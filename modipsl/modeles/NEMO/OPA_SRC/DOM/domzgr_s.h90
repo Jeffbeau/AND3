@@ -1,0 +1,264 @@
+   !!----------------------------------------------------------------------
+   !!                     ***  domzgr.s.h90  ***
+   !!----------------------------------------------------------------------
+   !!----------------------------------------------------------------------
+   !!  OPA 9.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/OPA_SRC/DOM/domzgr_s.h90,v 1.3 2005/08/30 13:26:10 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+   !!----------------------------------------------------------------------
+
+#if defined key_s_coord
+   !!----------------------------------------------------------------------
+   !!   'key_s_coord' :                                        s-coordinate
+   !!----------------------------------------------------------------------
+
+   SUBROUTINE zgr_s
+      !!----------------------------------------------------------------------
+      !!                  ***  ROUTINE zgr_s  ***
+      !!                     
+      !! ** Purpose :   define the s-coordinate system
+      !!
+      !! ** Method  :   s-coordinate
+      !!         The depth of model levels is defined as the product of an
+      !!      analytical function by the local bathymetry, while the vertical
+      !!      scale factors are defined as the product of the first derivative
+      !!      of the analytical function by the bathymetry.
+      !!      (this solution save memory as depth and scale factors are not
+      !!      3d fields)
+      !!          - Read bathymetry (in meters) at t-point and compute the
+      !!         bathymetry at u-, v-, and f-points.
+      !!            hbatu = mi( hbatt )
+      !!            hbatv = mj( hbatt )
+      !!            hbatf = mi( mj( hbatt ) )
+      !!          - Compute gsigt, gsigw, esigt, esigw from an analytical
+      !!         function and its derivative given as statement function.
+      !!            gsigt(k) = fssig (k+0.5)
+      !!            gsigw(k) = fssig (k    )
+      !!            esigt(k) = fsdsig(k+0.5)
+      !!            esigw(k) = fsdsig(k    )
+      !!      This routine is given as an example, it must be modified
+      !!      following the user s desiderata. nevertheless, the output as
+      !!      well as the way to compute the model levels and scale factors
+      !!      must be respected in order to insure second order a!!uracy
+      !!      schemes.
+      !!
+      !! Reference :
+      !!      Madec, Lott, Delecluse and Crepon, 1996. JPO, 26, 1393-1408.
+      !!
+      !! History :
+      !!        !  95-12  (G. Madec)  Original code : s vertical coordinate
+      !!        !  97-07  (G. Madec)  lbc_lnk call
+      !!        !  97-04  (J.-O. Beismann) 
+      !!   8.5  !  02-06  (G. Madec)  F90: Free form and module
+      !!----------------------------------------------------------------------
+      !! * Local declarations
+      INTEGER  ::   in
+      INTEGER  ::   ji, jj, jk
+      REAL(wp) ::   fssig, fsdsig, pfkk
+      REAL(wp) ::   zh0, zdz1, zdzn, zd, za, zb, zc, zdepmi
+
+      !!----------------------------------------------------------------------
+      !!  OPA 8.5, LODYC-IPSL (2002)
+      !!----------------------------------------------------------------------
+
+      ! a. Sigma stretching coefficient
+      !      hyperbolic stretching sigma= za(in-jk)^3+zb(in-jk)^2+zc(in-jk)+zd
+      !      hyperbolic stretching sigma= za(jk)^3+zb(jk)^2+zc(jk)+zd
+      !  calculate stretching coefficients (to ensure
+      !        ss(sigma) =1 at sigma=1,  and -1 at sigma=-1)
+      !        sigma =1 at the surface (k=1) and  =-1 at the bottom (k=jpk)
+      !   the only free parameters are the depths of the  first level
+      !   dz1 and of the last level(zdzn) in meters (given as a positive
+      !   quantity).
+      
+      fssig(pfkk) =-0.5* ( ( ( za*(pfkk-1.) + zb ) * (pfkk-1.) + zc ) * (pfkk-1.) + zd -1. )
+
+      ! b. Vertical derivative of sigma stretching coefficient
+      
+      fsdsig(pfkk)= 0.5*( ( 3.*za*(pfkk-1.) + 2.*zb )* (pfkk-1.) + zc )
+      
+      ! ------------------ stretching polynomial ------------------------
+      
+      ! SPEM coefficients
+      ! spem opa: kopa= jpk-kspem
+      !        pfkk =in-jk (spem) <==> pfkk=in-jk-jpk=-jk-1  (opa)
+
+      zh0  = 5500.
+      zdz1 = 800.
+      zdzn = 17.5
+      in   = 19
+
+      IF(lwp) THEN
+         WRITE(numout,*) ' stretching with a third order polynamial'
+         WRITE(numout,*) ' h0 = ',zh0
+         WRITE(numout,*) ' at ',zh0,'  dz(1)= z(1)-z(0)   = ',zdz1
+         WRITE(numout,*) '             dz(n)= z(n)-z(n-1) = ',zdzn
+      ENDIF
+
+      za =     - 2.*(zdz1+zdzn)/zh0/float(in-1)/float(in-2)   &
+                + 4./float(in)/float(in-1)/float(in-2)
+
+      zb =     - 6./float(in-1)/float(in-2)   &
+                + 2.*(zdz1*float(in+1)+ zdzn*float(2*in-1))   &
+                /zh0/float(in-2)/float(in-1)
+
+      zc =     -2.*zdzn*float(in)/zh0/float(in-2)   &
+                -2.*zdz1*float(in)/zh0/float(in-1)/float(in-2)   &
+                +(6.* float(in) - 4.)/float(in)/float(in-1)/float(in-2)
+
+      zd =     1.
+
+      !!----------------------------------------------------------------------
+      !!  OPA 8.5, LODYC-IPSL (2002)
+      !!----------------------------------------------------------------------
+
+
+      ! 1. Lecture and computation of hbat fields
+      ! -----------------------------------------
+
+      ! 1.1 Read hbatt (in meters)
+      ! 1.2 Set the hbatt to negative value   ???
+
+      hbatt(:,:) = - bathy(:,:)
+
+
+      ! 1.3 Set a minimum depth  (zdepmi)
+
+      zdepmi = -50.
+      IF( zdepmi >= 0. ) THEN
+         IF(lwp) WRITE(numout,*)'domzgr: the minimum depth must be < 0'
+         STOP 'domzgr'
+      ENDIF
+      DO jj = 1, jpj
+         DO ji = 1, jpi
+            hbatt(ji,jj) = MIN( hbatt(ji,jj), zdepmi )
+            hbatu(ji,jj) = zdepmi
+            hbatv(ji,jj) = zdepmi
+            hbatf(ji,jj) = zdepmi
+         END DO
+      END DO
+
+      CALL lbc_lnk( hbatt, 'T', 1. )
+
+      IF(lwp) THEN
+         WRITE(numout,*)
+         WRITE(numout,*) ' domzgr: minimum depth set to : ',zdepmi
+         WRITE(numout,*)
+      ENDIF
+
+      ! 1.4 Control print
+
+      IF(lwp) THEN
+         WRITE(numout,*)
+         WRITE(numout,*) ' domzgr: hbatt field; ocean depth in meters'
+         WRITE(numout,*)
+         CALL prihre(hbatt(1,1),jpi,jpj,1,jpi,1,1,jpj,1,0.,numout)
+      ENDIF
+
+      ! 1.5 Compute hbat fields at u-, v-, f-points
+
+      DO jj = 1, jpjm1
+        DO ji = 1, jpim1
+           hbatu(ji,jj)= 0.5 *( hbatt(ji  ,jj)+hbatt(ji+1,jj  ) ) * umask(ji,jj,1)
+           hbatv(ji,jj)= 0.5 *( hbatt(ji  ,jj)+hbatt(ji  ,jj+1) ) * vmask(ji,jj,1)
+           hbatf(ji,jj)= 0.25*( hbatt(ji  ,jj)+hbatt(ji  ,jj+1)   &
+                               +hbatt(ji+1,jj)+hbatt(ji+1,jj+1) ) * fmask(ji,jj,1)
+        END DO
+      END DO
+
+      CALL lbc_lnk( hbatu, 'U', 1. )
+      CALL lbc_lnk( hbatv, 'V', 1. )
+      CALL lbc_lnk( hbatf, 'F', 1. )
+
+
+      ! 2. Computation of gsig and esig fields
+      ! --------------------------------------
+
+      ! 2.1 Coefficients for model level depth at w- and t-levels
+
+      DO jk = 1, jpk
+         gsigw(jk) = -fssig ( float(jk)    )
+         gsigt(jk) = -fssig ( float(jk)+0.5)
+      END DO
+
+      ! 2.2 Coefficients for vertical scale factors at w-, t- levels
+
+      DO jk = 1, jpk
+         esigw(jk)=fsdsig( float(jk)    )
+         esigt(jk)=fsdsig( float(jk)+0.5)
+      END DO
+
+      ! 2.3 Coefficients for vertical depth as the sum of e3w scale factors
+
+      gsi3w(1) = 0.5 * esigw(1)
+      DO jk = 2, jpk
+        gsi3w(jk) = gsi3w(jk-1)+ esigw(jk)
+      END DO
+
+      ! ===========
+      ! Zoom domain 
+      ! ===========
+
+      IF( lzoom )   CALL zgr_bat_zoom
+
+      ! 2.4 Control print
+
+      IF(lwp) THEN
+         WRITE(numout,*) 
+         WRITE(numout,*) ' domzgr: vertical coefficients for model level'
+         WRITE(numout,9400)
+         WRITE(numout,9410) (jk,gsigt(jk),gsigw(jk),esigt(jk),esigw(jk),gsi3w(jk),jk=1,jpk)
+      ENDIF
+ 9400 FORMAT(9x,' level   gsigt    gsigw    esigt    esigw    gsi3w')
+ 9410 FORMAT(10x,i4,5f9.2)
+
+      IF(lwp) THEN
+         WRITE(numout,*)
+         WRITE(numout,*) ' domzgr: vertical coordinates : point (10,10,k)'
+         WRITE(numout,*) ' ~~~~~~  --------------------'
+         WRITE(numout,9420)
+         WRITE(numout,9430) (jk,fsdept(10,10,jk),fsdepw(10,10,jk),     &
+                             fse3t (10,10,jk),fse3w (10,10,jk),jk=1,jpk)
+      ENDIF
+
+ 9420 FORMAT(9x,' level   gdept    gdepw    gde3w     e3t      e3w  ')
+ 9430 FORMAT(10x,i4,4f9.2)
+
+      DO jk = 1, jpk
+         DO jj = 1, jpj
+            DO ji = 1, jpi
+               IF( fse3w(ji,jj,jk) <= 0. .OR. fse3t(ji,jj,jk) <= 0. ) THEN
+                  IF(lwp) THEN
+                     WRITE(numout,*)
+                     WRITE(numout,*) ' e r r o r :         e3w or e3t =< 0 '
+                     WRITE(numout,*) ' =========           --------------- '
+                     WRITE(numout,*)
+                     WRITE(numout,*) '             point (i,j,k)= ',ji,jj,jk
+                     WRITE(numout,*)
+                  ENDIF
+                  STOP 'domzgr'
+               ENDIF
+               IF( fsdepw(ji,jj,jk) < 0. .OR. fsdept(ji,jj,jk) < 0. ) THEN
+                  IF(lwp) THEN
+                     WRITE(numout,*)
+                     WRITE(numout,*) ' e r r o r :      gdepw or gdept < 0 '
+                     WRITE(numout,*) ' =========        ------------------ '
+                     WRITE(numout,*)
+                     WRITE(numout,*) '             point (i,j,k)= ',ji,jj,jk
+                     WRITE(numout,*)
+                  ENDIF
+                  STOP 'domzgr'
+               ENDIF
+            END DO
+         END DO
+      END DO
+
+   END SUBROUTINE zgr_s
+
+#else
+   !!----------------------------------------------------------------------
+   !!   Default option :                                      Empty routine
+   !!----------------------------------------------------------------------
+   SUBROUTINE zgr_s
+   END SUBROUTINE zgr_s
+#endif

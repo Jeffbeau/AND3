@@ -1,0 +1,18 @@
+   !!---------------------------------------------------------------------
+   !!                     ***  par_sms_cfc.h90  ***  
+   !!                    CFC Source Minus Sink model
+   !!---------------------------------------------------------------------
+
+   !!----------------------------------------------------------------------
+   !!  TOP 1.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/TOP_SRC/SMS/par_sms_cfc.h90,v 1.6 2005/11/14 16:42:42 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+   !!----------------------------------------------------------------------
+
+   INTEGER , PARAMETER :: &
+      jpyear = 100,       & ! temporal parameter 
+      jphem  = 2            ! hemispheric parameter
+
+   INTEGER, PARAMETER ::  & 
+      jp11 = 1,           & ! CFC-11
+      jp12 = 2              ! CFC-12

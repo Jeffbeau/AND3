@@ -1,0 +1,47 @@
+!!---------------------------------------------------------------------
+!!
+!!                         PARAMETER passivetrc.PISCES
+!!                       *******************************
+!!
+!!  purpose :
+!!  ---------
+!!     INCLUDE PARAMETER FILE for passive tracer PISCES model
+!!
+!!
+!! number of biological trends
+!! ---------------------------
+!!
+!!----------------------------------------------------------------------
+!!  TOP 1.0,  LOCEAN-IPSL (2005)
+!! $Header: /home/opalod/NEMOCVSROOT/NEMO/TOP_SRC/SMS/par_sms_pisces.h90,v 1.4 2005/09/12 09:04:58 opalod Exp $
+!! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt
+!!----------------------------------------------------------------------
+
+      INTEGER jpdiabio
+      PARAMETER (jpdiabio = 1)
+!!
+!!    NOW ASSIGN A PARAMETER TO NAME INDIVIDUAL TRACERS
+!!    WARNING: BE CAREFUL ABOUT THE ORDER WHEN READING THE RESTART FILE
+!!
+!!    JPDIC : dissolved inoganic carbon concentration (mol/L)
+!!    JPTAL : total alkalinity (ueq/L)
+!!    JPOXY : oxygen carbon concentration (mol/L)
+!!    JP13C : isotope 13 of DIC (mol/L)
+!!    JPCAL : calcite  concentration (mol/L)
+!!    JPPO4 : phosphate concentration (mol C/L)
+!!    JPPOC : particulate organic phosphate concentration (mol C/L)
+!!    JPSIL : silicate concentration (mol/L)
+!!    JPPHY : phytoplancton concentration (mol/L)
+!!    JPZOO : zooplancton concentration (mol/L)
+!!    JPDOC : dissolved organic carbon concentration (mol/L)
+!!
+
+      INTEGER jpdic,jptal,jpoxy,jpcal,jppo4,jppoc
+      INTEGER jpsil,jpphy,jpzoo,jpdoc,jpgoc,jpnfe,jpnch
+      INTEGER jpdia,jpmes,jpbsi,jpfer,jpbfe,jpsfe,jpdfe,jpdsi
+      INTEGER jpdch,jpno3,jpnh4
+      PARAMETER(jpdic=1,jptal=2,jpoxy=3,jpcal=4,jppo4=5,jppoc=6)
+      PARAMETER(jpsil=7,jpphy=8,jpzoo=9,jpdoc=10)
+      PARAMETER(jpdia=11,jpmes=12,jpbsi=13,jpfer=14,jpbfe=15)
+      PARAMETER(jpgoc=16, jpsfe=17, jpdfe=18, jpdsi=19)
+      PARAMETER(jpnfe=20, jpnch=21, jpdch=22, jpno3=23, jpnh4=24)

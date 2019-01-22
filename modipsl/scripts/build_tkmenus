@@ -1,0 +1,54 @@
+#! /bin/ksh
+#
+# This Shell script will look for all configuration files and build the
+# Tk/Tcl menus with it. (Taken from Linux Kernel configuration).
+#	
+# The directory where resides this script (??/modipsl/scripts) will be the
+# the reference.
+#
+d_n=$(dirname $0)'/..'
+echo $d_n
+wd=`pwd`
+echo 'Here :' $wd
+#
+# Save the main config file
+#
+/bin/mv $wd/Config.in $wd/Main_Config.in
+#
+conf_files=`find $d_n -name Config.in -print`
+echo $conf_files
+#
+for dd in $conf_files
+do
+#
+diri=$(dirname $dd)
+#
+# This here needs to be done in case the compiler 
+# leaves the \\ structures.
+#
+/bin/mv $diri/Config.in $diri/tmp_config.in
+sed -e 's/\\\\/\\/' $diri/tmp_config.in > $diri/Config.in
+/bin/rm $diri/tmp_config.in
+echo "source $dd" >> $wd/Main_Config.in
+cat $diri/Config.help >> Config.help
+cat $diri/Config.defaults >> Config.defaults
+#
+done
+#
+# Now that we have all Config.in included in the main file
+# we can build the Tk/Tcl shell.
+#
+$d_n/bin/tkparse < Main_Config.in  > $d_n/tmp/kconfig.tmp
+if [ -f /usr/local/bin/wish ]; then \
+   echo '#!'"/usr/local/bin/wish -f" > $wd/config.tk; \
+else \
+   echo '#!'"/usr/bin/wish -f" > $wd/config.tk; \
+fi
+cat $d_n/scripts/header.tk >> $wd/config.tk
+cat $d_n/tmp/kconfig.tmp >> $wd/config.tk
+/bin/rm -f $d_n/tmp/kconfig.tmp
+echo "set defaults \"Config.defaults\"" >> $wd/config.tk
+cat $d_n/scripts/tail.tk >> $wd/config.tk
+chmod 755 $wd/config.tk
+#
+

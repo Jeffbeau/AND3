@@ -1,0 +1,279 @@
+#!/bin/ksh
+# $Id: ins_post,v 2.3 2004/12/22 16:04:12 adm Exp $
+#-----------------------------------------------
+#- Installation de scripts de post_traitement
+#-----------------------------------------------
+b_n=$(basename $0)
+d_n=$(dirname $0)
+
+#- Saisie et validation des options
+x_v='silencious';
+x_d='normal';
+x_t="";
+x_n="";
+
+while getopts :hvd:t: ops
+  do
+    case $ops in
+      (h)  echo "Usage    : "${b_n} \
+                " [-h] [-v] [-d] [-t h]  [-n f]";
+           echo " -h       : help";
+           echo " -v       : verbose mode";
+           echo " -d       : debug mode";
+           echo " -t h     : target host_name";
+           echo "Defaults  : -t local_host";
+           exit 0;;
+      (v)  x_v='verbose';;
+      (d)  x_d='debug';;
+      (t)  x_t=${OPTARG};;
+      (:)  echo ${b_n}" : -"${OPTARG}" option : missing value" 1>&2;
+           exit 2;;
+      (\?) echo ${b_n}" : -"${OPTARG}" option : not supported" 1>&2;
+           exit 2;;
+    esac
+  done
+shift $(($OPTIND-1));
+
+if [ "$x_t" = "sxnec" ]; then
+   b_n_post=$(basename $HOMEGAYA)
+   d_n_post=$(dirname $HOMEGAYA)
+elif [ "$x_t" = "fjvpp" ]; then
+   b_n_post=$(basename $DMFDIR)
+   d_n_post=\/$(dirname $DMFDIR | awk -F\/ '{print $4}')
+elif [ "$x_t" = "sx6nec" ]; then
+   b_n_post=$(basename $DMFDIR)
+   d_n_post=$(dirname $DMFDIR)
+else
+echo "        !!! WARNING !!!"
+echo " The path for the output files on the storage server,"
+echo " needed for post-traitement files, is not automaticaly set."
+echo " Please specify manually this path by replacing the AAAAAAA"
+echo " string in the Output Job with the desired path."
+echo "        !!! WARNING !!!"
+fi
+#- Traitement des options
+#- REAL precision
+# Target_Host Name
+if [ '\?'${x_t} = '\?' ]; then
+  x_t=`${d_n}/w_i_h`;
+  if [ $? -ne 0 ]; then
+    echo "Bad installation : w_i_h/uname unreachable" 1>&2;
+    exit 1;
+  elif [ "$x_t" = "Unknown" ]; then
+    echo "Local_Host not supported" 1>&2;
+    exit 1;
+  fi;
+fi;
+
+case ${x_t} in
+  ( aix | cray | fjvpp | linux | osf1 | solaris | t3e | sxnec | sx6nec | unix ) ;;
+  (*)
+    echo "Target_Host "${x_t}" not supported" 1>&2;
+    exit 1;;
+esac
+#-
+x_m=$( (cd $d_n ; pwd) | sed -e "s,/util,," )
+
+if [ ${x_v} = 'verbose' ]; then
+  echo '--- Mode              : '${x_v};
+  echo '--- Compilation       : '${x_d};
+  echo '--- Target            : '${x_t};
+  echo '--- Name              : '${x_n};
+  echo '--- MODIPSL directory : '${x_m};
+fi;
+#-
+#-
+l_rep1=`find ${d_n}/.. -name mo2st -print`
+l_rep2=`find ${d_n}/.. -name da2st -print`
+l_rep3=`find ${d_n}/.. -name mo2se -print`
+l_rep4=`find ${d_n}/.. -name da2mo -print`
+l_rep5=`find ${d_n}/.. -name da4mo -print`
+l_rep6=`find ${d_n}/.. -name da2ye -print`
+l_rep7=`find ${d_n}/.. -name da4ye -print`
+l_rep8=`find ${d_n}/.. -name mo2ye -print`
+l_rep9=`find ${d_n}/.. -name mo4ye -print`
+l_rep10=`find ${d_n}/.. -name mo2sn -print`
+l_rep11=`find ${d_n}/.. -name da2sn -print`
+l_rep12=`find ${d_n}/.. -name txt2tar -print`
+l_rep13=`find ${d_n}/.. -name monitoring_script -print`
+l_rep14=`find ${d_n}/.. -name monitoring_loop_script -print`
+l_rep15=`find ${d_n}/.. -name monitoring_loop2_script -print`
+l_rep16=`find ${d_n}/.. -name atlas_cpl_se_ORCA_LIM -print`
+l_rep17=`find ${d_n}/.. -name atlas_cpl_se -print`
+l_rep18=`find ${d_n}/.. -name atlas_cpl_se_LMDZOR -print`
+l_rep19=`find ${d_n}/.. -name atlas_cpl_se_ORCA_LIM2 -print`
+l_rep20=`find ${d_n}/.. -name create_ts -print`
+#-
+#-
+
+
+W_OS=${x_t};
+
+if [ ${W_OS}  = "sxnec" ]; then
+   format='\s'
+elif [ ${W_OS}  = "fjvpp" ]; then
+   format='\d'
+elif [ ${W_OS}  = "sx6nec" ]; then
+   format='\g'
+else
+echo "        !!! WARNING !!!"
+echo " The display format of numbers,"
+echo " needed for the dates, is not automaticaly set."
+echo " Please specify manually this format by replacing the PPPPPPP"
+echo " string in the Output Job with the desired format."
+echo "        !!! WARNING !!!"
+fi
+
+echo " ";
+echo "Installation of simple execution jobs for $W_OS";
+echo " ";
+#-
+
+for i in $l_rep1 $l_rep2 $l_rep3 $l_rep4 $l_rep5 $l_rep6 $l_rep7 $l_rep8 $l_rep9 $l_rep10 $l_rep11 $l_rep12 $l_rep13 $l_rep14 $l_rep15 $l_rep16 $l_rep17 $l_rep18 $l_rep19 $l_rep20
+do
+  echo " "
+  case $i in
+  "$l_rep1") j=$(dirname $i);
+          MKTR="$j";
+          r=$(cd $j ; pwd);
+          echo "Installation of mo2st.job file in directory : $(cd $j ; pwd) ";
+          typeset -R W_XX[1];
+	  set -A W_XX '\#\-D\-' '#-Q- '$W_OS;
+          sed  -e "/^.*${W_XX[0]}$/d" -e "s,^${W_XX[1]}*,," -e "s,AAAAAAA,${d_n_post}\/${b_n_post},g" -e "s,PPPPPPP,${format},g" ${MKTR}/mo2st | grep -v '^#-Q- ' $1 > ${r}/mo2st.job ;;
+ "$l_rep2") j=$(dirname $i);
+          MKTR="$j";
+          r=$(cd $j ; pwd);
+          echo "Installation of da2st.job file in directory : $(cd $j ; pwd) ";
+          typeset -R W_XX[1];
+	  set -A W_XX '\#\-D\-' '#-Q- '$W_OS;
+          sed  -e "/^.*${W_XX[0]}$/d" -e "s,^${W_XX[1]}*,," -e "s,AAAAAAA,${d_n_post}\/${b_n_post},g" -e "s,PPPPPPP,${format},g" ${MKTR}/da2st | grep -v '^#-Q- ' $1 > ${r}/da2st.job ;;
+  "$l_rep3") j=$(dirname $i);
+          MKTR="$j";
+          r=$(cd $j ; pwd);
+          echo "Installation of mo2se.job file in directory : $(cd $j ; pwd) ";
+          typeset -R W_XX[1];
+	  set -A W_XX '\#\-D\-' '#-Q- '$W_OS;
+          sed  -e "/^.*${W_XX[0]}$/d" -e "s,^${W_XX[1]}*,," -e "s,AAAAAAA,${d_n_post}\/${b_n_post},g" -e "s,PPPPPPP,${format},g" ${MKTR}/mo2se | grep -v '^#-Q- ' $1 > ${r}/mo2se.job ;;
+  "$l_rep4") j=$(dirname $i);
+          MKTR="$j";
+          r=$(cd $j ; pwd);
+          echo "Installation of da2mo.job file in directory : $(cd $j ; pwd) ";
+          typeset -R W_XX[1];
+	  set -A W_XX '\#\-D\-' '#-Q- '$W_OS;
+          sed  -e "/^.*${W_XX[0]}$/d" -e "s,^${W_XX[1]}*,," -e "s,AAAAAAA,${d_n_post}\/${b_n_post},g" -e "s,PPPPPPP,${format},g" ${MKTR}/da2mo | grep -v '^#-Q- ' $1 > ${r}/da2mo.job ;;
+  "$l_rep5") j=$(dirname $i);
+          MKTR="$j";
+          r=$(cd $j ; pwd);
+          echo "Installation of da4mo.job file in directory : $(cd $j ; pwd) ";
+          typeset -R W_XX[1];
+	  set -A W_XX '\#\-D\-' '#-Q- '$W_OS;
+          sed  -e "/^.*${W_XX[0]}$/d" -e "s,^${W_XX[1]}*,," -e "s,AAAAAAA,${d_n_post}\/${b_n_post},g" -e "s,PPPPPPP,${format},g" ${MKTR}/da4mo | grep -v '^#-Q- ' $1 > ${r}/da4mo.job ;;
+  "$l_rep6") j=$(dirname $i);
+          MKTR="$j";
+          r=$(cd $j ; pwd);
+          echo "Installation of da2ye.job file in directory : $(cd $j ; pwd) ";
+          typeset -R W_XX[1];
+	  set -A W_XX '\#\-D\-' '#-Q- '$W_OS;
+          sed  -e "/^.*${W_XX[0]}$/d" -e "s,^${W_XX[1]}*,," -e "s,AAAAAAA,${d_n_post}\/${b_n_post},g" -e "s,PPPPPPP,${format},g" ${MKTR}/da2ye | grep -v '^#-Q- ' $1 > ${r}/da2ye.job ;;
+  "$l_rep7") j=$(dirname $i);
+          MKTR="$j";
+          r=$(cd $j ; pwd);
+          echo "Installation of da4ye.job file in directory : $(cd $j ; pwd) ";
+          typeset -R W_XX[1];
+	  set -A W_XX '\#\-D\-' '#-Q- '$W_OS;
+          sed  -e "/^.*${W_XX[0]}$/d" -e "s,^${W_XX[1]}*,," -e "s,AAAAAAA,${d_n_post}\/${b_n_post},g" -e "s,PPPPPPP,${format},g" ${MKTR}/da4ye | grep -v '^#-Q- ' $1 > ${r}/da4ye.job ;;
+  "$l_rep8") j=$(dirname $i);
+          MKTR="$j";
+          r=$(cd $j ; pwd);
+          echo "Installation of mo2ye.job file in directory : $(cd $j ; pwd) ";
+          typeset -R W_XX[1];
+	  set -A W_XX '\#\-D\-' '#-Q- '$W_OS;
+          sed  -e "/^.*${W_XX[0]}$/d" -e "s,^${W_XX[1]}*,," -e "s,AAAAAAA,${d_n_post}\/${b_n_post},g" -e "s,PPPPPPP,${format},g" ${MKTR}/mo2ye | grep -v '^#-Q- ' $1 > ${r}/mo2ye.job ;;
+  "$l_rep9") j=$(dirname $i);
+          MKTR="$j";
+          r=$(cd $j ; pwd);
+          echo "Installation of mo4ye.job file in directory : $(cd $j ; pwd) ";
+          typeset -R W_XX[1];
+	  set -A W_XX '\#\-D\-' '#-Q- '$W_OS;
+          sed  -e "/^.*${W_XX[0]}$/d" -e "s,^${W_XX[1]}*,," -e "s,AAAAAAA,${d_n_post}\/${b_n_post},g" -e "s,PPPPPPP,${format},g" ${MKTR}/mo4ye | grep -v '^#-Q- ' $1 > ${r}/mo4ye.job ;;
+  "$l_rep10") j=$(dirname $i);
+          MKTR="$j";
+          r=$(cd $j ; pwd);
+          echo "Installation of mo2sn.job file in directory : $(cd $j ; pwd) ";
+          typeset -R W_XX[1];
+	  set -A W_XX '\#\-D\-' '#-Q- '$W_OS;
+          sed  -e "/^.*${W_XX[0]}$/d" -e "s,^${W_XX[1]}*,," -e "s,AAAAAAA,${d_n_post}\/${b_n_post},g" -e "s,PPPPPPP,${format},g" ${MKTR}/mo2sn | grep -v '^#-Q- ' $1 > ${r}/mo2sn.job ;;
+  "$l_rep11") j=$(dirname $i);
+          MKTR="$j";
+          r=$(cd $j ; pwd);
+          echo "Installation of da2sn.job file in directory : $(cd $j ; pwd) ";
+          typeset -R W_XX[1];
+	  set -A W_XX '\#\-D\-' '#-Q- '$W_OS;
+          sed  -e "/^.*${W_XX[0]}$/d" -e "s,^${W_XX[1]}*,," -e "s,AAAAAAA,${d_n_post}\/${b_n_post},g" -e "s,PPPPPPP,${format},g" ${MKTR}/da2sn | grep -v '^#-Q- ' $1 > ${r}/da2sn.job ;;
+  "$l_rep12") j=$(dirname $i);
+          MKTR="$j";
+          r=$(cd $j ; pwd);
+          echo "Installation of txt2tar.job file in directory : $(cd $j ; pwd) ";
+          typeset -R W_XX[1];
+	  set -A W_XX '\#\-D\-' '#-Q- '$W_OS;
+          sed  -e "/^.*${W_XX[0]}$/d" -e "s,^${W_XX[1]}*,," -e "s,AAAAAAA,${d_n_post}\/${b_n_post},g" -e "s,PPPPPPP,${format},g" ${MKTR}/txt2tar | grep -v '^#-Q- ' $1 > ${r}/txt2tar.job ;;
+  "$l_rep13") j=$(dirname $i);
+          MKTR="$j";
+          r=$(cd $j ; pwd);
+          echo "Installation of monitoring_script.job file in directory : $(cd $j ; pwd) ";
+          typeset -R W_XX[1];
+	  set -A W_XX '\#\-D\-' '#-Q- '$W_OS;
+          sed  -e "/^.*${W_XX[0]}$/d" -e "s,^${W_XX[1]}*,," -e "s,AAAAAAA,${d_n_post}\/${b_n_post},g" -e "s,PPPPPPP,${format},g" ${MKTR}/monitoring_script | grep -v '^#-Q- ' $1 > ${r}/monitoring_script.job ;;
+  "$l_rep14") j=$(dirname $i);
+          MKTR="$j";
+          r=$(cd $j ; pwd);
+          echo "Installation of monitoring_loop_script.job file in directory : $(cd $j ; pwd) ";
+          typeset -R W_XX[1];
+	  set -A W_XX '\#\-D\-' '#-Q- '$W_OS;
+          sed  -e "/^.*${W_XX[0]}$/d" -e "s,^${W_XX[1]}*,," -e "s,AAAAAAA,${d_n_post}\/${b_n_post},g" -e "s,PPPPPPP,${format},g" ${MKTR}/monitoring_loop_script | grep -v '^#-Q- ' $1 > ${r}/monitoring_loop_script.job ;;
+  "$l_rep15") j=$(dirname $i);
+          MKTR="$j";
+          r=$(cd $j ; pwd);
+          echo "Installation of monitoring_loop2_script.job file in directory : $(cd $j ; pwd) ";
+          typeset -R W_XX[1];
+	  set -A W_XX '\#\-D\-' '#-Q- '$W_OS ;
+          sed  -e "/^.*${W_XX[0]}$/d" -e "s,^${W_XX[1]}*,," -e "s,AAAAAAA,${d_n_post}\/${b_n_post},g" -e "s,PPPPPPP,${format},g" ${MKTR}/monitoring_loop2_script | grep -v '^#-Q- ' $1 > ${r}/monitoring_loop2_script.job ;;
+  "$l_rep16") j=$(dirname $i);
+          MKTR="$j";
+          r=$(cd $j ; pwd);
+          echo "Installation of atlas_cpl_se_ORCA_LIM.job file in directory : $(cd $j ; pwd) ";
+          typeset -R W_XX[1];
+	  set -A W_XX '\#\-D\-' '#-Q- '$W_OS;
+          sed  -e "/^.*${W_XX[0]}$/d" -e "s,^${W_XX[1]}*,," -e "s,AAAAAAA,${d_n_post}\/${b_n_post},g" -e "s,PPPPPPP,${format},g" ${MKTR}/atlas_cpl_se_ORCA_LIM | grep -v '^#-Q- ' $1 > ${r}/atlas_cpl_se_ORCA_LIM.job ;;
+  "$l_rep17") j=$(dirname $i);
+          MKTR="$j";
+          r=$(cd $j ; pwd);
+          echo "Installation of atlas_cpl_se.job file in directory : $(cd $j ; pwd) ";
+          typeset -R W_XX[1];
+	  set -A W_XX '\#\-D\-' '#-Q- '$W_OS;
+          sed  -e "/^.*${W_XX[0]}$/d" -e "s,^${W_XX[1]}*,," -e "s,AAAAAAA,${d_n_post}\/${b_n_post},g" -e "s,PPPPPPP,${format},g" ${MKTR}/atlas_cpl_se | grep -v '^#-Q- ' $1 > ${r}/atlas_cpl_se.job ;;
+  "$l_rep18") j=$(dirname $i);
+          MKTR="$j";
+          r=$(cd $j ; pwd);
+          echo "Installation of atlas_cpl_se_LMDZOR.job file in directory : $(cd $j ; pwd) ";
+          typeset -R W_XX[1];
+	  set -A W_XX '\#\-D\-' '#-Q- '$W_OS;
+          sed  -e "/^.*${W_XX[0]}$/d" -e "s,^${W_XX[1]}*,," -e "s,AAAAAAA,${d_n_post}\/${b_n_post},g" -e "s,PPPPPPP,${format},g" ${MKTR}/atlas_cpl_se_LMDZOR | grep -v '^#-Q- ' $1 > ${r}/atlas_cpl_se_LMDZOR.job ;;
+  "$l_rep19") j=$(dirname $i);
+          MKTR="$j";
+          r=$(cd $j ; pwd);
+          echo "Installation of atlas_cpl_se_ORCA_LIM2.job file in directory : $(cd $j ; pwd) ";
+          typeset -R W_XX[1];
+          set -A W_XX '\#\-D\-' '#-Q- '$W_OS;
+          sed  -e "/^.*${W_XX[0]}$/d" -e "s,^${W_XX[1]}*,," -e "s,AAAAAAA,${d_n_post}\/${b_n_post},g" -e "s,PPPPPPP,${format},g" ${MKTR}/atlas_cpl_se_ORCA_LIM2 | grep -v '^#-Q- ' $1 > ${r}/atlas_cpl_se_ORCA_LIM2.job ;;
+  "$l_rep20") j=$(dirname $i);
+          MKTR="$j";
+          r=$(cd $j ; pwd);
+          echo "Installation of create_ts.job file in directory : $(cd $j ; pwd) ";
+          typeset -R W_XX[1];
+	  set -A W_XX '\#\-D\-' '#-Q- '$W_OS;
+          sed  -e "/^.*${W_XX[0]}$/d" -e "s,^${W_XX[1]}*,," -e "s,AAAAAAA,${d_n_post}\/${b_n_post},g" -e "s,PPPPPPP,${format},g" ${MKTR}/create_ts | grep -v '^#-Q- ' $1 > ${r}/create_ts.job ;;
+ esac
+done
+echo " ";
+exit 0;

@@ -1,0 +1,104 @@
+#!/bin/sh
+# $Id: w_i_h,v 2.4 2006/01/18 05:59:17 adm Exp $
+#---------------------------------------------------------------------
+#- w_i_h                                                    04/10/1999
+#- Reconnaissance du systeme
+#---------------------------------------------------------------------
+( uname -s 1> /dev/null ) 2> /dev/null
+if [ $? -ne 0 ]; then
+  exit 1;
+fi;
+#-
+USYS=`uname -s`;
+#-
+if   [ "$USYS" = "AIX" ]; then
+  WSYS=`uname -n | sed -e "s/^\(zahir\)\(.*\)/\1/"`;
+  if [ "$WSYS" = "zahir" ]; then
+    DSYS="aix";
+  else
+    DSYS="ax_mono";
+  fi;
+elif [ "$USYS" = "AIXESA" ]; then
+  DSYS="aixesa";
+elif [ "$USYS" = "ConvexOS" ]; then
+  DSYS="convex";
+elif [   "$USYS" = "CP486" \
+      -o "$USYS" = "dev"  ]; then
+  DSYS="sco";
+elif [ "$USYS" = "Darwin" ]; then
+  DSYS="Darwin";
+elif [ "$USYS" = "HP-UX" ]; then
+  WSYS=`uname -n`;
+  if [ "$WSYS" = "moon" ]; then
+    DSYS="eshpux";
+  else
+    DSYS="hpux";
+  fi;
+elif [ "$USYS" = "IRIX" ]; then
+  WSYS=`uname -r | sed -e "s/\..*//"`
+  if [ "$WSYS" = "4" ]; then
+    DSYS="sgi4";
+  else
+    DSYS="sgi5";
+  fi;
+elif [ "$USYS" = "IRIX64" ]; then
+  WSYS=`uname -n`;
+  if [ "$WSYS" = "rhodes" ]; then
+    DSYS="sxnec";
+  else
+    DSYS="sgi6";
+  fi;
+elif [ "$USYS" = "Linux" ]; then
+  WSYS=`uname -n | sed -e "s/^\(asterix\)\(.*\)/\1/" \
+                        -e "s/^\(obelix\)\(.*\)/\1/" \
+                        -e "s/^\(ds\)\([0-9]*\)/\1/"`
+  if [   "$WSYS" = "asterix" \
+      -o "$WSYS" = "obelix" ]; then
+    DSYS="lxiv8";
+  elif [ "$WSYS" = "mercure" ]; then
+    DSYS="sx6nec";
+  elif [ "$WSYS" = "ds" ]; then
+    DSYS="sxdkrz";
+  else
+    DSYS="linux";
+  fi;
+elif [ "$USYS" = "MIPS" ]; then
+  DSYS="mips";
+elif [ "$USYS" = "OSF1" ]; then
+  DSYS="osf1";
+elif [ "$USYS" = "SunOS" ]; then
+  WSYS=`uname -r | sed -e "s/\..*//"`
+  if [ "$WSYS" = "5" ]; then
+    WSYS=`uname -r | sed -e "s/.*\.//"`
+    if [   "$WSYS" = 1 \
+        -o "$WSYS" = 2 \
+        -o "$WSYS" = 3 ]; then
+      DSYS="solaris";
+    else
+      DSYS="solaris";
+    fi;
+  else
+    DSYS="sun";
+  fi;
+elif [ "$USYS" = "SUPER-UX" ]; then
+  DSYS="nec";
+elif [ "$USYS" = "ULTRIX" ]; then
+  DSYS="ultrix";
+elif [   "$USYS" = "UNICOS" \
+      -o "$USYS" = "sn4803" \
+      -o "$USYS" = "sn4602" ]; then
+  DSYS="cray";
+elif [ "$USYS" = "UNIX_System_V" ]; then
+  DSYS="fjvpp";
+else
+  WSYS=`uname -m`;
+  if [ "$WSYS" = "CRAY T3E" ]; then
+    DSYS="t3e";
+  else
+    DSYS="Unknown";
+  fi;
+fi;
+#-
+echo "$DSYS";
+#-
+exit 0;

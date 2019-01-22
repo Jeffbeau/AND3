@@ -1,0 +1,2573 @@
+!!2010.09
+
+
+!#define is_3D  !! ====> call adv/diff routines
+
+#if defined key_passivetrc && defined key_BGCM_02
+MODULE lifemaker3D
+   !! * Modules used
+    USE in_out_manager
+    USE daymod, only: nmonth,nday,nyear,nday_year !AD: to get opa calendar
+    USE dom_oce, only: mbathy !AD (i.e nlayer)
+    USE oce, only: tn,sn,rhop !AD (i.e temp,salt) !NL#9 : add rhop
+    USE blk_oce, only: vatm, watm !Wind speed from
+    USE trc, only: nwritetrc,trn,trb
+!    USE flx_oce, only: qsr_oce
+    USE flxblk_swr, only: qsr_ocep, flx_blk_swr  !NL#8
+    USE lib_mpp
+    USE lib_ncdf
+
+#if defined DIAG_NPZD_GROWTH || defined DIAG_NPZD_flux
+    USE lib_bgcm_02, only : bgcm_diag_fname !NL#9 : to have accest to the bgcm diag file name
+#endif
+!AD:
+#if defined key_ice_lim 
+    USE ice, only: frld
+#endif
+
+#if defined (NPZD_INT_PROD)
+    !USE lib_bgcm_02, only: output_intprod
+#endif
+
+   IMPLICIT NONE
+   PRIVATE
+
+
+!AD: pointers will be assigned to trn latter
+     real(wp), dimension(:,:,:), pointer :: &
+     diat,  & !Large phytoplankton -> Diatoms
+     flag,  & !Small phytoplankton -> Flagellates
+     no3,  & !Nitrate
+     nh4,   & !Ammonium
+     meso,  & !Mesozooplankton
+     micro, & !Microzooplankton
+     mop,   & !Particulate Organic Matter
+     modis   !Dissolved Organic Matter
+  
+!c---LOCAL BUFFER VARIABLES TO COMPUTE NEW BUDGET OF EACH COMPARTMENT
+!DL in fact these are trb values ... modify 
+     real(wp), dimension(:,:,:), pointer :: &
+     Xno3,  &        !Nitrate                     [mmolN/m3]
+     Xnh4,  &        !Ammonium                    [mmolN/m3]
+     Xdiat,  &       !Large phyto -> Diatoms      [mmolN/m3]
+     Xflag,  &       !Small phyto -> Flagellates  [mmolN/m3]
+     Xmeso,  &       !Mesozooplankton             [mmolN/m3]
+     Xmicro,  &      !Microzooplankton            [mmolN/m3]
+     Xmop,  &        !Particulate Organic Matter  [mmolN/m3]
+     Xmodis          !Dissolved Organic Matter    [mmolN/m3]
+!c
+     real chla(jpi,jpj,jpk)   ! chlorophyll-a concentration [mgChla/m3]    
+
+!     integer maskGSLglob(jpidta,jpjdta)     ! mask for GSL to apply variable kcdom and ked to Gulf region only
+!     integer, public :: maskGSL(jpi,jpj)     ! local domain for maskGSL
+                               ! introduced by DL, september 27, 2012
+!c
+!c----------------------------------------------------------------
+!c Optical variables
+!c----------------------------------------------------------------
+!c     
+      real, public :: parz(jpi,jpj,jpk)       !PAR at depth z (3D)
+      real kchla(jpi,jpj,jpk)      !attenuation coef. from chla
+      real, public :: kcdom(jpi,jpj,jpk)      !attenuation coef. from CDOM
+      real, public :: ze01(jpi,jpj)           !depth of 1% of surface PAR (2D)
+!DL2015      real, public :: PAR_surf(jpi,jpj)       !net PAR at surface (Ein/m2/d)
+      real :: PAR_surf(jpi,jpj)       !net PAR at surface (Ein/m2/d)
+      real, public :: PAR_surf_2h(jpi,jpj,12)       !net PAR at surface (W/m2)
+!c
+#if defined (NPZD_INT_PROD)
+!c----------------------------------------------------------------
+!c Productions primaires et secondaires en [mgC/m3/day]
+!c----------------------------------------------------------------
+!c
+      real pnwd(jpi,jpj,jpk), &    !PI nw des diat	
+           pnwf(jpi,jpj,jpk),  &   !PI nw des flag	
+           pregd(jpi,jpj,jpk), &   !PI reg des diat	
+           pregf(jpi,jpj,jpk)      !PI reg des flag
+
+      real pmesd(jpi,jpj,jpk), &   !P II mesozoo => diatoms
+           pmesm(jpi,jpj,jpk), &   !P II mesozoo => microzoo
+           pmicf(jpi,jpj,jpk), &   !P II microzoo => flagellates
+           pmicm(jpi,jpj,jpk)      !P II microzoo => mop
+#endif
+
+      integer rec_num, status      !NL#10 add of 'status'
+!c
+!c----------------------------------------------------------------
+!c Flux d azote entre les compartiments
+!c----------------------------------------------------------------
+!c
+      real mud(jpi,jpj,jpk), &      !Diatoms growth rate
+           mupm(jpi,jpj,jpk), &     !Diatoms maximum growth rate
+           muf(jpi,jpj,jpk), &      !Flagellates growth rate
+           mezg(jpi,jpj,jpk), &     !Meso grazing rate
+           mizg(jpi,jpj,jpk), &     !Micro grazing rate
+           mezmorta,&  !Meso mortality rate
+           mez2nh4,&  !Meso excretion to NH4
+           dlp,               &  !diatoms mortality
+           dsp,               &  !flagellates mortality
+           dmiz,               &  !microzooplankton mortality
+           fno3d(jpi,jpj,jpk),&     !Diatoms no3 uptake fraction
+           fno3f(jpi,jpj,jpk),&     !Flagellates no3 uptake fraction 
+           fnh4d(jpi,jpj,jpk),&     !Diatoms nh4 uptake fraction
+           fnh4f(jpi,jpj,jpk),&     !Flagellates nh4 uptake fraction 
+           fnd(jpi,jpj,jpk), &      !Diatoms N uptake  
+           fnf(jpi,jpj,jpk), &      !Flagellates N uptake  
+           tsd(jpi,jpj,jpk), &      !Diatoms N doubling time
+           tsf(jpi,jpj,jpk), &      !Flagellates N doubling time
+           tcd(jpi,jpj,jpk), &      !Diatoms C doubling time
+           tcf(jpi,jpj,jpk)         !Flagellates C doubling time
+!c
+!c----------------------------------------------------------------
+!c Diagnostique
+!c----------------------------------------------------------------
+!c
+#if defined DIAG_NPZD_GROWTH
+!NL#10 daily mean variables
+      real  dmtsd(jpi,jpj,jpk) &      !Diatoms N doubling time (daily mean)
+           ,dmtsf(jpi,jpj,jpk) &      !Flagellates N doubling time (daily mean)
+           ,dmtcd(jpi,jpj,jpk) &      !Diatoms C doubling time (daily mean)
+           ,dmtcf(jpi,jpj,jpk)         !Flagellates C doubling time (daily mean)
+#endif
+
+#if defined DIAG_NPZD_flux
+!NL#12 variable for daily total
+      real dfdmizdon(jpi,jpj,jpk), &      !Dead microzoo (daily total)
+           dfdspdon(jpi,jpj,jpk), &       !Dead flagelate (daily total)
+           dffpondon(jpi,jpj,jpk), &      !Fragmentation of POM to DOM (daily total)
+           dfredonnh4(jpi,jpj,jpk), &     !Remineralization to NH4 (daily total)
+           dfppsp(jpi,jpj,jpk), &     ! primary production of the flagelates flow #A2
+           dfpplp(jpi,jpj,jpk), &     ! primary production of the diatome   flow #A2
+           dfnh4no3(jpi,jpj,jpk), &   ! nitrification       flow #L
+           dfdlppon(jpi,jpj,jpk), &   ! Dead diatom cells  flow#B
+           dfgrlpmez(jpi,jpj,jpk), &  ! Grazing by mesozoo to LP  flow #C
+           dfgrspmiz(jpi,jpj,jpk), &  ! Grazing by microzoo to SP  flow #D
+           dfgrmezmiz(jpi,jpj,jpk), &  ! Grazing by mesozoo  to MIZ  flow #I
+           dfdmezpon(jpi,jpj,jpk), &   ! Dead mesozooo   flow #J
+           dfgrponmiz(jpi,jpj,jpk), &  ! Grazing by microzoo  to PON flow #M
+           dfemeznh4(jpi,jpj,jpk), &  ! Excretion by meso  flow N
+           dfunmicdom(jpi,jpj,jpk), & ! Un-assimilited part of microzoo routed to DON   flow #M + flow #D (lost), flow G
+           dfunmezpon(jpi,jpj,jpk), & ! Un-assimilated part of mesozoo diet routed to PON flow #C + flow #I  (lost), flow J
+           dfunmiznh4(jpi,jpj,jpk), & ! Un-assimilited part of microzoo diet routed to NH4 flow #M + flow #D (lost), flow H
+           dfsedlp(jpi,jpj,jpk), &     ! Sedimentation of to below    flow Z2
+           dfsedpon(jpi,jpj,jpk)       ! Sedimentation to below     flow Z1
+#endif
+
+!c----------------------------------------------------------------
+!c Sedimentation
+!c----------------------------------------------------------------
+!c
+      real sedim(jpi,jpj)      !Flux de sedimentation au fond (derniere couche du modele)
+      real sediment(jpi,jpj)   !Accumulation dans le sediment (derniere couche du modele)
+      real trap(jpi,jpj)       !trappe a sediments placee a 150 m (2D) en gC/m2/day
+  
+      integer lev_trap
+      parameter(lev_trap=12)  !Trappe a sediments placee au niveau 12 du modele
+                              !i.e 150 m
+!DL verif layer of 150m with OPA
+!c
+!c----------------------------------------------------------------
+!c---some parameters used  are coming from the physical model
+!c    and described in 'ocean_header.h'
+!c
+!c   kstep:  pas de temps
+!c   time(6): time(1) = sec; time(2)=min; time(3)=hr; 
+!c   time(4)=jr; time(5)=mo; time(6)=yr
+!c
+!c   u,v,w  (currents)
+!c   za     (water level)
+!c   av,nv  (vertical turbulent coefficients)
+!c   ah     (horizontal turbulent coefficiifeents)
+!c   temp   (water temperature)
+!c   salt   (water salinity)
+!c   uwind,vwind (wind)
+!c   ice_conc (Ice concentration)
+!c----------------------------------------------------------------
+!c End of file
+!c-
+
+#if defined (OXYGEN)
+!==============================================================
+!
+! > Declaration des variables utilises par le module OXYGEN
+!   inclus dans le modele NPZD
+!
+!==============================================================
+!
+!---------------------------------------------------------------
+! Compartiment principal
+!---------------------------------------------------------------
+
+     real(wp), dimension(:,:,:), pointer :: &
+     oxy,    &     ! Dissolved oxygen conc.[mmolO/m3]
+     Xoxy        ! Dissolved oxygen conc.[mmolO/m3]
+     real o2solub(jpi,jpj,jpk)    ! Oxygen solubility [mmolO/m3]
+!
+!---------------------------------------------------------------
+! Time-integrated Oxygen Fluxes
+!---------------------------------------------------------------
+
+     real prod_o2(jpi,jpj,jpk)   ! Growth production of O2
+     real cons_o2(jpi,jpj,jpk)   ! Consumption of O2
+     real flx_o2(jpi,jpj)        ! Surface Air-Sea flux of O2
+
+!----------------------------------------------------------------
+! End of file
+!----------------------------------------------------------------
+#endif
+!
+#if defined (key_carbon)
+!==============================================================
+!  Declaration des variables utilises par le module key_carbon
+!  inclus dans le modele NPZD
+!==============================================================
+!
+     real, dimension(:,:,:), pointer :: TCO2
+     real prod_TCO2(jpi,jpj,jpk)
+     real cons_TCO2(jpi,jpj,jpk)
+     real ALK(jpi,jpj,jpk)
+     real SolubCO2(jpi,jpj,jpk)
+     real pCO2W3D(jpi,jpj,jpk)
+     real TCO3(jpi,jpj,jpk)
+!DL     real flx_CO2(jpi,jpj)
+     real(wp), public, dimension(jpi,jpj) ::flx_CO2 !for printing in bgcm_02_model
+     real(wp), public, dimension(jpi,jpj,jpk) ::pHW3D !for printing in bgcm_02_model
+     real(wp), public, dimension(jpi,jpj,jpk) ::SatCa3D !for printing in bgcm_02_model
+     real(wp), public, dimension(jpi,jpj,jpk) ::SatAr3D !for printing in bgcm_02_model
+     integer nb_line  !NL#11
+     real, allocatable :: CO2_yearly(:,:)   !NL#11
+#endif
+
+     real(wp) :: pd(jpk)
+!DL     real (wp), parameter :: Alb_o =0.14      ! Albedo of open ocean
+!DL, albedo is applied is flxblk.F90
+     public :: lifemaker
+
+#if defined (NPZD_INT_PROD)
+     PUBLIC :: output_intprod
+!    USE lib_bgcm_02, only: output_intprod
+#endif
+
+ CONTAINS
+
+  SUBROUTINE lifemaker(kt)
+!!
+         USE trc, only:lrsttr
+
+!>>> MLI CODE:
+
+!c
+!c-----------------------------------------------------------------------   
+!c   Gulf of St. Lawrence Ecosystem Model
+!c
+!c   M. CHIFFLET - VERSION 6
+!c   modifications / version 4:
+!c     fonction ingestion du MESZ: Ivlev modifiee selon Fennel, JPR 2001
+!c   modifications / version 5:
+!c     sels nutritifs a Quebec
+!c
+!c   Y. LE CLAINCHE - Version 7
+!c     -> Optimisation sur les tests et les boucles
+!c     -> Gestion des sorties dans une routine separee
+!c     -> Correction sur les bilans des compartiments biologiques
+!c        (=> utilisation adequate des valeurs au pas de temps precedent)
+!c     -> Fonction de sensibilite a la lumiere des diatomees variable #ifdef(VARIA_LIGHT_SENSI)
+!c     -> Modification du dignostic sur le bilan de matiere totale (fichier externe 208) #ifdef(NPZD_DIAG)
+!c     -> Implementation du cycle de l'oxygene #ifdef(OXYGEN)
+!c     -> Implementation d'un diagnostic sur le bilan d'oxygene total (fichier externe 209) #ifdef(OXY_DIAG)
+!c
+      character filenom*80
+      common/control3/filenom
+
+#if defined (OXYGEN)
+!      real(wp) :: solubility_o2
+!      real(wp) :: surf_flux_o2
+#endif
+
+!c
+!c---PHYTOPLANKTON-------------------------------------------------------   
+!c   nanophtyo 1-5 mum = flag
+!c   microphyto >5 mum = diat
+!c
+!c   RAPPORTS C/N/Chla pour le PHYTO
+!c   795 mgC = 14.45 mg Chla = 10 mmolN
+!c   rapport molaire C/N -> 106/16; rapport masse C/chla -> 55/1
+!c   masse molaire : N = 14 g/mol ; C = 12 g/mol
+!c   1 mmolN/m3 = (106/16)*12 mgC/m3
+!c              = 79.5 mgC/m3 
+!c
+!c---ZOOPLANKTON---------------------------------------------------------
+!c   RAPPORTS C/N pour le ZOO
+!c   1 mmolN/m3 = 7*12 mgC/m3    7 fois plus de C que de N
+!c              = 84 mgC/m3 = 0.084 gC/m3
+!c
+!c-----------------------------------------------------------------------
+!c
+!c---INPUT PARAMETERS
+!c
+!AD     qsr_oce ! surface Short Wave radiation [W/m2]
+!NL#8     qsr_ocep ! surface Short Wave radiation [W/m2], update hourly
+
+      real :: ice_conc(jpi,jpj)
+      INTEGER, INTENT( in ) ::   kt !time step AD: this has to get passed in opa
+!c
+!c---LOCAL VARIABLES
+!c
+      integer :: j,i,k        ! indices pour parcourir la grille
+      integer :: l            ! indice pour les frontieres
+      integer :: jtday
+      integer, save :: ttt
+!c
+#if defined (NPZD_INT_PROD)
+      integer, save :: outfreq      ! output frequency of the integrated productions
+#endif
+!c
+      real :: e(jpi,jpj,jpk)     ! underwater light field [Ein/m2/d]
+      real :: e01(jpk),e01_bot   ! NL#4 : fraction of the light at the center (e01) or bottom (e01_bot) of the layer
+      real :: dzt(jpk)       ! distances entre les milieux des couches [m]
+      real :: dzt1(jpk)      ! distances entre les milieux des couches [m]
+!c
+!NL      real :: PAR_surf(jpi,jpj)   ! PAR net en surface [Ein/m2/d]
+      real :: diatf           ! fraction de DIAT (vs MICRO) dans la diete du MESO 
+      real :: flagf           ! fraction de FLAG (vs MOP) dans la diete du MICRO
+      real :: mizf            ! fraction de MICRO (vs DIAT) dans la diete du MESO
+      real :: mopf            ! fraction de MOP (vs FLAG) dans la diete du MICRO
+      real :: foodmiz           ! Microozooplancton food = flag + fmopf*mop, added november 2014 by DL 
+      real :: foodmez           ! Mezozooplancton food = diat + fmizf*miz, added november 2014 by DL 
+      real :: dmez           ! Mezozooplancton mortality
+      integer :: zprt(jpi,jpj)   ! temporary array for bathymetry    ! NL
+!c
+!      real :: diatsedup       !DIAT sedimentation from the upper layer [mmolN/m3]
+!      real :: mopsedup        !MOP sedimentation from the upper layer [mmolN/m3]
+!c
+      real :: nitrif        !nitrification rate [s-1]
+      real :: fgmop         !fragmentation rate of mop to modis [s-1]
+      real :: sedmop        !sedimentation rate of mop [s-1]
+      real :: regmod        !regeneration of modis to NH4 [s-1]
+      real :: sed           !diatoms sedimentation rate [m s-1]
+!c
+!c---LOCAL VARIABLES FOR DIAGNOSTICS
+!c
+#if defined (OXYGEN)
+      real :: oxy_prod        ! Instantaneous production of O2
+      real :: oxy_cons        ! Instantaneous consumption of O2
+      real :: oxy_ventil      ! Instataneous air-sea exchange of O2
+#endif
+#if defined (key_carbon)
+      real :: TCO2_prod        ! Instantaneous production of TCO2
+      real :: TCO2_cons        ! Instantaneous consumption of TCO2
+      real :: CO2_ventil      ! Instataneous air-sea gas exchange of CO2
+      real :: pCO2AIR
+!c      real :: prCO2AIR 
+!c      real :: surf_flux_CO2
+#endif
+!c
+#if defined (OXY_DIAG)
+      real :: totini_o2       ! Initial total dissolved oxygen [L]
+      real :: totfin_o2       ! final total dissolved oxygen [L]
+      real,save :: airsea_o2  ! Ventilation of oxygen [L]
+      real,save :: o2_budget  ! Dissolved oxygen budget [L]
+#endif
+!c
+#if defined (key_carbon_DIAG)
+      real :: totini_TCO2                     ! Initial total dissolved TCO2
+      real :: totfin_TCO2                     ! final total dissolved TCO2
+      real,save :: airsea_CO2                 ! Air-sea CO2 ventilation 
+      real,save :: TCO2_budget                ! Dissolved TCO2 budget
+#endif
+!c
+#if defined (NPZD_DIAG)
+      real :: totini            ! Initial total matter [tC]
+      real :: totfin            ! final total matter [tC]
+      real,save :: totsedim     ! Accumulation in sediment [tC]
+      real,save :: matterbudget ! Matter budget [tC]
+#endif
+!c
+!c---LOCAL VARIABLES FOR INTIALIZATION WORK
+!c
+      logical, save :: first=.true.
+!c
+      integer :: npass,mpass,ilopass ! Indexes of input data fields  
+      real :: field1(jpi,jpj,jpk) ! Fields to read initial input data
+      real :: field2(jpi,jpj,jpk) ! for time-interpolation to the starting date
+      real :: weight          ! Weight in the time-interpolation
+!c
+      integer :: month1,month2
+      integer :: month,day
+      integer ndm(12)
+      data ndm/31,28,31,30,31,30,31,31,30,31,30,31/
+      character*3 month_name(12)
+      data month_name /'JAN','FEB','MAR','APR','MAY','JUN',&
+                       'JUL','AUG','SEP','OCT','NOV','DEC'/
+!c
+      real :: bid
+      real :: chla_cheb(jpk)  ! profil initial chla
+!c
+      integer :: ipg, jpg,ip,jp  !Dummy looping indices
+      integer :: ipg1, jpg1  !Dummy looping indices
+      integer :: ipg2, jpg2  !Dummy looping indices
+
+!c
+!c---PARAMETRES DES FONCTIONS BIO
+!c
+      real, parameter :: k3d=1.0 ! cste de 1/2 sat. de la prise de NO3 = 1. mmolN m-3
+      real, parameter :: k4d=0.5 ! cste de 1/2 sat. de la prise de NH4 = 0.5 mmolN m-3
+      real, parameter :: k3f=1.0 ! cste de 1/2 sat. de la prise de NO3 = 1. mmolN m-3
+      real, parameter :: k4f=0.3 ! cste de 1/2 sat. de la prise de NH4 = 0.1 mmolN m-3
+!c     
+#if defined (VARIA_LIGHT_SENSI)
+      real :: ked, ek              ! cste de 1/2 sat. pour la lumiere DIAT variable en fonction de la salinite
+      real :: deltas
+#else
+!cc      real, parameter :: ked=10. ! cste de 1/2 sat. pour la lumiere DIAT = 10 Ein m-2 d-1
+      real, parameter :: ked=15. ! cste de 1/2 sat. pour la lumiere DIAT = 20 Ein m-2 d-1
+#endif
+      real, parameter :: kef=9. ! cste de 1/2 sat. pour la lumiere FLAG = 10 Ein m-2 d-1
+!c
+!DL, addition June 2013 to limit production at low light levels (light compensation intensity)
+!DL      real, parameter :: lcompp=0.30 * 0.39744  ! 0.3 W/m2 converted to Ein m-2 d-1
+      real, parameter :: lcompp=0.1 * 0.39744  ! W/m2 converted to Ein m-2 d-1
+!c     
+      real, parameter :: tcritd=8.4 ! taux de croissance critique DIAT = 8.4 d 
+      real, parameter :: tcritf=8.4 ! taux de croissance critique FLAG = 8.4 d 
+      real, parameter :: tdmind=0.5 ! taux de croissance minimum DIAT = 0.5 d 
+      real, parameter :: tdminf=0.65 ! taux de croissance minimum FLAG = 0.5 d
+!c     
+      
+      real, parameter :: kw=0.04 ! coef. attenuation water = 0.04 m-1
+!c 
+!DL2014      real, parameter :: gmez=0.4/86400. ! MESO grazing max = 0.4 d-1 en sec version 5 (0.2 pour versions anterieures)
+      real, parameter :: gmez=0.55/86400. ! MESO grazing max = 0.4 d-1 en sec version 5 (0.2 pour versions anterieures)
+      real, parameter :: gmiz=1.9/86400.  ! MICRO grazing max = 2 d-1 en sec
+!DL2014      real, parameter :: hmez=0.3        ! cste Ivlev MESO mmolN m-3 (Ivlev modifiee: Fennel 2001)
+      real, parameter :: hmez=0.9       ! cste Ivlev MESO mmolN m-3 (Ivlev modifiee: Fennel 2001)
+      real, parameter :: hmiz=0.7        ! tx auquel la saturation est atteinte MICRO mmolN m-3
+      real, parameter :: mezas=0.7       ! MESO assimilation = 70% 
+!DL2014      real, parameter :: mizas=0.4       ! MICRO assimilation = 40%
+      real, parameter :: mizas=0.4       ! MICRO assimilation = 40%
+!c     
+      real, parameter :: dlpi=0.02/86400. ! DIAT mortality = 0.02 d-1 en sec
+      real, parameter :: dspi=0.02/86400. ! FLAG mortality = 0.02 d-1 en sec
+!      real, parameter :: dmez=0.05/86400.! MESO mortality = 0.05 d-1 en sec		
+!Adding temperature dependent mortality rate, DL Dec 2014 as per Buitenhuis et al. 2006
+      real, parameter :: dmez0=0.048/86400.! MESO mortality = 0.05 d-1 en sec		
+      real, parameter :: cmez0=1.056     ! MESO temperature dependence of mortality 	
+      real, parameter :: dmizi=0.02/86400.! MICRO mortality = 0.02 d-1 en sec
+      real, parameter :: fmizf=0.45        ! Fraction of MIZ used as food by mezozoo, added november 2014 by DL
+!c
+!DL      real, parameter :: sed=1./86400. ! Sedimentation DIAT = 1 m d-1 en sec
+      real, parameter :: sedmax=0.9/86400. ! Sedimentation DIAT = 1 m d-1 en sec
+!      real, parameter :: sedmop=30.0/86400. ! Sedimentation MOP = 100 m d-1 en sec
+!DL      real, parameter :: sedmopup=42.0/86400. ! Sedimentation MOP in upper layer = 100 m d-1 en sec
+!c
+!DL      real, parameter :: regmod=0.2/86400.  ! Regeneration MOD => NH4 = 0.2 d-1 en sec (version 4.3v1)
+!DL, sept 2014      real, parameter :: regmod=0.4/86400. ! Regeneration MOD => NH4 = 0.4 d-1 en sec
+      real, parameter :: regmodi=0.25/86400. ! Regeneration MOD => NH4 = 0.4 d-1 en sec
+      real, parameter :: fgmopup=0.16/86400. ! Fragmentation MOP in upper layer = 0.1 d-1 en sec
+!DL      real, parameter :: fgmop=0.05/86400. ! Fragmentation MOP = 0.05 d-1 en sec
+      real, parameter :: fmopf=0.3         ! Fraction of MOP used as food by microzoo, added november 2014 by DL
+!c
+      real, parameter :: mizdom=0.3 ! % de 1.-mizas excrete en DON par le MICRO = 30% 
+!c      real, parameter :: mezexnh4=0.01/86400.  ! taux de perte de NH4 par le MESO = 0.01 d-1 en sec (version 4.3v1) 
+      real, parameter :: mezexnh4=0.05/86400. ! taux de perte de NH4 par le MESO = 0.05 d-1 en sec
+!c
+! DL inclusion of nitrification as a function of depth following Denman(2003)
+!  september 2014
+!      real, parameter :: vox=0.029/86400. ! max nitrification rate = 0.03 d-1 en sec
+!      real, parameter :: zox=50. ! 50% nitrification depth in m
+!      integer, parameter :: nx=7 ! exponent determining sharpness inhibition above zox
+!c
+! DL inclusion of nitrification as a function of light Sibert et al (2011)
+! november 2014
+! with nh4 limitation, max nitrif needs to be higher
+!DL      real, parameter :: nitrifmax=0.029/86400. ! max nitrification rate = 0.03 d-1 en sec
+      real, parameter :: nitrifmax=0.05/86400. ! max nitrification rate = 0.03 d-1 en sec
+      real, parameter :: knitreg=0.03          ! half saturation for the nh4 dependence
+      real kenitr                               ! Light limitation coefficient
+
+#if defined (OXYGEN)
+      real, parameter :: Rnp_o2=(138./16.) ! O2:N molar ratio during new production
+      real, parameter :: Rrp_o2=(106./16.) ! O2:N molar ratio during recycled production and remineralisation
+      real, parameter :: knito2=30.        ! half saturation for nitrification O2 dependence
+#endif
+!c
+#if defined (key_carbon)
+      real, parameter :: Rnp_NC  =106./16.    ! C:N molar ratio during new production
+      real, parameter :: Rrp_NC  =106./16.    ! C:N molar ratio during recycled production and remineralisation
+!      real, parameter :: rhomer  =1025.          ! Masse volumique de la mer
+      real, DIMENSION(jpi,jpj,jpk) :: rhomer3D   ! potential volumic mass, from rhop calculated in each step (by SUBROUTINE eos)
+      real, parameter :: UNM     =3600.*24*30    ! Un mois en secondes
+      real :: Deltamois                          ! Deltamois: Nombre de mois a partir de 1978
+#endif
+
+#if defined (key_AND)
+! inclusion of the concentration of N in precipitation
+      real ::  no3mconc 
+      real ::  nh4_mconc 
+#endif
+!!DB -- assign pointers to default trn, trb arrays
+     diat => trn(:,:,:,1)
+     flag => trn(:,:,:,2)
+     no3 => trn(:,:,:,3)
+     nh4 => trn(:,:,:,4)
+     meso => trn(:,:,:,5)
+     micro => trn(:,:,:,6)
+     mop => trn(:,:,:,7)
+     modis => trn(:,:,:,8)
+
+     Xdiat => trb(:,:,:,1)
+     Xflag => trb(:,:,:,2)
+     Xno3 => trb(:,:,:,3)
+     Xnh4 => trb(:,:,:,4)
+     Xmeso => trb(:,:,:,5)
+     Xmicro => trb(:,:,:,6)
+     Xmop => trb(:,:,:,7)
+     Xmodis => trb(:,:,:,8)
+
+#if defined (OXYGEN)
+     oxy => trn(:,:,:,9)
+     Xoxy => trb(:,:,:,9)
+#endif
+#if defined (key_carbon)
+     TCO2 => trn(:,:,:,10)
+!     pCO2AIR =  prCO2AIR(kt) !NL#11 Calcul of CO2 concentration ! necessaire?
+#endif
+
+!       if (lwp)print*,'IN lifemaker'
+
+       ice_conc(:,:)=(1.0-frld(:,:)) !Frld is fraction of free water
+
+!c
+!c-----------------------------------------------------------------------
+!c
+!c     if(lwp) print*,'--- >  at timestep = ',kt,' / ',nitend
+!c
+!c-----------------------------------------------------------------------
+
+!NL--- Bathy level
+!NL       note that mbathy has been modified in dommsk or in solver.
+!NL       it is the number of non-zero "w" levels in the water, and the minimum
+!NL       value (on land) is 2. We define zprt as the number of "T" points in the ocean
+!NL       at any location, and zero on land.
+!NL   IMPORTANT change: replaced mbathy by zprt in the document
+!ML   zprt => "real" nlayer
+!DL Need to conserve lowest mbathy at 2
+!DL      zprt = tmask(:,:,1)*(mbathy-1)      ! NL
+      zprt(:,:) = tmask(:,:,1)*max(2,mbathy-1) 
+
+! Calcul the short wave radiation at the first step and at each hour NL#8
+      if (first.or.mod(kt*rdt,3600.).lt.rdt) call flx_blk_swr( kt )
+
+!c---CONDITIONS INITIALES
+!c
+      if (first) then
+!       if(lwp) print*,'> Initialization for NPZD model...'
+      first=.false.
+
+!c------------------------------
+#if defined (NPZD_INT_PROD)
+!c -> output frequency of the integrated productions
+      outfreq=INT(86400/rdt) !AD:
+!c
+!c -> init variables used for time integration
+      pnwd(:,:,:)=0.
+      pregd(:,:,:)=0.
+      pnwf(:,:,:)=0.
+      pregf(:,:,:)=0.
+      pmesd(:,:,:)=0.
+      pmesm(:,:,:)=0.
+      pmicf(:,:,:)=0.
+      pmicm(:,:,:)=0.
+      trap(:,:)=0.
+      sediment(:,:)=0.
+#endif
+!c     
+#if defined (OXYGEN)
+      prod_o2(:,:,:)=0.
+      cons_o2(:,:,:)=0.
+      flx_o2(:,:)=0.
+#endif
+!c
+!c------------------------------
+#if defined (NPZD_DIAG)
+      totini=0. 
+      totfin=0.
+      totsedim=0.
+      matterbudget=0.
+#endif
+!c     
+#if defined (OXY_DIAG)
+      totini_o2=0. 
+      totfin_o2=0.
+      airsea_o2=0.
+      o2_budget=0.
+#endif
+!c
+#if defined (key_carbon)
+      prod_TCO2(:,:,:)=0.
+      cons_TCO2(:,:,:)=0.
+      flx_CO2(:,:)=0.
+      ALK(:,:,:)=0.
+      SolubCO2(:,:,:)=0.
+      pCO2W3D(:,:,:)=0.
+      pHW3D(:,:,:)=0.
+      TCO3(:,:,:)=0.
+      SatCa3D(:,:,:)=0.
+      SatAr3D(:,:,:)=0.
+#endif
+!c
+#if defined (key_carbon_DIAG) 
+      totini_TCO2=0.
+      totfin_TCO2=0.
+      airsea_CO2=0.
+      TCO2_budget=0.
+#endif
+!c
+!c---Initialisation ecosystem variables
+!DL Initialisation of no3, oxy and TCO2(or DIC) is done in lib_bgcm_02
+!DL not to be redone here as will erase 3D initial field
+!c--The DIC (CO2+HCO3+CO3) data unit is (micromol/kg)
+        if (.not.lrsttr) then       !NL#2  (put trn pointer to zero only if is not a restart)
+        print*,'lrsttr =', lrsttr
+        nh4(:,:,:)=0.
+        diat(:,:,:)=0.
+        flag(:,:,:)=0.
+        meso(:,:,:)=0.
+        micro(:,:,:)=0.
+        mop(:,:,:)=0.
+        modis(:,:,:)=0.
+        endif           !NL#2
+!DL these should be initialized in bgcm_02, if lrsttr, else ...
+        parz(:,:,:)=0.
+        PAR_surf(:,:)=0.
+        PAR_surf_2h(:,:,:)=0.
+        ze01(:,:)=0.
+        sedim(:,:)=0.
+        sediment(:,:)=0.
+        trap(:,:)=0.
+!c	    
+!c----------------------------------------------------------
+!c---PROFILS INITIAUX ECOSYSTEM VARIABLES
+!c----------------------------------------------------------
+!c
+!c---Initial NO3 profiles are time-interpolated from monthly NO3 field
+!DL These are now initialised in lib_bgcm_02
+!c-----------------------------------------------------------------------
+
+!C -- Diane Lavoie, added october 2012
+!c---Read the Gulf of St. Lawrence mask for the application of variable kcdom and ked
+!c-----------------------------------------------------------------------------------
+!      open(200,file='mask_Gulf_SLE.dat')
+!       if(lwp)  print*,'========================================================'
+!      if(lwp) print*,'> Reading Gulf mask'
+!      if(lwp) print*, 'jpi, jpj in lifemaker', jpi, jpj          
+!      if(lwp) print*, 'jpidta, jpjdta in lifemaker', jpidta, jpjdta   
+!      do i=1,jpidta
+!         read(200,*) (maskGSLglob(i,j),j=1,jpjdta)
+!      enddo
+!      close(200)
+
+!c ------------------
+!c local domain level
+!c ------------------
+!      maskGSL(:,:)=0
+!      do j=1,nlcj
+!         do i=1,nlci
+!            maskGSL(i,j)=maskGSLglob(mig(i),mjg(j))
+!         enddo
+!      enddo
+
+!c
+!c---Read an initial fixed CHLA vertical profile for the whole domain
+!c-----------------------------------------------------------------------
+      open(201,file='chla_ini.dat')
+!       if(lwp)  print*,'========================================================'
+!       if(lwp) print*,'> Initial fixed mean Chla vertical profile read'
+      do k=1,jpk
+         read(201,*) bid,chla_cheb(k)
+!         write(*,FMT="('k = ',I4,' | Chla = ',F10.2)") k,chla_cheb(k)
+      enddo
+      close(201)
+       !DL		 chla_cheb(:)=0.1 !JC:
+      if (.not.lrsttr) then       !NL#2  (initialize trn pointer  only if is not a restart)
+
+!c
+#if defined (key_carbon)
+!c
+!c--Read a initial fixed vertical profile of Dissolved Inorganic Carbon for the whole domain
+!c---Do the time-interpolation
+!c       TCO2(:,:,:) = (1.-weight)*field1(:,:,:)*(rhomer/1000.) &
+!c		   + weight*field2(:,:,:)*(rhomer/1000.)
+!       TCO2(:,:,:) = TCO2(:,:,:)*(rhomer/1000.) 
+! Here DIC was converted to mmol/m3 but this will be modifies to convert production and ci=onsumption instead
+      rhomer3D=rhop  !NL#9 (3D array for the water density
+!      rhomer3D=rhomer   !NL#9 (constant for the water density)
+      TCO2(:,:,:) = TCO2(:,:,:)*(rhomer3D(:,:,:)/1000.) !NL#9
+
+#endif
+
+!c---General initialisation for NH4,MOP,MOD,DIAT,FLAG,MESO,MICRO
+!c-----------------------------------------------------------------------
+      do j=1,jpj
+       do i=1,jpi
+        if (zprt(i,j) .gt. 0) then
+           do k=1,zprt(i,j)
+              nh4(i,j,k) = 1.
+              mop(i,j,k) = 0.05
+              modis(i,j,k) = 0.05
+              diat(i,j,k) = (0.5*chla_cheb(k)) /1.5
+              flag(i,j,k) = (0.5*chla_cheb(k)) /1.5
+              chla(i,j,k) = chla_cheb(k)
+              meso(i,j,k) = 0.1  !DL was 0.4 for startup in fall
+              micro(i,j,k) = 0.1  !DL was 0.4 for startup in fall
+
+           enddo 
+        endif
+       enddo 
+      enddo
+      endif !NL#2
+
+!AD: init before value ... otherise get ~trn/2 on next timestep (VERY IMPORTANT)
+      trb(:,:,:,:) = trn(:,:,:,:)
+
+      endif     !first if for initialisation
+!c
+!c-----------------------------------------------------------------------
+!c     BOUCLE PRINCIPALE SUR j et i 
+!c-----------------------------------------------------------------------
+
+      do j=1,jpj
+      do i=1,jpi
+        if (zprt(i,j) .gt. 0) then
+!c-----------------------------------------------------------------------
+!c   Definition de la distance entre deux points centraux: dzt(k)
+!c   utilise pour la penetration de l'eclairement et la sedimentation
+!c     pd(k) = epaisseur de chaque couche
+!c     en surface: prise en compte de l'elevation de l'eau pd(1)+za(i,k)
+!c     au fond: epaisseur variable: pd(zprt(i,k)) = ldep(i,k)
+!c-----------------------------------------------------------------------
+!c---> Y. Le Clainche (IML) - jan 07
+!c---> Simplification du calcul des distances entre les milieux des couches
+
+!AD      pd(1) = dz(1) +za(i,k)
+      pd(:)=e3t(:)  !JC: Needs water level here
+      dzt(1) = e3t(1)/2. !AD: +za(i,k)
+      do k=2,zprt(i,j)
+!DL        if (k.eq.zprt(i,j)) then
+!AD: no partial cell now          dzt(k) = (pd(k-1)+ldep(i,j))/2.
+!DL          dzt(k) = (pd(k)+pd(k-1))/2. !AD: No partial cell
+!DL        else
+          dzt(k) = (pd(k)+pd(k-1))/2.
+!DL        endif
+      enddo
+
+!c 
+!c-----------------------------------------------------------------------
+!c
+!c   DEFINITION DU CHAMP DE LUMIERE
+!c   Modele optique Morel 1988
+!c-----------------------------------------------------------------------
+!c
+!c 1- Calcul du coefficient d'attenuation kcdom (fonction de la salinite)
+!c 2- Variable light sensitivitiy of diatoms in function of surface salinity
+!c DL- june 2013. I modified the value in order to increase ked
+
+!         if (maskGSL(i,j) .gt. 0) then
+           do k=1,zprt(i,j)
+!DL              if (sn(i,j,k).LE.26.) then !JC: Salt
+              if (sn(i,j,k).LE.25.2) then !JC: Salt
+                kcdom(i,j,k) = 0.2492
+!DL              else if (sn(i,j,k).GE.32.) then
+              else if (sn(i,j,k).GE.31.) then
+                kcdom(i,j,k) = 0.0302
+              else
+!DL                kcdom(i,j,k) = (-0.0365*sn(i,j,k)) + 1.1982
+                kcdom(i,j,k) = (-0.0377*sn(i,j,k)) + 1.1982
+             endif
+            enddo
+
+#if defined (VARIA_LIGHT_SENSI)
+!GSS4         deltas = sn(i,j,k) - 30.5
+!GSS4         ked = 10 + (10/(1+EXP(-5.*deltas)))
+         deltas = sn(i,j,1) - 32.0
+!DL         ked = 9.5+ (3.5/(1+EXP(-0.5*deltas)))
+!DL         ked = 8.8+ (4.7/(1+10**(-0.5*deltas)))
+         ked = 8.8+ (4.6/(1+10**(-0.48*deltas)))
+!tmort3          ked = -12.0*kcdom(i,j,1)+12.4
+!         if (sn(i,j,k).LE.26.) then !JC: Salt
+!             ked=0.65*26.
+!         else if (sn(i,j,k).GE.32.) then
+!             ked=0.65*32.
+!         else
+!             ked=0.65*sn(i,j,k)
+!         endif
+!DL for new hyperbolic light function
+!          ek = (-28.0*kcdom(i,j,1)+17.0)/225
+#endif
+!c
+!c-----------------------------------------------------------------------
+!c 2-Calculs du coefficient d'attenuation kchla due a la conc. en chla,
+!C   du champ de lumiere e et de la profondeur de la couche euphotique ze01
+!c
+!c---> Y. Le Clainche (IML) - jan 07
+!c---> ajout d'un test sur le PAR en surface pour limiter les calculs inutiles
+!c
+!---------------------------------------------------------------------------
+!DL
+!            if (nproc.eq.0.and.i.eq.3.and.j.eq.3) then
+!            print*, 'qrs_oce in lifemaker = ', qsr_oce(i,j)
+!            endif
+
+      PAR_surf(i,j) = (1.-ice_conc(i,j)) &
+!DL, April 2013               * (1.-Alb_o)*0.45*qsr_oce(i,j)     &
+!Albedo is already applied to qsr_oce in flxblk.F90
+               * 0.45*qsr_ocep(i,j)     &   !0.45 of SW is PAR, this fraction could be increased to 0.45
+               * 0.39744    ! conversion from W/m2 to Ein/m2/d
+!               * 0.9         !PAR appears to be too high with CMC
+
+!DL --- pour ecriture PAR aux 2 heures -----------
+      if(mod( (kt-nit000+1), nwritetrc/12 ) == 0 ) then
+         ttt=  mod( (kt-nit000+1),nwritetrc )/(nwritetrc/12)
+         if (ttt==0) ttt=12
+         PAR_surf_2h(i,j,ttt)=PAR_surf(i,j)/0.39744    !en W/m2
+      endif
+
+! DL Nitrification rate as a function of light - novembre 2014
+!-------------------------------------------------------------
+      kenitr = max(0.0000039744, 0.00003*PAR_surf(i,j));           !in Ein/m2/d
+!-------------------------------------------------------------
+!c
+      if (PAR_surf(i,j).GT.0.) then
+        chla(i,j,1) = (diat(i,j,1)+flag(i,j,1))*1.5
+        kchla(i,j,1) = 0.0518*(chla(i,j,1)**(-0.572))
+        if (chla(i,j,1).eq.0) kchla(i,j,1) =0.  !NL#4 protection to not have "NAN" at the previous line
+        e(i,j,1) = PAR_surf(i,j) &
+                 * EXP( -dzt(1)*(kw + kcdom(i,j,1) &
+                                   + kchla(i,j,1)*chla(i,j,1)) ) !in the center of the cell
+        parz(i,j,1) = (e(i,j,1)/24)*60.386473 ! reconversion to W/m2
+
+!       !NL#4 ze01(i,j) = e3t(1) !Layer thickness
+        e01 = 0.  !NL#4
+        e01(1) = e(i,j,1)/PAR_surf(i,j)  !NL#4
+!c
+        do k=2,zprt(i,j)
+          chla(i,j,k) = (diat(i,j,k)+flag(i,j,k))*1.5
+          kchla(i,j,k)=0.0518*((chla(i,j,k)+chla(i,j,k-1))/2.)**(-0.572) !from center of previous cell to center of actual cell
+          if (chla(i,j,k).eq.0) kchla(i,j,k) =0.  !NL#4 protection to not have "NAN" at the previous line
+          e(i,j,k) = e(i,j,k-1) &
+                     * EXP( -dzt(k)*(kw &
+                     + ((kcdom(i,j,k)+kcdom(i,j,k-1))/2.) &
+                     + kchla(i,j,k)*(chla(i,j,k)+chla(i,j,k-1))/2) )
+          parz(i,j,k) = (e(i,j,k)/24)*60.386473 ! reconversion to W/m2
+        enddo
+!
+!        k=2 !DL
+!        do while ((k.LE.zprt(i,j)).AND.(e(i,j,k)/PAR_surf(i,j).GT.0.01))
+!           k=k+1
+!        enddo
+!         ze01(i,j) = e3t(k-1)
+
+      !NL#4 =========== modifications au calcul de ze01
+       !do the loop until e01.gt.0.01
+        k=1
+        do while ((k.LE.zprt(i,j)).AND.(e01(k).GT.0.01))
+          !if (i==20.and.j==20.and.lwp) print*,gdept(k),e01(k)*100
+           ze01(i,j) = gdept(k) ! take this depth, because e01.not..gt.0.01
+           k=k+1
+           e01(k) = e(i,j,k)/PAR_surf(i,j)  !NL#4
+          ! Calcul the attenuation at k (half previous cell, half this cell)
+!DL nov2014           e01(k) = e01(k-1)*EXP( -e3t(k-1)/2*(kw + kcdom(i,j,k-1)+kchla(i,j,k-1)*chla(i,j,k-1)) &
+!DL nov 2014                                & -e3t(k)/2 * (kw + kcdom(i,j,k) + kchla(i,j,k) * chla(i,j,k)) )
+!NL#4
+        enddo
+!        k=k-1
+!        ! exit of the cell because e01 .not..gt. 0.01, so now ze01(i,j) is the last grid division
+!        ! .gt. 0.01
+!        ! calcul the last partial cell to have the exact depth with 0.01
+!             ! look if the 0.01 go over the bottom-cell division
+!        e01_bot=e01(k)*EXP( -e3t(k)/2*(kw + kcdom(i,j,k)+kchla(i,j,k)*chla(i,j,k)))
+!        if (k.lt.zprt(i,j).or.e01_bot.lt.0.01) then ! not the last wet cell or ze01 not over the division, normal calcul
+
+!          !if (i==20.and.j==20.and.lwp) print*,'#1',ze01(i,j)-log(0.01/e01(k))/(kw + kcdom(i,j,k)
+!          !+ kchla(i,j,k)*chla(i,j,k)),e01_bot
+!            ze01(i,j)=ze01(i,j)-log(0.01/e01(k))/(kw + kcdom(i,j,k) + kchla(i,j,k)*chla(i,j,k))
+!        elseif (k.lt.zprt(i,j).and.e01_bot.ge.0.01) then !over the cell division, but still wet cell
+!          !if (i==20.and.j==20.and.lwp) print*,'#2',ze01(i,j)+e3t(k)/2-log(0.01/e01_bot)/(kw + kcd
+!          !om(i,j,k+1) + kchla(i,j,k+1)*chla(i,j,k+1)),e01_bot
+!            ze01(i,j)=ze01(i,j)+e3t(k)/2-log(0.01/e01_bot)/(kw + kcdom(i,j,k+1) + kchla(i,j,k+1)*chla(i,j,k+1))
+!
+!        elseif  (k.eq.zprt(i,j).and.e01_bot.ge.0.01) then   ! depth over the last cell, but the de
+          !  pth of the bottom of the cell (or top of the next
+          !if (i==20.and.j==20.and.lwp) print*,'#3',zprt(i,j),gdepw(k+1)
+!            ze01(i,j)=0!gdepw(k+1)
+!        else; stop('Error in the conditions of the calcul of ze01')
+!        endif
+
+      !NL#4 =========== ^^^^^
+
+
+      else  ! PAR_surf = 0. => on ne fait pas les calculs
+        do k=1,zprt(i,j)
+          chla(i,j,k) = (diat(i,j,k)+flag(i,j,k))*1.5
+          e(i,j,k) = 0.
+          parz(i,j,k) = 0.
+        enddo
+        ze01(i,j) = 0.
+      endif
+!c         
+!c-----Output kcdom & kchla
+!cYVO -> ATTENTION a revoir.........................................
+
+!c
+!c---> Y. Le Clainche (IML) - jan 07
+!c---> le diagnostique de ze01 est realise avec le calcul du champ de lumiere (voir plus haut)
+!cYLCc-----Depths of 1%*PAR
+!cYLC       lum=0.01*(1.-ice_conc(i,j))*qsr_oce(i,j)*0.45*0.3586
+!cYLC       do k=2,zprt(i,j)
+!cYLC         if (e(i,j,k).le.lum) then
+!cYLC           ze01(i,j)=et3(k-1)
+!cYLC           GOTO 22
+!cYLC         endif
+!cYLC       enddo
+!cYLC   22  continue
+!c
+!c------------------------------------------------------------------------
+!c---Evaluation of mean total matter before differential equations
+!c Nota : on considre toutes les mailles de meme dimension 
+!c => le budget est exprime en tonnes de C
+!c
+#if defined (NPZD_DIAG)
+      bid = 0.       
+      do k=1,zprt(i,j)
+        bid = bid + pd(k)*79.5*( no3(i,j,k)  + nh4(i,j,k) &
+                              + diat(i,j,k) + flag(i,j,k) &
+                              + meso(i,j,k) + micro(i,j,k) &
+                              + mop(i,j,k)  + modis(i,j,k))
+      enddo
+!JC:      totini = totini + (16./1000.)*bid      
+      totini = totini + ((e1t(i,j)*e2t(i,j))/1.e9)*bid      
+#endif
+!c
+!c------------------------------------------------------------------------
+!c---Evaluation of mean total oxygen before differential equations
+!c
+#if defined (OXY_DIAG)
+      bid = 0. 
+      do k=1,zprt(i,j)
+        bid = bid + pd(k)*oxy(i,j,k)*0.0223916 ! en (mL/L) x m 
+      enddo
+      totini_o2 = totini_o2 + ((e1t(i,j)*e2t(i,j))*1.E3)*bid ! en L
+#endif
+!c
+#if defined (key_carbon_DIAG)
+      bid = 0.
+      do k=1,zprt(i,j)
+        bid = bid + pd(k)*TCO2(i,j,k)
+      enddo
+      totini_TCO2 = totini_TCO2 + ((e1t(i,j)*e2t(i,j))*1.)*bid
+#endif
+!c
+!c------------------------------------------------------------------------
+!c---EQUATIONS BIO -> boucle sur les niveaux verticaux
+!c
+      do k=1,zprt(i,j)
+!c
+!c-----------------------------------------------------------------------
+! NITRIFICATION RATE  added by DL in september 2014
+!
+!       nitrif=(vox*gdept(k)**nx)/(zox**nx + gdept(k)**nx)
+!       if (lwp)print*,'i,j,k,gdept,nitrif',i,j,k,gdept(k),nitrif
+! Nitrification rate  added by DL in november 2014
+       if (Xnh4(i,j,k).lt.0.05) then
+          nitrif = 0.
+       else
+          nitrif=nitrifmax*(1.0-(e(i,j,k)/(e(i,j,k)+kenitr)))*(Xnh4(i,j,k)/(Xnh4(i,j,k)+knitreg))
+#if defined (OXYGEN)
+          nitrif=nitrif*(Xoxy(i,j,k)/(Xoxy(i,j,k)+knito2))
+#endif
+       endif
+
+! Fragmentation rate decreases below xx meters  added by DL in October 2014
+!       fgmop=fgmopup*min(1.0,(90.0/gdept(k))**-0.25)
+!       fgmop=fgmopup*min(1.0,(100.0/gdept(k))**0.65)
+       fgmop=fgmopup
+!       if (lwp)print*,'i,j,k,gdept,fgmop',i,j,k,gdept(k),fgmop
+
+! Sedimentation rate decreases below xx meters  added by DL in February 2016
+!       sedmop=sedmopup*min(1.0,(100.0/gdept(k))**0.18)
+!DL2018 ****************************************************************
+!DL2018 Definition du taux de chute de la MOP en fonction de la salinite
+!D2018L ****************************************************************
+             if (sn(i,j,1).LE.26.) then !Salt
+                sedmop=35.0/86400.    !m d-1 en sec
+             else
+                sedmop=25.0/86400.    !m d-1 en sec
+             endif
+!c------------------------------------------------------------------------
+!c------------------------------------------------------------------------
+!c---TX DE CROISSANCE DES DIAT
+!c
+!DL, oct 2014, new formulation for nutrient uptake, following Vallino and LeQuere (2008)
+
+      fnh4d(i,j,k)=Xnh4(i,j,k)/(k4d+Xnh4(i,j,k))
+      fno3d(i,j,k)=Xno3(i,j,k)*(1-fnh4d(i,j,k))/(k3d+Xno3(i,j,k))
+      fnd(i,j,k)=fnh4d(i,j,k)+fno3d(i,j,k)
+
+!          if (nproc.eq.0.and.i.eq.3.and.j.eq.3) then
+!          print*, 'k, fnh4d, fno3d, fnd= ', k, fnh4d(i,j,k), fno3d(i,j,k), fnd(i,j,k)
+!          endif
+!
+!      fnd(i,j,k) = (Xno3(i,j,k)*k4d + Xnh4(i,j,k)*k3d) &
+!                / (k4d*k3d + Xno3(i,j,k)*k4d + Xnh4(i,j,k)*k3d)
+!
+!          if (nproc.eq.0.and.i.eq.3.and.j.eq.3) then
+!          print*, 'k, fnd= ', k, fnd(i,j,k)
+!          endif
+
+!          if (nproc.eq.0.and.i.eq.3.and.j.eq.3) then
+!          print*, 'k, ked, e(i,j,k) = ', k, ked, e(i,j,k), lcompp
+!          endif
+
+!DL2013, addition of light compensation intensity      if (e(i,j,k).eq.0.) then 
+      if (e(i,j,k).lt.lcompp) then 
+        mud(i,j,k)=0.
+        fno3d(i,j,k)=0.
+        fnh4d(i,j,k)=0.
+      else if (fnd(i,j,k).eq.0.) then !I think this can be removed now
+        mud(i,j,k)=0.
+      else
+        tsd(i,j,k)=tdmind/fnd(i,j,k)
+        tcd(i,j,k)=tdmind*(1.+(ked/e(i,j,k)))
+
+!          if (nproc.eq.0.and.i.eq.3.and.j.eq.3) then
+!          print*, 'tsd(i,j,k) - nut = ', k, tsd(i,j,k)
+!          print*, 'tcd(i,j,k) - light1 = ', k, tcd(i,j,k)
+!          endif
+!new formulation exponentielle, tried in may 2014
+!        tcd(i,j,k)=tdmind/(1-exp(-ek*parz(i,j,k)))
+!          if (nproc.eq.0.and.i.eq.3.and.j.eq.3) then
+!          print*, 'tsd(i,j,k) - nut = ', k, tsd(i,j,k)
+!          print*, 'tcd(i,j,k) - light2 = ', k, tcd(i,j,k)
+!          endif
+
+        if (tsd(i,j,k).ge.tcritd) then
+          mud(i,j,k)=0.
+          fno3d(i,j,k)=0.
+          fnh4d(i,j,k)=0.
+        else if (tcd(i,j,k).ge.tcritd) then
+          mud(i,j,k)=0.
+          fno3d(i,j,k)=0.
+          fnh4d(i,j,k)=0.
+        else
+!DL New formulation for max growth rate based on temperature relation, put back to initial on spet. 2014
+!          mupm(i,j,k) = 0.8511*exp(0.0642*min(tn(i,j,k),14.0))*0.69; !Eppley max growth rate
+!          mupm(i,j,k) = 0.8511*exp(0.0642*tn(i,j,k))*0.69; !Eppley max growth rate
+          mud(i,j,k) = alog(2.) / (MAX(tcd(i,j,k),tsd(i,j,k))) /86400.
+
+!          if (nproc.eq.0.and.i.eq.3.and.j.eq.3) then
+!          print*, 'mud(i,j,k) no T = ', k, mud(i,j,k)
+!          endif
+
+!          mud(i,j,k) = mupm(i,j,k)*tdmind/ (MAX(tcd(i,j,k),tsd(i,j,k))) /86400.
+
+!          if (nproc.eq.0.and.i.eq.3.and.j.eq.3) then
+!          print*, 'mud(i,j,k) with T = ', k, tn(i,j,k), mud(i,j,k)
+!          endif
+
+!Now calculate on top                    
+!DL, oct 2014          fno3d(i,j,k) = (Xno3(i,j,k)*k4d) &
+!DL, oct 2014                       / (Xno3(i,j,k)*k4d + Xnh4(i,j,k)*k3d)
+        endif
+      endif
+!DL test pour nobio on no3
+!     mud(i,j,k)=0.
+!DL Diatoms sedimentation rate, December 29 2015
+      sed=sedmax !*(1-fnd(i,j,k))
+!c      
+!c------------------------------------------------------------------------
+!c---TX DE CROISSANCE DES FLAG
+!c
+!DL, oct 2014, new formulation for nutrient uptake, following Vallino and LeQuere (2008)
+
+      fnh4f(i,j,k)=Xnh4(i,j,k)/(k4f+Xnh4(i,j,k))
+      fno3f(i,j,k)=Xno3(i,j,k)*(1-fnh4f(i,j,k))/(k3f+Xno3(i,j,k))
+      fnf(i,j,k)=fnh4f(i,j,k)+fno3f(i,j,k)
+
+!      fnf(i,j,k) = (Xno3(i,j,k)*k4f + Xnh4(i,j,k)*k3f) &
+!                / (k4f*k3f + Xno3(i,j,k)*k4f + Xnh4(i,j,k)*k3f)
+
+!DL2013, addition of light compensation intensity      if (e(i,j,k).eq.0.) then 
+      if (e(i,j,k).lt.lcompp) then 
+        muf(i,j,k)=0.
+        fno3f(i,j,k)=0.
+        fnh4f(i,j,k)=0.
+      else if(fnf(i,j,k).eq.0.) then
+        muf(i,j,k)=0.
+      else
+        tsf(i,j,k)=tdminf/fnf(i,j,k)
+        tcf(i,j,k)=tdminf*(1.+(kef/e(i,j,k)))
+        if (tsf(i,j,k).ge.tcritf) then
+          muf(i,j,k)=0.
+          fno3f(i,j,k)=0.
+          fnh4f(i,j,k)=0.
+        else if (tcf(i,j,k).ge.tcritf) then
+          muf(i,j,k)=0.
+          fno3f(i,j,k)=0.
+          fnh4f(i,j,k)=0.
+        else
+          muf(i,j,k) = alog(2.) &
+                    / (MAX(tcf(i,j,k),tsf(i,j,k))) /86400.
+! Calculated at the top now
+!DL oct 2014          fno3f(i,j,k) = (Xno3(i,j,k)*k4f) &
+!DL oct 2014                      / (Xno3(i,j,k)*k4f + Xnh4(i,j,k)*k3f)
+        endif
+      endif
+!DL test pour nobio on no3
+!     muf(i,j,k)=0.
+!c
+!c-----------------------------------------------------------------------
+!c---TX DE BROUTAGE DU MESOZOO
+!c   Fonction Ivlev modifiee selon Fennel (JPR, 2001)
+!c   i=imax(1-exp(-(k*k)*(P*P)))
+!c
+!      mezg(i,j,k) = gmez * (1.- EXP(-(hmez**2)*((Xdiat(i,j,k)+Xmicro(i,j,k))**2)) )
+!DL, nov 2014, new formulation for mezozoo grazing
+! ADD CONDITION, if Xmicro smaller than xx, then fmizf=0.
+!SHould be the same as condition for zero micro mortality
+
+!c  
+!DL, nov 2014      if (Xdiat(i,j,k).eq.0.) then
+      if (Xdiat(i,j,k).lt.0.05) then
+          diatf=0.
+          dlp=0.
+          if (Xmicro(i,j,k).lt.0.05) then
+              mizf=0.
+              foodmez=0.
+              dmiz=0.
+          else
+              mizf=1.
+              foodmez=fmizf*Xmicro(i,j,k)
+              dmiz=dmizi
+          endif    
+      else
+!DL nov 2014          diatf = Xdiat(i,j,k) / (Xdiat(i,j,k)+Xmicro(i,j,k))
+          if (Xmicro(i,j,k).lt.0.05) then
+              diatf=1.
+              mizf=0.
+              foodmez=Xdiat(i,j,k)
+              dmiz=0.
+          else
+              foodmez=Xdiat(i,j,k)+(fmizf*Xmicro(i,j,k))
+              diatf = Xdiat(i,j,k) / foodmez 
+              mizf=1.-diatf
+              dmiz=dmizi
+          endif    
+          dlp=dlpi
+      endif
+      mezg(i,j,k) = gmez * ( (foodmez**2) / ((hmez**2)+(foodmez**2)) )
+!c
+!c-----------------------------------------------------------------------
+!c---TX DE mortalit/ du MESOZOO
+
+      if (Xmeso(i,j,k).lt.0.075) then
+          mezmorta = 0.0 
+          mez2nh4 = 0.0 
+      else 
+!DL Dec2014          mezmorta = dmez*(Xmeso(i,j,k)**2)  ! Quadratique mortality
+          dmez=dmez0*(cmez0**tn(i,j,k))
+          mezmorta = dmez*Xmeso(i,j,k)
+          mez2nh4 = mezexnh4*Xmeso(i,j,k)    ! Excretion of NH4
+      endif 
+!c
+!c-----------------------------------------------------------------------
+!c---TX DE BROUTAGE DU MICROZOO
+!DL, nov 2014, addition of mop as food source for microzoo
+!DL      mizg(i,j,k) = gmiz * ( (Xflag(i,j,k)**2) / ((hmiz**2)+(Xflag(i,j,k)**2)) )
+
+!DL, dec 2014 
+      if (Xflag(i,j,k).lt.0.025) then
+          flagf=0.
+          dsp=0.
+          if (Xmop(i,j,k).lt.0.03) then
+              mopf=0.
+              foodmiz=0.
+              fgmop=0.
+          else
+              mopf=1.
+              foodmiz=fmopf*Xmop(i,j,k)
+          endif
+      else
+          if (Xmop(i,j,k).lt.0.03) then
+              mopf=0.
+              flagf=1.
+              foodmiz=Xflag(i,j,k)
+              fgmop=0.
+          else
+              foodmiz=Xflag(i,j,k)+fmopf*Xmop(i,j,k)
+              flagf = Xflag(i,j,k) / foodmiz 
+              mopf=1.-flagf
+          endif
+          dsp=dspi
+      endif
+      mizg(i,j,k) = gmiz * ( (foodmiz**2) / ((hmiz**2)+(foodmiz**2)) )
+!c
+!c-----------------------------------------------------------------------
+!c---TX DE REGENERATION DU DON
+!DL, sept2015
+!c-----------------------------------------------------------------------
+          if (Xmodis(i,j,k).lt.0.02) then
+              regmod=0.
+          else
+              regmod=regmodi
+          endif
+!c
+!c-----------------------------------------------------------------------
+!c---PRODUCTIONS PRIMAIRES INTEGREES A CHAQUE POINT EN mgC/m3
+!c
+#if defined (NPZD_INT_PROD)
+!c
+!c -> Cumuls journaliers productions primaires
+!c
+!c    Production nouvelle des Diatoms       
+       pnwd(i,j,k)  = pnwd(i,j,k) &
+                   + rdt*( (Xdiat(i,j,k)*mud(i,j,k)*fno3d(i,j,k)) *79.5 )
+!c    Production regeneree des Diatoms
+       pregd(i,j,k) = pregd(i,j,k) &
+!DL, oct 2014                   + rdt*( (Xdiat(i,j,k)*mud(i,j,k)*(1.-fno3d(i,j,k))) *79.5 )
+                   + rdt*( (Xdiat(i,j,k)*mud(i,j,k)*fnh4d(i,j,k)) *79.5 )
+!c    Production mouvelle des Flagelates
+       pnwf(i,j,k)  = pnwf(i,j,k) &
+                   + rdt*( (Xflag(i,j,k)*muf(i,j,k)*fno3f(i,j,k)) *79.5 )
+!c    Production regeneree des Flagelates
+       pregf(i,j,k) = pregf(i,j,k) &
+!DL, oct 2014                   + rdt*( (Xflag(i,j,k)*muf(i,j,k)*(1.-fno3f(i,j,k))) *79.5 )
+                   + rdt*( (Xflag(i,j,k)*muf(i,j,k)*fnh4f(i,j,k)) *79.5 )
+!c
+!C
+!C----------------------------------------------------------------------
+!C---PRODUCTIONS SECONDAIRES INTEGREES A CHAQUE POINT EN mgC/m3
+!C
+!c -> Cumuls journaliers productions secondaires
+!c
+!c    Production mesozoo => diatoms      
+       pmesd(i,j,k) = pmesd(i,j,k) &
+                   + rdt*( (mezas*mezg(i,j,k)*diatf*Xmeso(i,j,k)) *84.)
+!c    Production mesozoo => microzoo     
+       pmesm(i,j,k) = pmesm(i,j,k) &
+                   + rdt*( (mezas*mezg(i,j,k)*mizf*Xmeso(i,j,k)) *84.)
+!c    Production microzoo => flagellates  
+       pmicf(i,j,k) = pmicf(i,j,k) &
+                   + rdt*( (mizas*mizg(i,j,k)*flagf*Xmicro(i,j,k)) *84.)
+!c    Production microzoo => flagellates  
+       pmicm(i,j,k) = pmicm(i,j,k) &
+                   + rdt*( (mizas*mizg(i,j,k)*mopf*Xmicro(i,j,k)) *84.)
+#endif
+!c
+#if defined (OXYGEN)
+!c-----------------------------------------------------------------------
+!c---PRODUCTION D'OXYGENE LORS DE LA PHOTOSYNTHESE
+!c
+       oxy_prod = (Rnp_o2 * Xdiat(i,j,k)*mud(i,j,k)*fno3d(i,j,k))  &      !Photosynthese diatoms (new production)
+!DL oct 2014               + (Rrp_o2 * Xdiat(i,j,k)*mud(i,j,k)*(1.-fno3d(i,j,k))) & !Photosynthese diatoms (regen. prod.)
+               + (Rrp_o2 * Xdiat(i,j,k)*mud(i,j,k)*fnh4d(i,j,k)) & !Photosynthese diatoms (regen. prod.)
+               + (Rnp_o2 * Xflag(i,j,k)*muf(i,j,k)*fno3f(i,j,k))  &     !Photosynthese flagelates (new production)
+!DL, oct 2014               + (Rrp_o2 * Xflag(i,j,k)*muf(i,j,k)*(1.-fno3f(i,j,k)))  !Photosynthese flagelates (regen. prod.)
+               + (Rrp_o2 * Xflag(i,j,k)*muf(i,j,k)*fnh4f(i,j,k))  !Photosynthese flagelates (regen. prod.)
+!c
+!c -> Cumul journalier de la production d'O2
+!YVL      if(kt.GT.nwritetrc) then 
+         prod_o2(i,j,k) = prod_o2(i,j,k) + rdt*oxy_prod !AD:
+!YVL      endif
+!c
+!c-----------------------------------------------------------------------
+!c---CONSOMATION D'OXYGENE LORS DES PROCESSUS DE REMINERALISATION
+!c   ET ECHANGE OCEAN-ATMOSPHERE EN SURFACE
+!c
+!       oxy_cons = (Rrp_o2 * mezexnh4*Xmeso(i,j,k))   &                          !Mesozoo NH4 excretion
+       oxy_cons = (Rrp_o2 * mez2nh4)   &                          !Mesozoo NH4 excretion
+                + (Rrp_o2 * regmod*Xmodis(i,j,k))     &                         !Regeneration DON -> NH4
+                + (Rrp_o2 * (1.-mizas)*(1.-mizdom)*mizg(i,j,k)*Xmicro(i,j,k)) &  !Microzoo NH4 excretion
+                + (Rrp_o2 * nitrif*Xnh4(i,j,k))                                 !nitrification NH4 -> NO3
+!c
+!c -> Cumul journalier de la consommation d'O2
+         cons_o2(i,j,k) = cons_o2(i,j,k) + rdt*oxy_cons
+!c
+!c -> Oxygen solubility in function of temperature and salinity
+      o2solub(i,j,k)=solubility_o2(tn(i,j,k),sn(i,j,k))
+!c
+!c -> O2 flux at sea surface 
+      if (k.EQ.1) then   ! couche de surface 
+         oxy_ventil = surf_flux_o2(o2solub(i,j,1),oxy(i,j,1),&
+                                   tn(i,j,1),vatm(i,j))
+      endif
+!c
+!c -> Cumul journalier du flux d'O2 en surface
+         flx_o2(i,j) = flx_o2(i,j) + rdt*(1.-ice_conc(i,j))*oxy_ventil
+!c
+#endif
+!c
+#if defined (key_carbon)
+!c 
+!c--Production de CO2 ------------------------------------------------------------------------------------c
+      TCO2_prod = &
+!DL dec2014               (Rrp_NC * mezexnh4*Xmeso(i,j,k))   &
+               (Rrp_NC * mez2nh4)   &
+             + (Rrp_NC * regmod*Xmodis(i,j,k))    & 
+             + (Rrp_NC * (1.-mizas)*(1.-mizdom)*mizg(i,j,k)*Xmicro(i,j,k)) 
+
+!effet nitrif sur CO2
+
+!YVL       if(kt.GT.nwritetrc) then
+       prod_TCO2(i,j,k) = prod_TCO2(i,j,k) + rdt*TCO2_prod
+!YVL       endif
+
+!c--Consommation de CO2 -----------------------------------------------------------------------------------c
+
+       TCO2_cons = &
+                (Rnp_NC * Xdiat(i,j,k)*mud(i,j,k)*fno3d(i,j,k)) &
+!DL, oct 2014              + (Rrp_NC * Xdiat(i,j,k)*mud(i,j,k)*(1.-fno3d(i,j,k)))  &
+              + (Rrp_NC * Xdiat(i,j,k)*mud(i,j,k)*fnh4d(i,j,k))  &
+              + (Rnp_NC * Xflag(i,j,k)*muf(i,j,k)*fno3f(i,j,k))  &
+!DL, oct 2014              + (Rrp_NC * Xflag(i,j,k)*muf(i,j,k)*(1.-fno3f(i,j,k)))
+              + (Rrp_NC * Xflag(i,j,k)*muf(i,j,k)*fnh4f(i,j,k))
+
+!YVL      if(kt.GT.nwritetrc) then
+        cons_TCO2(i,j,k) = cons_TCO2(i,j,k) + rdt*TCO2_cons
+!YVL      endif												
+
+!c--Calcul de pCO2 en surface -----------------------------------------------------------------------------c
+
+       ALK(i,j,k) = 1021.3 + 36.532 * sn(i,j,k)
+       !ALK(i,j,k) = max(1021.3 + 36.532 * sn(i,j,k),1439.)
+       ! Warning : min alkalinity set to 1350.
+
+       if (k.eq.1) then
+
+          Deltamois=12*(nyear-1978.)+nmonth
+
+          pCO2AIR =  prCO2AIR(((rdt*kt)/UNM)+Deltamois)
+!************************
+! rdt=480 sec., time step
+! kt = number of time step
+!DL, CAREFUL, check this value
+!************************
+         CALL pCO2EAU( TCO2(i,j,1)*(1000./rhomer3D(i,j,1)),tn(i,j,1),sn(i,j,1),&
+!         CALL pCO2EAU( TCO2(i,j,1)*(1000./rhomer),tn(i,j,1),sn(i,j,1),&
+                   ALK(i,j,1),pCO2W3D(i,j,1),SolubCO2(i,j,1) )
+
+!******************************************************
+!DL, TCO2 from initial data and boundary is in micromol#kg-sw, was converted into mmol m-3
+!DL but then boundary is not
+!DL pCO2EAU needs micromol/kg so reconvert to pass into the routine
+!DL should leave in micromol per kg and convert production consumption in water column?
+!DL or use mmol m-3 as input (convert observations)??
+!*******************************************************
+    
+         CO2_ventil = surf_flux_CO2( SolubCO2(i,j,1),pCO2AIR,  &
+!                                 pCO2W3D(i,j,1),tn(i,j,1),vatm(i,j))
+                        pCO2W3D(i,j,1),tn(i,j,1),vatm(i,j),rhomer3D(i,j,1))  !NL#9 : add rhomer3D(i,j,1) as argument
+
+         flx_CO2(i,j)=flx_CO2(i,j) + rdt*(1.-ice_conc(i,j))*CO2_ventil
+
+!          if (nproc.eq.0.and.i.eq.3.and.j.eq.3) then
+!          print*, 'flx_CO2(i,j)  = ', flx_CO2(i,j)
+!          endif
+
+       endif !      if (k.eq.1) then
+
+#endif
+!c
+!c-----------------------------------------------------------------------
+!c---EVOLUTION DIAT  in layer 'k'
+!c
+      diat(i,j,k) = diat(i,j,k) &
+                 + rdt*(mud(i,j,k)*Xdiat(i,j,k))       & ! Primary production
+                 - rdt*(mezg(i,j,k)*diatf*Xmeso(i,j,k))  & ! Grazing by mesozoo
+                 - rdt*(dlp*Xdiat(i,j,k))               ! Mortality 
+!c
+!DL, July 16, 2014, adding BMD modifications for sedimentation
+!DL      if (k.EQ.1) then      
+!DL         diat(i,j,k) = diat(i,j,k)    &
+!DL                     - rdt*(sed/dzt(k))*Xdiat(i,j,k)     ! Sedimentation outside the first layer
+!DL         diatsedup = rdt*(sed/dzt(k))*Xdiat(i,j,k)       ! Save to add to the lower layer
+!DL      else
+!DL         diat(i,j,k) = diat(i,j,k)    &
+!DL                    - rdt*(sed/dzt(k))*Xdiat(i,j,k) &     ! Sedimentation to below
+!DL                    + diatsedup                 ! Sedimentation from the upper layer
+!DL      endif
+!DL DL, Dec. 2014, add back diat sedim on bottom
+      if (k.EQ.1) then      
+         diat(i,j,k) = diat(i,j,k)    &
+                     - rdt*(sed/pd(k))*Xdiat(i,j,k)     ! Sedimentation outside the first layer
+!NL#13         diatsedup = rdt*(sed/pd(k))*Xdiat(i,j,k)       ! Save to add to the lower layer
+!DLDec2014      else if (k.LT.zprt(i,j)) then
+      else 
+         diat(i,j,k) = diat(i,j,k)    &
+!NL#13                   - rdt*(sed/pd(k))*Xdiat(i,j,k) &     ! Sedimentation to below
+!NL#13                   + diatsedup                 ! Sedimentation from the upper layer
+                    - rdt*(sed/pd(k))*(Xdiat(i,j,k)-Xdiat(i,j,k-1))
+!DLDec2104      else
+!DLDec2104         diat(i,j,k) = diat(i,j,k)    &
+!DLDec2104                     + diatsedup                  ! Sedimentation from the upper layer
+      endif
+!c
+!      if (nproc.eq.0.and.i.eq.3.and.j.eq.3.and.k.eq.1) then
+!      print*, 'diat in= ', diat(i,j,k)
+!      endif
+      diat(i,j,k) = MAX(0.001,diat(i,j,k))
+!c
+!c-----------------------------------------------------------------------
+!c---EVOLUTION FLAG in layer 'k'
+!c
+      flag(i,j,k) = flag(i,j,k) &
+                 + rdt*(muf(i,j,k)*Xflag(i,j,k)) &      ! Primary production 
+!DLnov2014                 - rdt*(mizg(i,j,k)*Xmicro(i,j,k)) &    ! Grazing by microzoo
+                 - rdt*(mizg(i,j,k)*flagf*Xmicro(i,j,k)) &    ! Grazing by microzoo
+                 - rdt*(dsp*Xflag(i,j,k))              ! Mortality
+!c
+!      if (nproc.eq.0.and.i.eq.3.and.j.eq.3.and.k.eq.1) then
+!      print*, 'flag in= ', flag(i,j,k)
+!      endif
+      flag(i,j,k) = MAX(0.001,flag(i,j,k))
+!c     
+!c-----------------------------------------------------------------------
+!c---EVOLUTION NO3 in layer 'k'
+#if defined (key_AND)
+      IF (k.EQ.1) then
+          no3mconc   = 1.5803E-5 !This value in the mean mmol/kg of water for the year 2006
+          no3(i,j,1) = no3(i,j,1) &
+                 - rdt*(mud(i,j,k)*fno3d(i,j,k)*Xdiat(i,j,k)) & ! Uptake by diatoms
+                 - rdt*(muf(i,j,k)*fno3f(i,j,k)*Xflag(i,j,k)) & ! Uptake by flagelates
+                 + rdt*nitrif*Xnh4(i,j,k) &                     ! nitrification
+                 + (rdt/86400)*no3mconc*watm(i,j)/e3t(1)        ! precipitation flux
+
+!      if (nproc.eq.0.and.i.eq.3.and.j.eq.3.and.k.eq.1) then
+!      print*, 'no3 in= ', no3(i,j,k)
+          no3(i,j,k) = MAX(0.001,no3(i,j,k))
+      
+      else 
+         no3(i,j,k) = no3(i,j,k) &
+                 - rdt*(mud(i,j,k)*fno3d(i,j,k)*Xdiat(i,j,k)) & ! Uptake by diatoms
+                 - rdt*(muf(i,j,k)*fno3f(i,j,k)*Xflag(i,j,k)) & ! Uptake by flagelates
+                 + rdt*nitrif*Xnh4(i,j,k)                       ! nitrification
+!      if (nproc.eq.0.and.i.eq.3.and.j.eq.3.and.k.eq.1) then
+!      print*, 'no3 in= ', no3(i,j,k)
+!      endif
+         no3(i,j,k) = MAX(0.001,no3(i,j,k))
+      endif
+#else
+         no3(i,j,k) = no3(i,j,k) &
+                 - rdt*(mud(i,j,k)*fno3d(i,j,k)*Xdiat(i,j,k)) & ! Uptake by diatoms
+                 - rdt*(muf(i,j,k)*fno3f(i,j,k)*Xflag(i,j,k)) & ! Uptake by flagelates
+                 + rdt*nitrif*Xnh4(i,j,k)                       ! nitrification
+!      if (nproc.eq.0.and.i.eq.3.and.j.eq.3.and.k.eq.1) then
+!      print*, 'no3 in= ', no3(i,j,k)
+!      endif
+         no3(i,j,k) = MAX(0.001,no3(i,j,k))
+#endif   
+!c-----------------------------------------------------------------------
+!c---EVOLUTION MICRO in layer 'k'
+!c
+      micro(i,j,k) = micro(i,j,k) &
+                   + rdt*(mizas*mizg(i,j,k)*Xmicro(i,j,k))  &   ! Intake by microzoo (growth)
+                   - rdt*(mezg(i,j,k)*mizf*Xmeso(i,j,k)) &! Grazing by mesozoo
+                   - rdt*(dmiz*Xmicro(i,j,k))                  ! Linear mortality
+!c
+      micro(i,j,k) = MAX(0.001,micro(i,j,k))
+!c
+!c-----------------------------------------------------------------------
+!c---EVOLUTION MESO in layer 'k'
+!c
+
+      meso(i,j,k) = meso(i,j,k) &
+                  + rdt*(mezas*mezg(i,j,k)*Xmeso(i,j,k)) &     ! Intake by mesozoo (growth)
+                  - rdt*mez2nh4   &
+                  - rdt*mezmorta              
+!c
+      meso(i,j,k) = MAX(0.001,meso(i,j,k))
+!c
+!c-----------------------------------------------------------------------
+!c---EVOLUTION NH4 in layer 'k'
+!c    if (k.EQ.1) then
+!      IF (k.EQ.1) then
+!         nh4_mconc=1000.
+!         nh4(i,j,k) = nh4(i,j,k) &
+!DL                 + rdt*(mezexnh4*Xmeso(i,j,k))  &                          ! Excretion by meso
+!                 + rdt*mez2nh4                  &                          ! Excretion by meso
+!                 + rdt*((1.-mizas)*(1.-mizdom)*mizg(i,j,k)*Xmicro(i,j,k)) &! Un-assimilited part of microzoo diet routed to NH4
+!                 + rdt*(regmod*Xmodis(i,j,k)) &                           ! Remineralization of DOM
+!DL, oct 2014                 - rdt*(mud(i,j,k)*(1.-fno3d(i,j,k))*Xdiat(i,j,k)) &      ! Uptake by diatoms
+!                 - rdt*(mud(i,j,k)*fnh4d(i,j,k)*Xdiat(i,j,k)) &      ! Uptake by diatoms
+!DL, oct 2014                 - rdt*(muf(i,j,k)*(1.-fno3f(i,j,k))*Xflag(i,j,k)) &      ! Uptake by flagelates
+!                 - rdt*(muf(i,j,k)*fnh4f(i,j,k)*Xflag(i,j,k)) &      ! Uptake by flagelates
+!                 - rdt*nitrif*Xnh4(i,j,k) &                                     ! nitrification
+!                 + rdt*nh4_mconc*watm(i,j)                          ! precipitation flux
+!         nh4(i,j,k) = MAX(0.001,nh4(i,j,k))
+!
+!        else
+           nh4(i,j,k) = nh4(i,j,k) &
+!DL                 + rdt*(mezexnh4*Xmeso(i,j,k))  &                          ! Excretion by meso
+                 + rdt*mez2nh4                  &                          ! Excretion by meso
+                 + rdt*((1.-mizas)*(1.-mizdom)*mizg(i,j,k)*Xmicro(i,j,k)) &! Un-assimilited part of microzoo diet routed to NH4
+                 + rdt*(regmod*Xmodis(i,j,k)) &                           ! Remineralization of DOM
+!DL, oct 2014                 - rdt*(mud(i,j,k)*(1.-fno3d(i,j,k))*Xdiat(i,j,k)) &      ! Uptake by diatoms
+                 - rdt*(mud(i,j,k)*fnh4d(i,j,k)*Xdiat(i,j,k)) &      ! Uptake by diatoms
+!DL, oct 2014                 - rdt*(muf(i,j,k)*(1.-fno3f(i,j,k))*Xflag(i,j,k)) &      ! Uptake by flagelates
+                 - rdt*(muf(i,j,k)*fnh4f(i,j,k)*Xflag(i,j,k)) &      ! Uptake by flagelates
+                 - rdt*nitrif*Xnh4(i,j,k)                                 ! nitrification
+
+!c
+!      if (nproc.eq.0.and.i.eq.3.and.j.eq.3.and.k.eq.1) then
+!      print*, 'nh4 in= ', nh4(i,j,k)
+!      endif
+           nh4(i,j,k) = MAX(0.001,nh4(i,j,k))
+!      endif
+!c
+!c-----------------------------------------------------------------------
+!c---EVOLUTION MOP in layer 'K'
+!c
+      mop(i,j,k) = mop(i,j,k)&
+                 + rdt*((1.-mezas)*mezg(i,j,k)*Xmeso(i,j,k)) & ! Un-assimilated part of mesozoo diet
+!DLdec2014                 + rdt*(dmez*(Xmeso(i,j,k)**2)) &              ! Dead mesozooo
+                 + rdt*mezmorta                 &              ! Dead mesozooo
+                 + rdt*(dlp*Xdiat(i,j,k)) &                    ! Dead diatom cells
+                 - rdt*(fgmop*Xmop(i,j,k)) &                   ! Fragmentation to DOM
+                 - rdt*(mizg(i,j,k)*mopf*Xmicro(i,j,k))        ! Grazing by microzoo
+
+!c
+!DL, July 16, 2014, adding BMD modifications for sedimentation
+      if (k.EQ.1) then      ! Ajout sedimentation en provenance de la couche superieure
+         mop(i,j,k) = mop(i,j,k) &
+!DL                    - rdt*(sedmop/pd(k))*0.5*(Xmop(i,j,k)+Xmop(i,j,k+1))   ! Sedimentation outside the first layer
+                    - rdt*(sedmop/pd(k))*Xmop(i,j,k)   ! Sedimentation outside the first layer
+!DL         mopsedup = rdt*(sedmop/pd(k))*Xmop(i,j,k)     !DL, added oct14 ! Save to add to the lower layer
+!DL                    - rdt*(sedmop/dzt(k))*Xmop(i,j,k)   ! Sedimentation outside the first layer
+!DL         mopsedup = rdt*(sedmop/dzt(k))*Xmop(i,j,k)        ! Save to add to the lower layer
+!DL      else
+!DL         mop(i,j,k) = mop(i,j,k) &
+!DL                    - rdt*(sedmop/dzt(k))*Xmop(i,j,k) & ! Sedimentation to below
+!DL                    + mopsedup                  ! Sedimentation from the upper layer
+!DL      endif
+!DL         else if (k.eq.zprt(i,j)) then
+!DL         mop(i,j,k) = mop(i,j,k) &
+!DL                    - rdt*(sedmop/pd(k))*0.5*(Xmop(i,j,k)-Xmop(i,j,k-1))
+         else   !sedimentation on the bottom needs to occur
+         mop(i,j,k) = mop(i,j,k) &
+!DL                    - rdt*(sedmop/pd(k))*0.5*(Xmop(i,j,k+1)-Xmop(i,j,k-1))
+                    - rdt*(sedmop/pd(k))*(Xmop(i,j,k)-Xmop(i,j,k-1))
+!NL#13                    - rdt*(sedmop/pd(k))*Xmop(i,j,k)  & ! Sedimentation to below
+!NL#13                    + mopsedup                  ! Sedimentation from the upper layer
+!DLoct14      else
+!DLoct14         mop(i,j,k) = mop(i,j,k) &
+!DLoct14                    + mopsedup                  ! Sedimentation from the upper layer
+      end if
+!c
+      mop(i,j,k) = MAX(0.001,mop(i,j,k))
+!c
+!c-----------------------------------------------------------------------
+!c---EVOLUTION MOD in layer 'k'
+!c
+      modis(i,j,k) = Xmodis(i,j,k) &
+                   + rdt*((1.-mizas)*mizdom*mizg(i,j,k)*Xmicro(i,j,k))&! Un-assimilited part of microzoo routed to DOM 
+                   + rdt*(dmiz*Xmicro(i,j,k)) &               ! Dead microzoo
+                   + rdt*(dsp*Xflag(i,j,k))   &               ! Dead flagelate cells
+                   + rdt*(fgmop*Xmop(i,j,k))  &               ! Fragmentation of POM to DOM 
+                   - rdt*(regmod*Xmodis(i,j,k))              ! Remineralization to NH4
+!c
+      modis(i,j,k) = MAX(0.001,modis(i,j,k))
+!c
+!c-----------------------------------------------------------------------
+!c---EVOLUTION of DISSOLVED OXYGEN in layer 'k'
+!c
+#if defined (OXYGEN)
+      oxy(i,j,k) = oxy(i,j,k) &
+                + rdt*oxy_prod &
+                - rdt*oxy_cons
+
+      if (k.eq.1) then      ! couche de surface d'epaisseur = dz(1)+za(i,k) 
+         oxy(i,j,1) = oxy(i,j,1) + rdt*(1.-ice_conc(i,j))*(oxy_ventil/(e3t(1)))
+      endif
+!c
+      oxy(i,j,k) = MAX(0.0,oxy(i,j,k))
+!c      
+#endif
+!c
+!c--Evolution de la concentration du carbone inorganique dissous (DIC, TCO2) dans la couche j ------------c
+!c--[TCO2]       = mmolC/m3
+!c--[TCO2_prod]  = mmolC/m3/s
+!c--[CO2_ventil] = mmolCO2/m2/s
+!c
+#if defined (key_carbon)
+
+      TCO2(i,j,k) = TCO2(i,j,k) + rdt*TCO2_prod - rdt*TCO2_cons  
+!DL on pourrait faire la conversion ici vu que l<on as la densit/ du modele
+      if (k.eq.1) then 
+         TCO2(i,j,1) = TCO2(i,j,1)+rdt*(1.-ice_conc(i,j))*(CO2_ventil/(e3t(1)))
+      endif
+
+      TCO2(i,j,k) = MAX(0.0,TCO2(i,j,k))
+
+!C--Calcul du pH de l'eau --------------------------------------------------
+      CALL pCO2pH(TCO2(i,j,k)*(1000./rhomer3D(i,j,k)),tn(i,j,k),sn(i,j,k),&
+!      CALL pCO2pH(TCO2(i,j,k)*(1000./rhomer),tn(i,j,k),sn(i,j,k),&
+                   ALK(i,j,k),pCO2W3D(i,j,k),SolubCO2(i,j,k),&
+                   pHW3D(i,j,k),TCO3(i,j,k))
+!c
+!C--Calcul la saturation d'aragonite et calcite ------------------------------
+!c
+       CALL CO3sat(tn(i,j,k),sn(i,j,k),TCO3(i,j,k),SatCa3D(i,j,k),SatAr3D(i,j,k))
+
+#endif
+!c
+!c----------------------------------------------------------------------
+!c---Sedimentation works
+!c Nota: The sedimentation flux 'mopsedup' and 'diatsedup' are coming from the upper layer 
+!c       (i.e save in the previous iteration in the k=1:zprt(i,j))
+!c
+!c-1- Accumulation in the sediments trap located at the model level 'lev_trap'
+!c-2- Save the sedimentation flux from the current layer to add to the lower one
+!c-3- Accumulation in the bottom sediments sedim(i,j)
+!c
+!c-1-
+!YVL      if(kt.GT.nwritetrc) then
+!DLfev2015        if((k.EQ.zprt(i,j)).OR.(k.EQ.lev_trap)) then
+!DLfev2015           trap(i,j) = trap(i,j)  + mopsedup*79.5  + diatsedup*79.5
+!DLmai2015 trap_lev or keep equal to zero
+!DLmai2015  shouldn't it be k-1 ????
+        if((k.LT.zprt(i,j)).AND.(k.EQ.lev_trap)) then
+!DL           trap(i,j) = trap(i,j)  + mopsedup  + diatsedup
+           trap(i,j) = trap(i,j) &
+                     + rdt*sedmop*Xmop(i,j,k) & 
+                     + rdt*sed*Xdiat(i,j,k) 
+        endif
+!YVL      endif
+!c-2-
+!DL, July 16, 2014, adding BMD modifications for sedimentation, except I am using pd(k)
+      if (k.GT.1) then  ! from the 2nde layer => for the 1st layer, see above the evolution of DIAT and MOP
+!         mopsedup = rdt*(sedmop/dzt(k))*Xmop(i,j,k)        ! Save to add to the lower layer
+!         diatsedup = rdt*(sed/dzt(k))*Xdiat(i,j,k)      ! Save to add to the lower layer
+!      endif
+!DLoct14      if (k.LT.zprt(i,j)) then   ! This check only required if using mopsedup and diatsedup for  sedi
+!DLnov2015         mopsedup = rdt*(sedmop/pd(k))*Xmop(i,j,k)   ! Save to add to the lower layer
+!NL#13         diatsedup = rdt*(sed/pd(k))*Xdiat(i,j,k)    ! Save to add to the lower layer
+      endif
+
+!c-3-
+      if(k.EQ.zprt(i,j)) then  
+         sedim(i,j) = rdt*(sedmop*Xmop(i,j,k) + sed*Xdiat(i,j,k))
+!NL14         sediment(i,j) = sediment(i,j) + sedim(i,j)
+         sediment(i,j) = sediment(i,j) + (sedim(i,j)*0.4)
+         modis(i,j,k) = modis(i,j,k) + (sedim(i,j)*0.6/pd(k))  !instant remin of sediment
+      endif
+!c
+!c --------------------------------------------------------------------
+#if defined DIAG_NPZD_GROWTH
+!c NL#10 Addition of the diat growth varibles for the daily mean
+        dmtcd(i,j,k)=dmtcd(i,j,k)+tcd(i,j,k)/nwritetrc
+        dmtsd(i,j,k)=dmtsd(i,j,k)+tsd(i,j,k)/nwritetrc
+        dmtcf(i,j,k)=dmtcf(i,j,k)+tcf(i,j,k)/nwritetrc
+        dmtsf(i,j,k)=dmtsf(i,j,k)+tsf(i,j,k)/nwritetrc
+#endif
+!c
+#if defined DIAG_NPZD_flux
+!  NL#12 Addition of the flux in modis for daily total
+        dfdmizdon(i,j,k) = dfdmizdon(i,j,k) + rdt*(dmiz*Xmicro(i,j,k))               ! Dead microzoo                   flow #G
+        dfdspdon(i,j,k)  = dfdspdon(i,j,k)  + rdt*(dsp*Xflag(i,j,k))                 ! Dead flagelate cells            flow #E
+        dffpondon(i,j,k) = dffpondon(i,j,k)  + rdt*(fgmop*Xmop(i,j,k))                ! Fragmentation of POM to DOM     flow #K
+        dfredonnh4(i,j,k)= dfredonnh4(i,j,k) + rdt*(regmod*Xmodis(i,j,k))              ! Remineralization to NH4        flow #F
+        dfppsp(i,j,k) = dfppsp(i,j,k)   + rdt*muf(i,j,k)*Xflag(i,j,k)               ! primary production of the flagelates flow #A2
+        dfpplp(i,j,k)  = dfpplp(i,j,k)  + rdt*mud(i,j,k)*Xdiat(i,j,k)               ! primary production of the diatome   flow #A2
+        dfnh4no3(i,j,k) = dfnh4no3(i,j,k) + rdt*nitrif*Xnh4(i,j,k)                    ! nitrification       flow #L
+        dfdlppon(i,j,k) = dfdlppon(i,j,k) + rdt*dlp*Xdiat(i,j,k)                      ! Dead diatom cells  flow#B
+        dfgrlpmez(i,j,k)= dfgrlpmez(i,j,k)+ rdt*mezg(i,j,k)*diatf*Xmeso(i,j,k)        ! Grazing by mesozoo to LP  flow #C
+        dfgrspmiz(i,j,k) = dfgrspmiz(i,j,k) + rdt*mizg(i,j,k)*flagf*Xmicro(i,j,k)       ! Grazing by microzoo to SP  flow #D
+        dfgrmezmiz(i,j,k)= dfgrmezmiz(i,j,k)+rdt*(mezg(i,j,k)*mizf*Xmeso(i,j,k))      ! Grazing by mesozoo  to MIZ  flow #I
+        dfdmezpon(i,j,k) = dfdmezpon(i,j,k) + rdt*dmez*Xmeso(i,j,k)                      ! Dead mesozooo   flow #J
+
+        dfgrponmiz(i,j,k)= dfgrponmiz(i,j,k) + rdt*mizg(i,j,k)*mopf*Xmicro(i,j,k)   ! Grazing by microzoo  to PON flow #M
+        dfemeznh4(i,j,k)= dfemeznh4(i,j,k) + rdt*mezexnh4*Xmeso(i,j,k)                ! Excretion by meso  flow N
+
+        dfunmicdom(i,j,k)=dfunmicdom(i,j,k) + rdt*((1.-mizas)*mizdom*mizg(i,j,k)*Xmicro(i,j,k)) ! Un-assimilited part of microzoo routed to DON   flow #M + flow #D (lost), flow G
+        dfunmezpon(i,j,k)=dfunmezpon(i,j,k) + rdt*((1.-mezas)*mezg(i,j,k)*Xmeso(i,j,k))  ! Un-assimilated part of mesozoo diet routed to PON flow #C + flow #I  (lost), flow J
+
+        dfunmiznh4(i,j,k)=dfunmiznh4(i,j,k) + rdt*((1.-mizas)*(1.-mizdom)*mizg(i,j,k)*Xmicro(i,j,k)) ! Un-assimilited part of microzoo diet routed to NH4 flow #M + flow #D (lost), flow H
+
+        dfsedlp(i,j,k) = dfsedlp(i,j,k) + rdt*(sed/pd(k))*Xdiat(i,j,k)      ! Sedimentation of to below    flow Z2
+        dfsedpon(i,j,k) = dfsedpon(i,j,k) + rdt*(sedmop/pd(k))*Xmop(i,j,k)    ! Sedimentation to below     flow Z1
+
+#endif
+
+!c-----------------------------------------------------------------------
+!c---Fin de la boucle sur les niveaux verticaux
+!c
+      enddo     ! k:1 -> zprt(i,j)
+!c
+!c----------------------------------------------------------------------
+!c---Evaluation of total matter after differential equations
+!c Nota : on considere toutes les mailles de m�me dimension = 4kmx4km = 16.10E6 m2
+!c => le budget est exprime en tonnes de C
+!c
+#if defined (NPZD_DIAG)
+      bid = 0.
+      do k=1,zprt(i,j)
+        bid = bid + pd(k)*79.5*( no3(i,j,k)  + nh4(i,j,k) &
+                               + diat(i,j,k) + flag(i,j,k) &
+                               + meso(i,j,k) + micro(i,j,k) &
+                               + mop(i,j,k)  + modis(i,j,k))
+      enddo
+!JC:      totfin = totfin + (16./1000.)*bid
+      totfin = totfin + ((e1t(i,j)*e2t(i,j))/1.e9)*bid
+!c
+      bid = 79.5*(16./1000.)*sedim(i,j)
+      call mpp_sum(bid)
+      totsedim = totsedim + bid
+
+!JC:      totsedim = totsedim + 79.5*((e1t(i,j)*e2t(i,j))/1.e9)*sedim(i,j)
+#endif
+!c
+#if defined (OXY_DIAG)
+      bid = 0.
+      do k=1,zprt(i,j)
+         bid = bid + pd(k)*oxy(i,j,k)*0.0223916 ! en (mL/L) x m
+      enddo
+!JC:   totfin_o2 = totfin_o2 + (16.*1E9)*bid ! en L
+      totfin_o2 = totfin_o2 + ((e1t(i,j)*e2t(i,j))*1.E3)*bid ! en L
+!c
+      bid =  rdt*(1.-ice_conc(i,j))*oxy_ventil*0.0223916 ! L/m2
+!JC:      airsea_o2 = airsea_o2 + (16.*1E9)*bid ! en L
+!JC:      airsea_o2 = airsea_o2 + ((e1t(i,j)*e2t(i,j))*1.E3)*bid ! en L
+      bid= ((e1t(i,j)*e2t(i,j))*1.E3)*bid ! en L
+      call mpp_sum(bid)
+      airsea_o2 = airsea_o2 + bid
+#endif
+
+!c--Calcul de la quantit� totale de TCO2 (totfin_TCO2)----------------------------------------------------c
+!c--[totfin_TCO2]=mmolC
+#if defined (key_carbon_DIAG)
+
+      do k=1,zprt(i,j)
+       totfin_TCO2 = totfin_TCO2 + pd(k)*TCO2(i,j,k)*((e1t(i,j)*e2t(i,j))*1.) !JC:
+      enddo
+  
+!c--Calcul du flux de CO2 (airsea_co2) a travers l'interface atmosph�re-eau ------------------------------c
+
+!JC:       airsea_CO2 = airsea_CO2 * rdt*(1.-ice_conc(i,j))*CO2_ventil*((e1t(i,j)*e2t(i,j))*1.)
+      bid= rdt*(1.-ice_conc(i,j))*CO2_ventil*((e1t(i,j)*e2t(i,j))*1.)
+      call mpp_sum(bid)
+      airsea_co2 = airsea_co2 + bid
+
+#endif
+!c-----------------------------------------------------------------------
+!c----FIN DE LA BOUCLE PRINCIPALE sur j et i 
+!c
+      endif       ! jc(i,k) = water ?
+!c
+      enddo       ! i:1 -> jpi
+      enddo       ! j:1 -> jpj
+!c
+!c----------------------------------------------------------------------
+!c---SORTIE DES PRODUCTIONS PRIMAIRES ET SECONDAIRES INTEGREES JOURNALIEREMENT
+!c
+      if(mod( (kt-nit000+1), nwritetrc ) == 0 ) then
+!         write(*,*) 'Modulo = 0 at timestep ', kt, outfreq
+!c
+!c -> Appel de la routine externe pour la sauvegarde
+#if defined (NPZD_INT_PROD)
+!JC:         CALL do_bio_intprod_out  !JC: no direct output from Lifemaker
+         CALL output_intprod(kt)  ! NL#5
+         pnwd(:,:,:)=0.
+         pregd(:,:,:)=0.
+         pnwf(:,:,:)=0.
+         pregf(:,:,:)=0.
+         pmesd(:,:,:)=0.
+         pmesm(:,:,:)=0.
+         pmicf(:,:,:)=0.
+#endif
+!c
+#if defined DIAG_NPZD_GROWTH || defined DIAG_NPZD_flux
+        call output_npzd_diag(kt)
+#endif
+!c
+#if defined (OXYGEN)
+         prod_o2(:,:,:)=0.
+         cons_o2(:,:,:)=0.
+         flx_o2(:,:)=0.
+#endif
+!c
+#if defined (key_carbon)
+      prod_TCO2(:,:,:)=0.
+      cons_TCO2(:,:,:)=0.
+#endif
+!c
+      endif
+!      endif  !JC: End output master node
+!C
+!c----------------------------------------------------------------------
+!c--- Monitoring total matter conservation in the whole model domin
+!c------------------------------------------------------------------------
+#if defined (NPZD_DIAG)
+!JC      if (kt.EQ.initial) open(208,file='totmatter.mod')
+      if (kt.EQ.initial.and.lwp) open(208,file='totmatter.mod')
+!cYLC      if (mod(kt,outfreq).EQ.0) then
+      call mpp_sum(totini)
+      call mpp_sum(totfin)
+      bid = (totfin - totini)
+      matterbudget = matterbudget + bid
+      if(lwp)write(208,FMT="(I8,5(3x,E12.3))") kt, totini, totfin, bid, &
+                                        totsedim, matterbudget
+!cYLC      endif
+      totini=0.0
+      totfin=0.0
+!JC:      if (kt.EQ.nitend) close(208)
+      if (kt.EQ.nitend.and.lwp) close(208)
+#endif
+!c
+!c-------------------------------------------------------------------------
+!c--- Monitoring total dissolved Oxygen evolution in the whole model domain
+!c-------------------------------------------------------------------------
+#if defined (OXY_DIAG)
+      if (kt.EQ.initial) open(209,file='tot_o2.mod')
+!cYLC       if (mod(kt,outfreq).EQ.0) then
+         call mpp_sum(totini_o2)
+         call mpp_sum(totfin_o2)
+         bid = (totfin_o2 - totini_o2)
+         o2_budget = o2_budget + bid
+         write(209,FMT="(I8,5(3x,E12.3))") kt, totini_o2, totfin_o2,&
+                                           bid, o2_budget, airsea_o2
+
+         totini_o2=0.0 ! RAZ for next iteration
+         totfin_o2=0.0
+!cYLC       endif
+      if (kt.EQ.nitend) close(209) !AD:
+#endif
+
+#if defined (key_carbon_DIAG)
+!c
+      if (kt.EQ.initial) open(209,file='tot_TCO2.mod')
+         call mpp_sum(totini_TCo2)
+         call mpp_sum(totfin_TCo2)
+         bid = (totfin_TCO2 - totini_TCO2)
+         TCO2_budget = TCO2_budget + bid
+     
+         write(209,FMT="(I8,5(3x,E12.3))") kt, totini_TCO2, &
+                                           totfin_TCO2,bid,TCO2_budget, &
+                                           airsea_CO2
+         totini_TCO2=0.0
+         totfin_TCO2=0.0
+      if (kt.EQ.nitend) close(209) !AD:
+
+#endif
+
+!c----------------------------------------------------------------------
+!c Write biological variables other than the tracers
+!c DL, April 2013
+!c ---------------------------------------------------------------------
+      if(mod( (kt-nit000+1), nwritetrc ) == 0 ) then
+!!DB: write to ncdf file
+!         rec_num = (kt-nit000+1)/nwritetrc
+!
+!         if(lwp) write(numout2,*)'PASSIVE TRACER: writing rec_num ',rec_num
+!         CALL ncdf_write(BGCM_fname, 'time_counter', REAL(kt * rdt), rec_num, status)
+!
+!!!DB: 2008.10.17: Both of the below work
+!!!DB: Note that to force a write of a 2D,3D,4D variable directly to a record number
+!!!    use a -ve value for rec_num
+!
+!         CALL ncdf_write(BGCM_fname, 'trn', trn, jptra, -rec_num, status)
+!         CALL ncdf_write(BGCM_fname, 'ndastp',REAL(ndastp), rec_num, status)
+!         CALL ncdf_write(BGCM_fname, 'model_time_step',REAL(kt), rec_num, status)
+!         CALL ncdf_write(BGCM_fname, 'model_time',model_time, rec_num, status)
+      endif
+!c
+
+!AD: #endif
+!       if(lwp) write(*,*) 'End of lifemaker()'
+      return
+
+
+  END SUBROUTINE lifemaker
+
+
+
+!c
+!c=======================================================================
+!c FUNCTION solubility_o2
+!c ----------------------
+!c > Calculate the oxygen solubility in function of current water 
+!c   temperature and salinity in [mmolO/m3]
+!c=======================================================================
+!c
+#if defined (OXYGEN)
+      REAL FUNCTION solubility_o2(t,s)
+
+!c Input Parameters
+      real, intent(in)  :: t  ! Water Temperature (in Celsius)
+      real, intent(in)  :: s  ! Water Salinity 
+!c
+!c Local Variables:
+      real              :: tk
+      real, parameter   :: R=0.0821, Patm=1.0, T0C=273.15 
+!c R is universal gas constant in atm.l/(mol) (degK)
+!c
+!c constants for solubility calculation from (Weiss, 1970)
+      real              :: a(4), b(3)
+      DATA a/-173.4292,249.6339,143.3483,-21.8492/
+      DATA b/-0.033096,0.014259,-0.00170/
+!c
+!c constants for solubility calculation from (Benson and Krauss, 1984, L&O)
+!c --> This new calculation was recommended by UNESCO 
+      real              :: ka(5), kb(3)
+      DATA ka/-135.90205,1.575701,-6.642308,1.243800,-8.621949/
+      DATA kb/0.017674,-10.754,2140.7/
+!c
+!c-----------------------------------------------------------------------
+!c
+      tk  = t + T0C
+!c
+!c Solubility calculation from (Weiss, 1970)
+!c
+!cYLC      beta = 
+!cYLC     &  EXP( a(1) + a(2)*100.*(1./tk) + a(3)*ALOG(tk/100.) + a(4)*tk/100.
+!cYLC     &  + ssurf * (b(1) + b(2)*tk/100. + b(3)*tk*tk/10000.) )   ! in [ml/l]
+!c
+!cYLC      solubility_o2 = 1000*beta*Patm/(R*T0C) ! in micromol of O2/l 
+                                       ! convert ml to l and mol to micromol (1.e-3 x 1.e6)
+!c
+!c Solubility calculation from (Benson and Krauss, 1984, L&O)
+!c in [micromol/l] or [mmmol/m3]
+!c
+      solubility_o2 = EXP( ka(1) &
+                    + (ka(2)*1E5)/tk + (ka(3)*1E7)/(tk**2) &
+                    + (ka(4)*1E10)/(tk**3) + (ka(5)*1E11)/(tk**4) &
+                    - s * ( kb(1) + kb(2)/tk + kb(3)/(tk**2) ) ) 
+
+      return
+
+      END  FUNCTION solubility_o2
+!c 
+#endif
+!c-----------------------------------------------------------------------
+!c
+!c=======================================================================
+!c FUNCTION surf_flux_o2
+!c ---------------------
+!c > Calculate the air-sea flux of oxygen at sea surface
+!c   1. calculate the gas transfer velocity for oxygen
+!c   2. calculate the air-sea flux
+!c=======================================================================
+!c
+#if defined (OXYGEN)
+      REAL FUNCTION surf_flux_o2(o2sat,o2surf,tsurf,wspd)
+
+!c Input Parameters
+      real, intent(in)	:: o2sat  ! Sea Surface O2 Saturation
+      real, intent(in)	:: o2surf ! Surface O2 Soncentration
+      real, intent(in)	:: tsurf  ! Surface Water Temperature
+      real, intent(in)  :: wspd    ! Surface wind speed [m/s]
+!c
+!c Schmidt number for oxygen from (Wanninkhof, 1992)
+      real              :: sc, sc20
+      real              :: c(4) ! Coeff. for calculation of sc
+      DATA c/1953.4,128.00,3.9918,0.050091/
+!c
+      real              :: kw_o2 ! Transfert velocity
+!c 
+!c-----------------------------------------------------------------------
+!c
+!c 1- Calculation of the gas transfer velocity for oxygen
+!c
+      sc   = c(1) - c(2)*tsurf + c(3)*tsurf*tsurf &
+           - c(4)*tsurf*tsurf*tsurf
+      sc20 = c(1) - c(2)*20. + c(3)*400. - c(4)*8000.
+!c
+      kw_o2 = 0.31 * wspd*wspd/SQRT(sc/sc20) ! in cm/h ?
+!cYLC      kw_o2 = 0.24 * kw_o2               ! convert to m/d
+      kw_o2 = (0.01/3600.) * kw_o2           ! convert to m/s
+!c
+!c 2- Calculation of the flux at surface in [mmol.m2/s]
+!c
+      surf_flux_o2 = (o2sat-o2surf) * kw_o2
+
+      return
+
+      END  FUNCTION surf_flux_o2
+!c 
+#endif
+!
+!-----------------
+! CARBON functions
+! ----------------
+!
+#if defined (key_carbon)
+
+      REAL FUNCTION prCO2AIR(Time)
+
+!c--------------------------------------------------------------------------------------------------------c
+!c
+!c			FUNCTION prCO2AIR
+!c
+!c This function calculate the atmospheric pCO2, based on a least Square fit
+!c to the 15 years (1978-1993) of pCO2 observations in Cold Bay, Alaska.
+!c The function is based on Signorini Sergio et al.(2001), JGR, 106, 197-215
+!c
+!c Les coefB(1) et CoefB(2) ont �t� d�termin�s par un fit exponentiel des observations de Mauna Loa (Longue serie)
+!c et les amplitudes et les phases sont celles de Cold Bay (Signorini Sergio et al.2001).
+!c CoefB(4), CoefB(6), CoefB(8) are phases in (rad)
+!c CoefB(3), CoefB(5) and CoefB(7) are amplitudes in (�atm)
+!c Dans le cas du fit  exponentiel,l'unit� de CoefB(1) est en (�atm) et l'unit� de CoefB(2) 
+!c en (1/month). 
+!C Time : Time in month
+!c--------------------------------------------------------------------------------------------------------c
+
+      REAL, intent(in)  :: Time
+      REAL :: CoefB(8), pi
+      DATA    CoefB/334.05,0.0004,6.61,0.77,3.01,-15.2,0.87,0.15/
+      INTEGER ind1,ind2,ill !NL#11
+      REAL    xyz !NL#11
+      INTEGER, parameter :: co2_type = 1!NL#11
+
+      pi=acos(-1.e0)
+
+      prCO2AIR =  CoefB(1)*EXP(CoefB(2)*Time) &
+                + CoefB(3)*SIN( 2*pi*Time/12.+CoefB(4) ) &
+                + CoefB(5)*SIN( 2*pi*Time/6. +CoefB(6) ) &
+                + CoefB(7)*SIN( 2*pi*Time/4. +CoefB(8) )
+
+      RETURN
+      END  FUNCTION prCO2AIR
+!
+!cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+!
+      subroutine pCO2EAU(DICin,T,S,TAKin,pCO2S,SolubCO2S)
+
+! Sergio R. Signorini - May 12, 1999
+! This routine does the carbonate chemistry
+!
+! Input:
+! DICin     = DIC concentration at the sea surface (in �mol/kg)
+! T         = Surface temperature in deg C (later converted to Kelvin)
+! S         = Surface salinity in psu
+! TAK       = Total alkalinity in (eq/kg = �mol/kg)
+!
+! Output:
+! pCO2S	    = Partial pressure of CO2 in sea water in (microatm=�atm=10.e+5 Pa)
+! SolubCO2S = Unite de SolubCO2S est in (mol/kg/atm)
+! K1,K2	    = Dissociation constants of carbonic acid as a function of temperature and salinity.
+! BR        = Borate concentration (UNESCO, 1987)
+! Kb	    = Dissociation constant for boric acid
+! Kw	    = Dissociation constant for sea water
+
+      implicit none
+      real DIC, DICin, T, S, TAK, TAKin, pCO2S
+      real Kr, Z, tk, pK1, pK2, pKb, pKw
+      integer itmax, it
+      parameter (itmax=200)
+      real CO2diss, A, K1, K2
+      real Hion, CA, BR, lnK0, TTT
+      real Kb, Kw, SolubCO2S
+      real error, emax, epsilon
+      real convmic, convmeg
+      data epsilon /1.e-8/
+
+! Cstes de conversion en (�mol,�atm) <-->(mol, atm)
+      convmic = 1.0e-6
+      convmeg = 1.0e+6
+      
+! Rescale temperature to Kelvin and DIC, TAK to mol/kg
+
+      tk = T + 273.15        !Kelvin
+      DIC=DICin*convmic      !mol/kg
+      TAK=TAKin*convmic      !mol/kg
+
+! DOE Handbook Chapter 5, Table 6.1 - Courtesy of Andrew Dickson
+      BR = (0.000232/10.811)*(S/1.80655)
+
+! Calculate dissociation constants for carbonic acid
+! Lueker TJ, Dickson AG, and Keeling CD (Lueker et al. 2000). Marine Chemistry, 70, 105-119 May 2000
+! This formulation is favored by Andrew Dickson
+! K1, K2 on the pHTOT scale in mol/kg-SW
+! K1 = [H][HCO3]/[H2CO3]
+! K2 = [H][CO3]/[HCO3]
+
+      pK1 = 3633.86/tk - 61.2172 + 9.6777*log(tk) - &
+            0.011555*S + 0.0001152*S*S
+      pK2 = 471.78/tk + 25.9290 - 3.16967*log(tk) - &
+            0.01781*S + 0.0001122*S*S
+      K1 = 10**(-pK1)
+      K2 = 10**(-pK2)
+
+! Dissociation constant for boric acid (Dickson, 1990)
+! Kb = [H][BO2]/[HBO2]
+
+      pKb = (-8966.9 - 2890.53*S**0.5 - 77.942*S +  &
+              1.728*S*S**0.5 - 0.0996*S**2)/tk +  &
+            ( 148.0248 +137.1942*S**0.5 + 1.62142*S) + &
+            (-24.4344 - 25.085*S**0.5 - 0.2474*S)*log(tk) + &
+            ( 0.053105*S**0.5)*tk
+
+      Kb = exp(pKb)
+
+! Ion product for water on pHTOT scale (DOE, 1994)
+! Kw = [H][OH]
+
+      pKw = 148.96502 -13847.26/tk - 23.6521*log(tk) + &
+           (118.67/tk - 5.977 + 1.0495*log(tk))*S**0.5 - &
+            0.01615*S
+      Kw = exp(pKw)
+
+! Calculate solubility of CO2 in seawater: kco2 using the formulation 
+! of Weiss (1974, Marine Chem., 2, 203-215). SolubCO2S in (mol/kg/atm)
+
+      TTT=tk/100.
+      lnK0 = -60.2409 + 93.4517/TTT + 23.3585*log(TTT)
+      lnK0 = lnK0 + S*(0.023517-0.023656*TTT+0.0047036*TTT*TTT)
+      SolubCO2S = exp(lnK0)
+
+! Start iteration to compute pCO2S
+
+      Kr = K1/K2
+      A = TAK
+
+      do it = 1, itmax
+
+         Z = ((DIC*Kr)**2 + A*Kr *(2.*DIC - A) *(4.-Kr))**0.5
+         CO2diss = DIC - A + &
+          (A*Kr - DIC*Kr - 4*A + Z)/(2.*(Kr - 4.))
+
+         Hion = CO2diss*K1/(2.*A) + ((CO2diss*K1)**2 + &
+          8.*A*CO2diss*K1*K2)**0.5/(2.*A)
+
+         CA = TAK - BR*Kb/(Kb+Hion) - Kw/Hion + Hion
+
+         emax = 1.e12
+
+         error = abs(CA - A)
+         error = min(error,emax)
+         emax = error
+         A = CA
+
+         if(error .lt. epsilon) goto 200
+
+      enddo
+
+  200 continue
+
+! pCO2S	    = Partial pressure of CO2 in sea water in (microatm=�atm=10.e+5 Pa)
+        pCO2S = DIC/(SolubCO2S*convmic*(1.+K1/Hion+(K1*K2)/Hion**2))
+
+      RETURN
+      END SUBROUTINE pCO2EAU
+
+!**********************************************************************************
+
+      SUBROUTINE pCO2pH(DICin,T,S,TAKin,pCO2D,SolubCO2D,pH,CO3)
+
+! Sergio R. Signorini - May 12, 1999
+! This routine does the carbonate chemistry
+!
+! Input:CO2_ventil
+! DICin     = Total DIC surface concentration in sea water (�mol/kg)
+! T         = Surface temperature in deg pCO2pHC (later converted to Kelvin)
+! S         = Surface salinity in psu
+! TAKin     = Total alkalinity in (eq/kg = �mol/kg)
+!
+! Output:
+! pCO2D	    = Partial pressure of CO2 in sea water in (microatm=�atm)
+! SolubCO2D = Unite de SolubCO2D est in (mol/kg/atm)
+! K1,K2	    = Dissociation constants of carbonic acid as a function of temperature and salinity.
+! BR	    = Borate concentration (UNESCO, 1987)
+! Kb	    = Dissociation constant for boric acid
+! Kw	    = Dissociation constant for sea water
+! CO3	    = CO3 concentration calculated after iteration in (mol/kg) and rescaled in (�mol/kg)
+! CO2	    = CO2 concentration calculated in (�mol/kg) using ([CO2]=pCO2D/SolubCO2D)
+
+      implicit none
+      real DIC, DICin, T, S, TAK,TAKin, pCO2D
+      real Kr, Z, tk, pK1, pK2, pKb, pKw
+      integer itmax, it, I
+      parameter (itmax=200)
+      real CO2diss, A, K1, K2
+      real Hion, CA, BR, lnK0, TTT
+      real Kb, Kw, SolubCO2D
+      real error, emax, epsilon
+      real B1, B2 
+      real P, Q, R1, S1
+      real XB, XA, XC
+      real pH, CO2,CO3
+      real convmic, convmeg
+      data epsilon /1.e-8/
+
+! Cstes de conversion en (�mol,�atm) <-->(mol, atm)
+      convmic = 1.0e-6
+      convmeg = 1.0e+6
+
+! NL  put zéro if no salinity and température (not give pH = inf for missing value)
+!      if (S.eq.0.and.T.eq.0) then
+!        pH = 0
+!        return
+!      endif
+
+! Rescale temperature to Kelvin and DIC, TAK to mol/kg
+      tk = T + 273.15
+      DIC=DICin*convmic
+      TAK=TAKin*convmic
+
+! DOE Handbook Chapter 5, Table 6.1 - Courtesy of Andrew Dickson
+      BR = (0.000232/10.811)*(S/1.80655)
+
+! Calculate dissociation ctes for carbonic acid
+! Lueker TJ, Di2000_bb_03/ckson AG, and Keeling CD (Lueker et al. 2000). Marine Chemistry, 70, 105-119 May 2000
+! This formulation is favored by Andrew Dickson
+! K1, K2 on the pHTOT scale in mol/kg-SW
+! K1 = [H][HCO3]/[H2CO3]
+! K2 = [H][CO3]/[HCO3]
+
+       pK1 = 3633.86/tk - 61.2172 + 9.6777*log(tk) - &
+            0.011555*S + 0.0001152*S*S
+       pK2 = 471.78/tk + 25.9290 - 3.16967*log(tk) - &
+            0.01781*S + 0.0001122*S*S
+       K1 = 10**(-pK1)
+       K2 = 10**(-pK2)
+
+! Dissociation constant for boric acid (Dickson, 1990)
+! Kb = [H][BO2]/[HBO2]
+
+       pKb = (-8966.9 - 2890.53*S**0.5 - 77.942*S + &
+              1.728*S*S**0.5 - 0.0996*S**2)/tk + &
+             (148.0248 +137.1942*S**0.5 + 1.62142*S) + &
+             (-24.4344 - 25.085*S**0.5 - 0.2474*S)*log(tk) + &
+             (0.053105*S**0.5)*tk
+       Kb = exp(pKb)
+
+! Ion product for water on pHTOT scale (DOE, 1994)
+! Kw = [H][OH]
+
+       pKw = 148.96502 -13847.26/tk - 23.6521*log(tk) + &
+             (118.67/tk - 5.977 + 1.0495*log(tk))*S**0.5 - &
+             0.01615*S
+       Kw = exp(pKw)
+    
+! Calculate solubility of CO2 in seawater: kco2 using the formulation
+! of Weiss (1974, Marine Chem., 2, 203-215). SolubCO2D in (mol/kg/atm)
+ 
+      TTT=tk/100.
+      lnK0 = -60.2409 + 93.4517/TTT + 23.3585*log(TTT)
+      lnK0 = lnK0 + S*(0.023517-0.023656*TTT+0.0047036*TTT*TTT)
+      SolubCO2D = exp(lnK0)
+
+! Start iteration to compute pCO2D
+
+      Kr = K1/K2
+      A = TAK
+
+      do it = 1, itmax
+
+         Z = ((DIC*Kr)**2 + A*Kr *(2.*DIC - A)*(4.-Kr))**0.5
+
+         CO2diss = DIC - A + (A*Kr - DIC*Kr - 4*A + Z)/(2.*(Kr - 4.))
+
+         Hion = CO2diss*K1/(2.*A) +((CO2diss*K1)**2 + &
+          8.*A*CO2diss*K1*K2)**0.5/(2.*A)
+
+         CA = TAK - BR*Kb/(Kb+Hion) - Kw/Hion + Hion
+
+         emax = 1.e12
+
+         error = abs(CA - A)
+         error = min(error,emax)
+         emax = error
+         A = CA
+
+         if(error .lt. epsilon) goto 200
+
+      enddo
+
+  200 continue
+
+        pCO2D = DIC/(SolubCO2D*convmic*(1.+K1/Hion+(K1*K2)/Hion**2))
+!DL va y avoir erreur de conversion ici?
+! Calculation of CO3 from TAK and DIC by iteration (Kier,1979,Mar.Chem.,8,95)
+! The CO3 concentration output after iteration is calculated in (mol/kg) because the TAK et DIC are in (mol/kg)
+! after rescaling them in the beginning.
+       B1 = K2/K1
+       B2 = K2/Kb
+       P  = 1-B2-4*B1-(B1/B2)+4*B1*B2
+       Q  = DIC*(1-4*B1*B2-B1/B2)+BR*(1-(B1/B2)-4*B1)-TAK*P
+       R1 =-B2*((1-4*B1)*TAK-DIC)*DIC-B1*(1-B2)*TAK**2+B1*(TAK+2*DIC)*BR
+       S1 = -B1*B2*DIC*TAK**2
+
+       CO3=0.
+       DO 100 I=1, 2
+       XB = R1-3*P*CO3**2
+       XA = Q+3*P*CO3
+       XC = S1+P*CO3**3
+       CO3 = (-XB+(XB**2-4*XA*XC)**.5)/(2*XA)
+  100  CONTINUE
+
+!After iteration we scale CO3 in (µmol/kg)
+      CO3=CO3*convmeg
+
+!Calculation of CO2 concentration ([CO2]=pCO2D/SolubCO2D) in (µmol/kg)
+      CO2=pCO2D*SolubCO2D
+
+      pH = -ALOG10((K1*K2*CO2/CO3)**.5)
+
+!       if ((pH+1.).eq.pH) then
+!       if ((K1*K2*CO2/CO3).le.0.) then
+!       if (ii.eq.1.and.jj.eq.17.and.kk.eq.2) then
+!         if (lwp) write(*,*), 'Ph is nan'
+!         if (lwp) write(*,'(a,3f)'), 'Ph, DIC, S =' ,pH, DIC, S
+!         if (lwp) write(*,'(a,4f)'), ' Calcul of CO3 #1 (K1,K2,CO2,CO3)',K1,K2,CO2,CO3
+!         if (lwp) write(*,'(a,4f)'), ' Calcul of CO3 #2 (B1,B2,DIC,TAK)',B1,B2,DIC,TAK
+!         if (lwp) write(*,'(a,3f)'), ' Calcul of CO3 #3 (pK1,pK2,pKb)',pK1,pK2,pKb
+!      endif 
+
+      return
+      
+     END SUBROUTINE pCO2pH
+
+!**********************************************************************************
+
+      SUBROUTINE CO3sat(T,S,CO3in,SatCa,SatAr)
+! This routine does the carbonate saturation state
+! Nicolas Lambert, may 2013
+!
+! Input:CO2_ventil
+! T         = Surface temperature in deg pCO2pHC (later converted to Kelvin)
+! S         = Surface salinity in psu
+! CO3in     = Total CO3 concentration in sea water (µmol/kg)
+!
+! Output:
+! SatCalc   = Saturation state of calcite
+! Satarg   = Saturation state of aragonite
+      implicit none
+      real T, S, CO3in, SatCa, SatAr
+      real CA, logpkCa, logpkAr, CO3
+      real convmic,convmeg,tk
+
+! Cstes de conversion en (µmol,µatm) <-->(mol, atm)
+      convmic = 1.0e-6
+      convmeg = 1.0e+6
+      tk = T + 273.15
+
+!DL, no seawater has a density of 1025
+!************************
+      ! convertion CO3 to mol/kg
+      CO3=CO3in*convmic
+
+! the calcul are made according to Millero 1995
+! (Thermodynamics  of  the  carbon  dioxide  system  in  the  oceans )
+
+!DL, Valid for which values of salinity
+!**********************************
+
+      ! calcul of calcium concentration
+      CA = 0.01028*(S/35.)
+
+!DL, Valid for salinity values of 5 to 35
+!****************************************
+      ! Calcul of solubility factor
+      logpkCa =    -171.9065 - 0.077993*tk  +  2839.319/tk + &
+                   71.595*log10(tk) + ( -0.77712 + 0.0028426*tk + &
+                   178.34/tk )*S**0.5 - 0.07711*S + 0.0041249*S**1.5
+
+      logpkAr  =    -171.945 - 0.077993*tk + 2903.293/tk + &
+                   71.595*log10(tk) + ( -0.068393 + 0.0017276*tk + &
+                   88.135/tk )*S**0.5 - 0.10018*S + 0.0059415*S**1.5
+
+      ! Calcul of the saturation state
+      SatCa = CA*CO3/10**(logpkCa)
+      SatAr  = CA*CO3/10**(logpkAr)
+
+      END SUBROUTINE CO3sat
+
+!cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
+     REAL FUNCTION surf_flux_CO2( SolubilityCO2,pCO2AIR,&
+                                      pCO2Wat,tsurf,winds,rhomer)
+
+!c--------------------------------------------------------------------------------------------------------c
+!c
+!c	        	FUNCTION surf_flux_CO2
+!c
+!c This function calculate the Piston velocity for CO2 and the flux of CO2. This
+!c function is based on Wanninkhof and McGillis (1999) for K0Piston_CO2 and
+!c Wanninkhof (1992) for Sch_CO2.
+!c
+!c tsurf:  Temperature de la surface de l'eau in (�C)
+!c pCO2Wat: CO2 partial pressure in water in (�atm)
+!c pCO2AIR: CO2 partial pressure in atmosphere (�atm)
+!c CoefT:  Coefficient of Schmidt number
+!c CoefW: Coefficient of Piston CO2
+!c K0Piston_CO2: The piston velocity in (cm/heure)
+!c K0Piston_CO2 =(0.31*WINDS**2)*(Sch_CO2/Sch20_CO2)**(-0.5)
+!c SolubilityCO2 : Solubility of CO2 in  water (mol/kg/atm)
+!c WINDS: Wind obtained from forcing file (cmc) in (m/s)
+!c Sch_CO2 : The Schmidt number of CO2
+!c Sch20_CO2 : The Schmidt number of CO2 at 20�C. This number can be equal
+!c to 600 for estury and 660for Open Ocean (Alberto Vieira Borgesi, 2004) [p.593-603]
+!c surf_flux_CO2 (mmolCO2/m2/s): After multiplication by the (rhoomer/(3600.*100000.)),
+!c CO2 flux is then in (mmolCO2/m2/s)
+!c rhomer : Masse volumique moyenne de l'eau de mer (1025. kg/m3).
+!c rhomer est un param�tre local pour cette routine
+!c--------------------------------------------------------------------------------------------------------c
+
+        REAL, intent(in) :: pCO2AIR
+        REAL, intent(in) :: pCO2Wat
+        REAL, intent(in) :: tsurf
+        REAL, intent(in) :: SolubilityCO2 !DL,must be same as SolubCO2D, check and remove
+        REAL, intent(in) :: WINDS !Wind speed provided by OPA
+        REAL, intent(in) :: rhomer !potential volumic mass    !NL#9
+   
+        REAL :: K0Piston_CO2
+        REAL :: CoefT(4)
+!DL april 2013       DATA    CoefT/1953.4,128.00,3.9918,0.050091/   !these are for O2
+        DATA    CoefT/2073.1,125.62,3.6276,0.043219/
+        REAL :: Sch20_CO2, Sch_CO2
+! ************************************************************************************
+!DL        DATA    Sch20_CO2/600./  !calculated value below = 665.99
+!DL but see Bechir comment above, should we include salinity param for GSL, or use maskGSL
+! ***********************************************************************************
+!NL9        rhomer=1025.
+
+        Sch_CO2  =CoefT(1)-CoefT(2)*tsurf+CoefT(3)*tsurf**2 &
+                 -CoefT(4)*tsurf**3
+        Sch20_CO2 = CoefT(1) - CoefT(2)*20. + CoefT(3)*400. - CoefT(4)*8000.
+
+        K0Piston_CO2 =(0.31*WINDS**2)*(Sch_CO2/Sch20_CO2)**(-0.5)
+
+        surf_flux_CO2 = K0Piston_CO2*SolubilityCO2*(pCO2AIR-pCO2Wat) &
+                      * (rhomer/(3600.*100000.))
+!DL mol/kg/atm to mmol/m3/microatm = *rhomer*1000/1e6
+!DL cm/hr en m/s = /100*3600
+        RETURN
+        END  FUNCTION surf_flux_CO2
+!c
+#endif
+!c
+#if defined (NPZD_INT_PROD)
+  SUBROUTINE output_intprod(kt)
+      ! NL#5  oct, 2013
+      ! output the biologic production integrated over one day
+      ! subroutine called in lifemaker()
+      USE lib_bgcm_02, only : BGCM_fname
+      implicit none
+        integer rec_num,status,kt
+
+        rec_num = (kt-nit000+1)/nwritetrc
+
+         CALL ncdf_write(BGCM_fname, 'pnwd',  pnwd , -rec_num, status)
+         CALL ncdf_write(BGCM_fname, 'pregd', pregd, -rec_num, status)
+
+         CALL ncdf_write(BGCM_fname, 'pnwf',  pnwf , -rec_num, status)
+         CALL ncdf_write(BGCM_fname, 'pregf', pregf, -rec_num, status)
+         CALL ncdf_write(BGCM_fname, 'pmesd', pmesd, -rec_num, status)
+         CALL ncdf_write(BGCM_fname, 'pmesm', pmesm, -rec_num, status)
+         CALL ncdf_write(BGCM_fname, 'pmicf', pmicf, -rec_num, status)
+!DL         CALL ncdf_write(BGCM_fname, 'pmicm', pmicm, -rec_num, status)
+
+  END SUBROUTINE output_intprod
+#endif
+!c
+#if defined DIAG_NPZD_GROWTH || defined DIAG_NPZD_flux 
+  SUBROUTINE output_npzd_diag(kt)
+      ! NL#5, NL#10 and NL#12  jan, 2015
+      ! output the diagnostic of the npzd function
+      ! notes : the writing is done only after one day (or nwritetrc)
+
+      implicit none
+        integer rec_num,status,kt
+
+        rec_num = (kt-nit000+1)/nwritetrc
+
+#if defined DIAG_NPZD_GROWTH
+        if (kt.eq.nit000) then ! initialisation (no writing)
+
+          write(numout,*)
+          write(numout,*),'DIAG_NPZD_GROWTH activated : Output related to the growth of diat. and flag'
+          write(numout,*),'~~~~~~~'
+
+        else  ! writing
+
+!c --- NL#10 DIAT GROWTH VARIABLES
+!c -> Do the writing
+          CALL ncdf_write(bgcm_diag_fname, 'tcd', dmtcd, -rec_num, status)
+          CALL ncdf_write(bgcm_diag_fname, 'tsd', dmtsd, -rec_num, status)
+          CALL ncdf_write(bgcm_diag_fname, 'tcf', dmtcf, -rec_num, status)
+          CALL ncdf_write(bgcm_diag_fname, 'tsf', dmtsf, -rec_num, status)
+          CALL ncdf_write(bgcm_diag_fname, 'trap', trap, -rec_num, status)
+          CALL ncdf_write(bgcm_diag_fname, 'sediment', sediment, -rec_num, status)
+
+        endif
+!c -> reset the daily mean variables (or initialise if first step)
+        dmtsd(:,:,:)=0.
+        dmtsf(:,:,:)=0.
+        dmtcd(:,:,:)=0.
+        dmtcf(:,:,:)=0.
+        trap(:,:)=0.
+        sediment(:,:)=0.
+#endif
+!c
+! NL#12  do the writing of the diag_modis
+#if defined DIAG_NPZD_flux
+        if (kt.eq.nit000) then ! initialisation (no writing)
+
+!  NL#12 inititlization of the diagnotic of modis
+          write(numout,*)
+          write(numout,*),'DIAG_NPZD_flux activated : Output related to the flux of modis'
+          write(numout,*),'~~~~~~~'
+          write(numout,*),'bgcm_diag_fname = ',bgcm_diag_fname
+
+        else  ! writing
+          CALL ncdf_write(bgcm_diag_fname, 'dmizdon', dfdmizdon, -rec_num, status)
+          CALL ncdf_write(bgcm_diag_fname, 'dspdon', dfdspdon, -rec_num, status)
+          CALL ncdf_write(bgcm_diag_fname, 'fpondon', dffpondon, -rec_num, status)
+          CALL ncdf_write(bgcm_diag_fname, 'redonnh4', dfredonnh4, -rec_num, status)
+          CALL ncdf_write(bgcm_diag_fname, 'ppsp',dfppsp, -rec_num, status)
+          CALL ncdf_write(bgcm_diag_fname, 'pplp',dfpplp, -rec_num, status)
+          CALL ncdf_write(bgcm_diag_fname, 'nh4no3',dfnh4no3, -rec_num, status)
+          CALL ncdf_write(bgcm_diag_fname, 'dlppon',dfdlppon, -rec_num, status)
+          CALL ncdf_write(bgcm_diag_fname, 'grlpmez',dfgrlpmez, -rec_num, status)
+          CALL ncdf_write(bgcm_diag_fname, 'grspmiz',dfgrspmiz, -rec_num, status)
+          CALL ncdf_write(bgcm_diag_fname, 'grmezmiz',dfgrmezmiz, -rec_num, status)
+          CALL ncdf_write(bgcm_diag_fname, 'dmezpon',dfdmezpon, -rec_num, status)
+          CALL ncdf_write(bgcm_diag_fname, 'grponmiz',dfgrponmiz, -rec_num, status)
+          CALL ncdf_write(bgcm_diag_fname, 'emeznh4',dfemeznh4, -rec_num, status)
+
+          CALL ncdf_write(bgcm_diag_fname,'unmicdom', dfunmicdom, -rec_num, status)
+          CALL ncdf_write(bgcm_diag_fname, 'unmezpon',dfunmezpon, -rec_num, status)
+          CALL ncdf_write(bgcm_diag_fname, 'unmiznh4',dfunmiznh4, -rec_num, status)
+          CALL ncdf_write(bgcm_diag_fname, 'sedlp',dfsedlp, -rec_num, status)
+          CALL ncdf_write(bgcm_diag_fname, 'sedpon',dfsedpon, -rec_num, status)
+
+        endif
+!  NL#12 put to zero for the next day(or initialise if first step)
+
+           dfdmizdon(:,:,:)=0.
+           dfdspdon(:,:,:)=0.
+           dffpondon(:,:,:)=0.
+           dfredonnh4(:,:,:)=0.
+           dfppsp(:,:,:)=0.
+           dfpplp(:,:,:)=0.
+           dfnh4no3(:,:,:)=0.
+           dfdlppon(:,:,:)=0.
+           dfgrlpmez(:,:,:)=0.
+           dfgrspmiz(:,:,:)=0.
+           dfgrmezmiz(:,:,:)=0.
+           dfdmezpon(:,:,:)=0.
+           dfgrponmiz(:,:,:)=0.
+           dfemeznh4(:,:,:)=0.
+           dfunmicdom(:,:,:)=0.
+           dfunmezpon(:,:,:)=0.
+           dfunmiznh4(:,:,:)=0.
+           dfsedlp(:,:,:)=0.
+           dfsedpon(:,:,:)=0.
+
+#endif
+
+  END SUBROUTINE output_npzd_diag
+#endif
+
+END MODULE lifemaker3D
+
+#endif

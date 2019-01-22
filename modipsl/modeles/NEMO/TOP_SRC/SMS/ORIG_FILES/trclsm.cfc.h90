@@ -1,0 +1,60 @@
+   !!----------------------------------------------------------------------
+   !!                    ***  trclsm.cfc.h90 ***
+   !!----------------------------------------------------------------------
+CONTAINS
+
+   SUBROUTINE trc_lsm
+      !!-------------------------------------------------------------------
+      !!                  ***  ROUTINE trc_lsm ***
+      !!                 
+      !! ** Purpose :   Definition some run parameter for CFC model
+      !!
+      !! ** Method  :   Read the namcfc namelist and check the parameter 
+      !!       values called at the first timestep (nit000)
+      !!
+      !! ** input   :   Namelist namcfc
+      !!
+      !! history :
+      !!   2.0  !  03-08 (C. Ethe)  Original code
+      !!----------------------------------------------------------------------
+      !!  TOP 1.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/TOP_SRC/SMS/trclsm.cfc.h90,v 1.5 2005/11/17 11:12:05 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+      !!----------------------------------------------------------------------
+
+      CHARACTER (len=32) ::  &
+         clname = 'namelist.trc.sms'
+      INTEGER ::  &
+         numnat = 80
+
+      NAMELIST/namdates/ndate_beg, nyear_res
+      !!-------------------------------------------------------------------
+
+      ndate_beg = 300101
+      nyear_res = 1950
+
+      IF(lwp) THEN
+         WRITE(numout,*) ' '
+         WRITE(numout,*) ' Namelist for CFC model'
+         WRITE(numout,*) ' ***********************'
+         WRITE(numout,*) ' '
+      ENDIF
+
+      OPEN( UNIT=numnat, FILE=clname, FORM='FORMATTED', STATUS='OLD' )
+      READ( numnat , namdates )
+
+      IF(lwp) THEN
+         WRITE(numout,*)
+         WRITE(numout,*) ' trc_lsm: Namelist parameter'
+         WRITE(numout,*) ' ~~~~~~~~~~~~~~'
+         WRITE(numout,*) '  initial calendar date (aammjj) for CFC  ndate_beg = ', ndate_beg
+         WRITE(numout,*) '  restoring time constant (year)          nyear_res = ', nyear_res
+      ENDIF
+      nyear_beg = ndate_beg / 10000
+      IF(lwp) THEN
+         WRITE(numout,*) '  initial year (aa)                       nyear_beg = ', nyear_beg
+         WRITE(numout,*) ' '
+      ENDIF
+
+   END SUBROUTINE trc_lsm
+

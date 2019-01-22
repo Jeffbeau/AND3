@@ -1,0 +1,253 @@
+   !!----------------------------------------------------------------------
+   !!                   ***  tau_coupled_ice.h90  ***
+   !!----------------------------------------------------------------------
+
+   !!----------------------------------------------------------------------
+   !!   tau     :   update the surface stress - coupled case with LIM
+   !!               sea-ice model
+   !!----------------------------------------------------------------------
+   !!----------------------------------------------------------------------
+   !!   OPA 9.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/OPA_SRC/SBC/tau_coupled_ice.h90,v 1.4 2005/12/12 14:18:05 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+   !!----------------------------------------------------------------------
+
+CONTAINS
+
+   SUBROUTINE tau( kt )
+      !!---------------------------------------------------------------------
+      !!                    ***  ROUTINE tau  ***
+      !!  
+      !! ** Purpose :   provide to the ocean the stress at each time step
+      !!
+      !! ** Method  :   Coupled case with LIM sea-ice model
+      !!      Read wind stress from a coupled Atmospheric model
+      !!      - horizontal interpolation is done in OASIS
+      !!        They are given in the 3D referential 
+      !!      (3 components at both U- and V-points)
+      !!
+      !!    CAUTION: never mask the surface stress field !
+      !!
+      !! ** Action  :   update at each time-step the two components of the 
+      !!                surface stress in both (i,j) and geographical ref.
+      !!
+      !! References : The OASIS User Guide, Version 2.0, CERFACS/TR 95/46
+      !!
+      !! History :
+      !!   7.0  !  94-03  (L. Terray)  Original code
+      !!        !  96-07  (Laurent TERRAY)  OASIS 2 Version
+      !!        !  96-11  (Eric Guilyardi) horizontal interpolation
+      !!        !  98-04  (M.A Foujols, S. Valcke, M. Imbard) OASIS2.2
+      !!   8.5  !  02-11  (G. Madec)  F90: Free form and module
+      !!----------------------------------------------------------------------
+      !! * Modules used
+      USE ioipsl                ! NetCDF library
+      USE cpl_oce               ! coupled ocean-atmosphere variables
+      USE geo2ocean             ! ???
+
+      !! * Arguments
+      INTEGER, INTENT( in  ) ::   kt   ! ocean time step
+
+      !! * Local declarations
+      INTEGER :: ji,jj,jf
+      INTEGER :: itm1,isize,iflag,info,inuread,index
+!      INTEGER :: icpliter
+      REAL(wp), DIMENSION(jpidta,jpjdta) ::   &
+         ztauxxu, ztauyyu, ztauzzu,   &  ! 3 components of the wind stress
+         ztauxxv, ztauyyv, ztauzzv       ! at U- and V-points
+      REAL(wp), DIMENSION(jpi,jpj) ::   &
+         ztauxx, ztauyy, ztauzz,      &  ! ???
+         ztauxg, ztauyg, ztauver         !
+
+! netcdf outputs
+
+      CHARACTER (len=80) ::   clcpltnam
+      INTEGER :: nhoridct, nidct
+      INTEGER ,DIMENSION(jpi*jpj) :: ndexct
+      SAVE nhoridct,nidct,ndexct
+      LOGICAL, SAVE :: lfirstt=.true.
+      REAL(wp) ::   zjulian
+
+! Addition for SIPC CASE
+      CHARACTER (len=3) ::   clmodinf      ! Header or not
+!      CHARACTER (len=3) ::   cljobnam_r    ! Experiment name in the field brick, if any 
+!      INTEGER ,DIMENSION(3) ::  infos          ! infos in the field brick, if any
+!!---------------------------------------------------------------------
+
+! 0. Initialization
+!------------------
+
+      isize = jpiglo * jpjglo
+      itm1 = ( kt - nit000 + 1 ) - 1
+
+! initialisation for output
+
+      IF( lfirstt ) THEN 
+          lfirstt = .FALSE.
+          ndexct(:) = 0
+          clcpltnam = "cpl_oce_tau"
+
+! Compute julian date from starting date of the run
+          CALL ymds2ju( nyear    , nmonth, nday , 0.e0  , zjulian )
+          CALL histbeg( clcpltnam, jpiglo, glamt, jpjglo, gphit,   &
+          1, jpiglo, 1, jpjglo, 0, zjulian, rdt, nhoridct, nidct, domain_id=nidom)
+! no vertical axis
+          CALL histdef( nidct, 'taux'  , 'taux'  , "-", jpi, jpj, nhoridct,   &
+             1, 1, 1, -99, 32, "inst", rdt, rdt )
+          CALL histdef( nidct, 'tauy'  , 'tauy'  , "-", jpi, jpj, nhoridct,   &
+             1, 1, 1, -99, 32, "inst", rdt, rdt )
+          CALL histdef( nidct, 'tauxeu', 'tauxeu', "-", jpi, jpj, nhoridct,   &
+             1, 1, 1, -99, 32, "inst", rdt, rdt )
+          CALL histdef( nidct, 'tauynu', 'tauynu', "-", jpi, jpj, nhoridct,   &
+             1, 1, 1, -99, 32, "inst", rdt, rdt )
+          CALL histdef( nidct, 'tauzzu', 'tauzzu', "-", jpi, jpj, nhoridct,   &
+             1, 1, 1, -99, 32, "inst", rdt, rdt )
+          CALL histdef( nidct, 'tauxev', 'tauxev', "-", jpi, jpj, nhoridct,   &
+             1, 1, 1, -99, 32, "inst", rdt, rdt )
+          CALL histdef( nidct, 'tauynv', 'tauynv', "-", jpi, jpj, nhoridct,   &
+             1, 1, 1, -99, 32, "inst", rdt, rdt )
+          CALL histdef( nidct, 'tauzzv', 'tauzzv', "-", jpi, jpj, nhoridct,   &
+             1, 1, 1, -99, 32, "inst", rdt, rdt )
+
+          DO jf = 1, ntauc2o
+            CALL histdef( nidct, cpl_readtau(jf), cpl_readtau(jf),   &
+               "-", jpi, jpj, nhoridct,   &
+               1, 1, 1, -99, 32, "inst", rdt, rdt )
+          END DO 
+
+          CALL histend(nidct)
+
+      ENDIF 
+
+! 1. Reading wind stress from coupler
+! -----------------------------------
+
+      IF( MOD(kt,nexco) == 1 ) THEN
+
+! Test what kind of message passing we are using
+
+          IF( cchan == 'PIPE' ) THEN 
+
+! UNIT number for fields
+
+              inuread = 99
+
+! exchanges from to atmosphere=CPL to ocean
+
+              DO jf = 1, ntauc2o
+!                CALL PIPE_Model_Recv(cpl_readtau(jf), icpliter, numout)
+                OPEN (inuread, FILE=cpl_f_readtau(jf), FORM='UNFORMATTED')
+                IF( jf == 1 ) CALL locread(cpl_readtau(jf), ztauxxu,isize,inuread,iflag,numout)
+                IF( jf == 2 ) CALL locread(cpl_readtau(jf), ztauyyu,isize,inuread,iflag,numout)
+                IF( jf == 3 ) CALL locread(cpl_readtau(jf), ztauzzu,isize,inuread,iflag,numout)
+                IF( jf == 4 ) CALL locread(cpl_readtau(jf), ztauxxv,isize,inuread,iflag,numout)
+                IF( jf == 5 ) CALL locread(cpl_readtau(jf), ztauyyv,isize,inuread,iflag,numout)
+                IF( jf == 6 ) CALL locread(cpl_readtau(jf), ztauyyv,isize,inuread,iflag,numout)
+                CLOSE ( inuread )
+              END DO 
+
+          ELSE IF( cchan == 'SIPC' ) THEN 
+
+!         Define IF a header must be encapsulated within the field brick :
+              clmodinf = 'NOT'   ! as $MODINFO in namcouple  
+! 
+!         reading of input field zonal wind stress SOZOTAUX
+
+              index = 1
+!              CALL SIPC_Read_Model(index, isize, clmodinf,cljobnam_r, infos, ztaux)
+
+!         reading of input field meridional wind stress SOZOTAU2 (at v point)
+
+              index = 2
+!              CALL SIPC_Read_Model(index, isize, clmodinf,cljobnam_r, infos, ztaux2)
+
+!         reading of input field zonal wind stress SOMETAUY
+
+              index = 3
+!              CALL SIPC_Read_Model(index, isize, clmodinf,cljobnam_r, infos, ztauy)
+
+!         reading of input field meridional wind stress SOMETAU2 (at u point)
+
+              index = 4
+!              CALL SIPC_Read_Model(index, isize, clmodinf,cljobnam_r, infos, ztauy2)
+! 
+
+          ELSE IF ( cchan == 'CLIM' ) THEN 
+
+              WRITE (numout,*) 'Reading wind stress from coupler ', kt
+
+! exchanges from atmosphere=CPL to ocean
+
+              DO jf = 1, ntauc2o
+                IF( jf == 1 ) CALL CLIM_Import (cpl_readtau(jf), itm1,ztauxxu,info)
+                IF( jf == 2 ) CALL CLIM_Import (cpl_readtau(jf), itm1,ztauyyu,info)
+                IF( jf == 3 ) CALL CLIM_Import (cpl_readtau(jf), itm1,ztauzzu,info)
+                IF( jf == 4 ) CALL CLIM_Import (cpl_readtau(jf), itm1,ztauxxv,info)
+                IF( jf == 5 ) CALL CLIM_Import (cpl_readtau(jf), itm1,ztauyyv,info)
+                IF( jf == 6 ) CALL CLIM_Import (cpl_readtau(jf), itm1,ztauzzv,info)
+                IF( info /= CLIM_Ok) THEN
+                   if(lwp) WRITE(numout,*)'Pb in reading ', cpl_readtau(jf), jf
+                   if(lwp) WRITE(numout,*)'Couplage itm1 is = ',itm1
+                   if(lwp) WRITE(numout,*)'CLIM error code is = ', info
+                   if(lwp) WRITE(numout,*)'STOP in Fromcpl'
+                   STOP 'tau.coupled.h90'
+                ENDIF
+              END DO 
+          ENDIF
+
+          DO jf = 1, ntauc2o
+            IF( jf == 1 ) CALL histwrite(nidct,cpl_readtau(jf), kt,ztauxxu,jpi*jpj,ndexct)
+            IF( jf == 2 ) CALL histwrite(nidct,cpl_readtau(jf), kt,ztauyyu,jpi*jpj,ndexct)
+            IF( jf == 3 ) CALL histwrite(nidct,cpl_readtau(jf), kt,ztauzzu,jpi*jpj,ndexct)
+            IF( jf == 4 ) CALL histwrite(nidct,cpl_readtau(jf), kt,ztauxxv,jpi*jpj,ndexct)
+            IF( jf == 5 ) CALL histwrite(nidct,cpl_readtau(jf), kt,ztauyyv,jpi*jpj,ndexct)
+            IF( jf == 6 ) CALL histwrite(nidct,cpl_readtau(jf), kt,ztauzzv,jpi*jpj,ndexct)
+          END DO 
+
+          CALL histsync(nidct)
+
+! 2. CHANGING DATA GRID COORDINATES --> GLOBAL GRID COORDINATES
+! -------------------------------------------------------------
+! On u grid
+          DO jj = 1, jpj
+            DO ji = 1, jpi
+              ztauxx(ji,jj) = ztauxxu( mig(ji), mjg(jj) )
+              ztauyy(ji,jj) = ztauyyu( mig(ji), mjg(jj) )
+              ztauzz(ji,jj) = ztauzzu( mig(ji), mjg(jj) )
+            END DO
+          END DO
+
+          CALL geo2oce( ztauxx, ztauyy, ztauzz, 'u', glamu, gphiu, tauxg, ztauyg, ztauver )
+
+          CALL histwrite( nidct, 'tauxeu', kt , tauxg  , jpi*jpj, ndexct )
+          CALL histwrite( nidct, 'tauynu', kt , ztauyg , jpi*jpj, ndexct )
+          CALL histwrite( nidct, 'tauzzu', kt , ztauver, jpi*jpj, ndexct ) 
+
+! On v grid
+          DO jj = 1, jpj
+            DO ji = 1, jpi
+              ztauxx(ji,jj) = ztauxxv( mig(ji), mjg(jj) )
+              ztauyy(ji,jj) = ztauyyv( mig(ji), mjg(jj) )
+              ztauzz(ji,jj) = ztauzzv( mig(ji), mjg(jj) )
+            END DO
+          END DO
+
+          CALL geo2oce( ztauxx, ztauyy, ztauzz, 'v', glamv, gphiv, ztauxg, tauyg, ztauver )
+
+          CALL histwrite( nidct, 'tauxev', kt , ztauxg , jpi*jpj, ndexct )
+          CALL histwrite( nidct, 'tauynv', kt , tauyg  , jpi*jpj, ndexct )
+          CALL histwrite( nidct, 'tauzzv', kt , ztauver, jpi*jpj, ndexct ) 
+
+
+          CALL repcmo( tauxg, ztauyg, ztauxg, tauyg, taux, tauy, kt )
+
+! sortie des composantes de vents : tauxn tauye
+
+          CALL histwrite( nidct, 'taux', kt , taux, jpi*jpj, ndexct )
+          CALL histwrite( nidct, 'tauy', kt , tauy, jpi*jpj, ndexct )
+          CALL histsync( nidct )
+          IF( nitend-kt < nexco ) CALL histclo( nidct )
+
+      ENDIF
+
+   END SUBROUTINE tau

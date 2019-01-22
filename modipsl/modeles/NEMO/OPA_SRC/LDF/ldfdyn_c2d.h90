@@ -1,0 +1,120 @@
+   !!----------------------------------------------------------------------
+   !!                      ***  ldfdyn_c2d.h90  ***
+   !!----------------------------------------------------------------------
+   !!   ldf_dyn_c2d  : set the lateral viscosity coefficients
+   !!   ldf_dyn_c2d_orca : specific case for orca r2 and r4
+   !!----------------------------------------------------------------------
+
+   !!----------------------------------------------------------------------
+   !!   OPA 9.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/OPA_SRC/LDF/ldfdyn_c2d.h90,v 1.4 2005/03/27 18:35:06 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+   !!----------------------------------------------------------------------
+
+   SUBROUTINE ldf_dyn_c2d( ld_print )
+      !!----------------------------------------------------------------------
+      !!                 ***  ROUTINE ldf_dyn_c2d  ***
+      !!                  
+      !! ** Purpose :   initializations of the horizontal ocean physics
+      !!
+      !! ** Method :
+      !!      2D eddy viscosity coefficients ( longitude, latitude )
+      !!
+      !!       harmonic operator   : ahm1 is defined at t-point
+      !!                             ahm2 is defined at f-point
+      !!           + isopycnal     : ahm3 is defined at u-point
+      !!           or geopotential   ahm4 is defined at v-point
+      !!           iso-model level : ahm3, ahm4 not used
+      !!
+      !!       biharmonic operator : ahm1 is defined at u-point
+      !!                             ahm2 is defined at v-point
+      !!                           : ahm3, ahm4 not used
+      !!
+      !!----------------------------------------------------------------------
+      !! * Arguments
+      LOGICAL, INTENT (in) :: ld_print   ! If true, output arrays on numout
+
+      !! * Local variables
+      REAL(wp) ::   za00, zdx_max
+      !!----------------------------------------------------------------------
+
+      IF(lwp) WRITE(numout,*)
+      IF(lwp) WRITE(numout,*) 'ldf_dyn_c2d : 2d lateral eddy viscosity coefficient'
+      IF(lwp) WRITE(numout,*) '~~~~~~~~~~~'
+      IF(lwp) WRITE(numout,*)
+
+      ! harmonic operator (ahm1, ahm2) : ( T- and F- points) (used for laplacian operators
+      ! ===============================                       whatever its orientation is)
+      IF( ln_dynldf_lap ) THEN
+         ! define ahm1 and ahm2 at the right grid point position
+         ! (USER: modify ahm1 and ahm2 following your desiderata)
+
+         zdx_max = MAXVAL( e1t(:,:) )
+         IF( lk_mpp )   CALL mpp_max( zdx_max )   ! max over the global domain
+
+         IF(lwp) WRITE(numout,*) '              laplacian operator: ahm proportional to e1'
+         IF(lwp) WRITE(numout,*) '              Caution, here we assume your mesh is isotropic ...'
+         IF(lwp) WRITE(numout,*) '              maximum grid-spacing = ', zdx_max, ' maximum value for ahm = ', ahm0
+
+         za00 = ahm0 / zdx_max
+         ahm1(:,:) = za00 * e1t(:,:)
+         ahm2(:,:) = za00 * e1f(:,:)
+
+         IF( ln_dynldf_iso ) THEN
+            IF(lwp) WRITE(numout,*) '              Caution, as implemented now, the isopycnal part of momentum'
+            IF(lwp) WRITE(numout,*) '                 mixing use aht0 as eddy viscosity coefficient. Thus, it is'
+            IF(lwp) WRITE(numout,*) '                 uniform and you must be sure that your ahm is greater than'
+            IF(lwp) WRITE(numout,*) '                 aht0 everywhere in the model domain.'
+         ENDIF
+
+
+         ! Control print
+         IF( lwp .AND. ld_print ) THEN
+            WRITE(numout,*)
+            WRITE(numout,*) 'inildf: 2D ahm1 array'
+            CALL prihre(ahm1,jpi,jpj,1,jpi,1,1,jpj,1,1.e-3,numout)
+            WRITE(numout,*)
+            WRITE(numout,*) 'inildf: 2D ahm2 array'
+            CALL prihre(ahm2,jpi,jpj,1,jpi,1,1,jpj,1,1.e-3,numout)
+         ENDIF
+      ENDIF
+
+      ! biharmonic operator (ahm3, ahm4) : at U- and V-points (used for bilaplacian operator
+      ! =================================                      whatever its orientation is)
+      IF( ln_dynldf_bilap ) THEN
+         ! (USER: modify ahm3 and ahm4 following your desiderata)
+         ! Here: ahm is proportional to the cube of the maximum of the gridspacing
+         !       in the to horizontal direction
+
+         zdx_max = MAXVAL( e1u(:,:) )
+         IF( lk_mpp )   CALL mpp_max( zdx_max )   ! max over the global domain
+
+         IF(lwp) WRITE(numout,*) '              bi-laplacian operator: ahm proportional to e1**3 '
+         IF(lwp) WRITE(numout,*) '              Caution, here we assume your mesh is isotropic ...'
+         IF(lwp) WRITE(numout,*) '              maximum grid-spacing = ', zdx_max, ' maximum value for ahm = ', ahm0
+
+         za00 = ahm0 / ( zdx_max * zdx_max * zdx_max )
+         ahm3(:,:) = za00 * e1u(:,:) * e1u(:,:) * e1u(:,:)
+         ahm4(:,:) = za00 * e1v(:,:) * e1v(:,:) * e1v(:,:)
+
+!ylu turn off lateral mixing in St Lawrence River
+!         ahm3(10:40,150:190) =0.0
+!         ahm4(10:40,150:190) =0.0
+          ahm3(mi0(10):mi1(40),mj0(150):mj1(190)) =0.0
+          ahm4(mi0(10):mi1(40),mj0(150):mj1(190)) =0.0
+
+         ! Control print
+         IF( lwp .AND. ld_print ) THEN
+            WRITE(numout,*)
+            WRITE(numout,*) 'inildf: ahm3 array'
+            CALL prihre(ahm3,jpi,jpj,1,jpi,1,1,jpj,1,1.e-3,numout)
+            WRITE(numout,*)
+            WRITE(numout,*) 'inildf: ahm4 array'
+            CALL prihre(ahm4,jpi,jpj,1,jpi,1,1,jpj,1,1.e-3,numout)
+         ENDIF
+      ENDIF
+
+
+   END SUBROUTINE ldf_dyn_c2d
+
+

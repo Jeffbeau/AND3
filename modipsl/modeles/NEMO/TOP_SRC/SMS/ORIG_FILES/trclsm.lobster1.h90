@@ -1,0 +1,280 @@
+!!----------------------------------------------------------------------
+!!                    ***  trclsm.lobster1.h90 ***
+!!----------------------------------------------------------------------
+CONTAINS
+
+   SUBROUTINE trc_lsm
+      !!----------------------------------------------------------------------
+      !!                        trclsm.lobster1.h
+      !!                     **********************
+      !!
+      !!  PURPOSE :
+      !!  ---------
+      !!     READS the specific NAMELIST for LOBSTER1 model
+      !!
+      !!   WORKSPACE :                : no
+      !!   ---------
+      !!
+      !!   MODIFICATIONS:
+      !!   --------------
+      !!      original  : 99-10 (M.A. Foujols, M. Levy) passive tracer
+      !!      additions : 00-12 (O. Aumont, E. Kestenare) add sediments
+      !! ----------------------------------------------------------------------
+      !! local declarations
+      !! ==================
+      CHARACTER (len=32) :: clname
+
+      !!---------------------------------------------------------------------
+      !!  TOP 1.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/TOP_SRC/SMS/trclsm.lobster1.h90,v 1.5 2006/04/10 15:39:56 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+      !!---------------------------------------------------------------------
+
+      ! 0. initializations
+      ! ------------------
+     NAMELIST/natbio/apmin,azmin,anmin,admin,   &
+      &   redf,reddom,slopet,toptp,psinut,akno3,aknh4,rcchl,        &
+      &   rgamma,toptgz,tmaxgz,rgz,             &
+      &   rppz,taus,aks,filmax,rpnaz,rdnaz,eggzoo,tauzn,   &
+      &   tmmaxp,tmminp,tmmaxz,tmminz,anumin,afdmin,taudn,   &
+      &   vsed,tmumax,aki,tmaxr,tminr, taunn, taudomn,xhr,   &
+      &   sedlam, sedlostpoc,  &
+      &    fphylab,fzoolab,fdetlab,fdbod
+      NAMELIST/natopt/xkg0,xkr0,xkgp,xkrp,xlg,xlr,rpig
+#if defined key_trc_diabio
+      INTEGER :: ji
+      NAMELIST/natdbi/ctrbio,ctrbil,ctrbiu,nwritebio
+#endif
+
+      IF(lwp) THEN
+         WRITE(numout,*) ' '
+         WRITE(numout,*) ' ROUTINE trclsm'
+         WRITE(numout,*) ' **************'
+         WRITE(numout,*) ' '
+         WRITE(numout,*) ' namelist for lobster1 model'
+         WRITE(numout,*) ' ***************************'
+         WRITE(numout,*) ' '
+      ENDIF
+
+
+      numnat=80
+      clname ='namelist.trc.sms'
+      OPEN( numnat, FILE= clname, FORM='formatted', STATUS = 'old')
+
+      ! 1.4 namelist natbio : biological parameters
+      ! -------------------------------------------
+
+      apmin = 0.
+      azmin = 0.
+      anmin = 0.
+      admin = 0.
+      redf  = 0.
+      reddom = 0.
+      slopet = 0.
+      toptp = 0.
+      psinut = 0.
+      akno3  = 0.
+      aknh4 = 0.
+      rcchl = 0.
+      rgamma= 0.
+      toptgz= 0.
+      tmaxgz= 0.
+      rgz   = 0.
+      rppz  = 0.
+      taus  = 0.
+      aks   = 0.
+      filmax= 0.
+      rpnaz = 0.
+      rdnaz = 0.
+      eggzoo= 0.
+      tauzn = 0.
+      tmmaxp= 0.
+      tmminp= 0.
+      tmmaxz= 0.
+      tmminz= 0.
+      anumin= 0.
+      afdmin= 0.
+      taudn = 0.
+      vsed  = 0.
+      tmumax= 0.
+      aki   = 0.
+      tmaxr   = 1./(     4.*rday)*0.
+      tminr   = 1./(24.*30.*rday)*0.
+      xhr=0.
+      sedlam=0.
+      sedlostpoc=0.
+      taudomn = 0.
+      taunn = 0.
+      fphylab = 0.
+      fzoolab = 0.
+      fdetlab = 0.
+      fdbod = 0.
+
+      READ(numnat,natbio)
+
+      IF(lwp) THEN
+          WRITE(numout,*) 'natbio'
+          WRITE(numout,*) ' '
+          WRITE(numout,*)     &
+          &   ' minimum phytoplancton concentration  apmin =', apmin
+          WRITE(numout,*)     &
+          &   ' minimum zooplancton   concentration  azmin =', azmin
+          WRITE(numout,*)     &
+          &   ' minimum nutrients     concentration  anmin =', anmin
+          WRITE(numout,*)     &
+          &   ' minimum detritus      concentration  admin =', admin
+          WRITE(numout,*)     &
+          &   ' redfield ratio  c:n                   redf =', redf
+          WRITE(numout,*)     &
+          &   ' van t hoff coefficient              slopet =', slopet
+          WRITE(numout,*)     &
+          &   ' optimal photosynthesis temperature   toptp =', toptp
+          WRITE(numout,*)     &
+          &   ' inhibition of no3 uptake by nh4      psinut =', psinut
+          WRITE(numout,*)     &
+          &   ' half-saturation nutrient for no3 uptake   akno3 =', akno3
+          WRITE(numout,*)     &
+          &   ' half-saturation nutrient for nh4 uptake   aknh4 =', aknh4
+          WRITE(numout,*)     &
+          &   ' carbone/chlorophyl ratio             rcchl =', rcchl
+          WRITE(numout,*)     &
+          &   ' phytoplankton exudation fraction    rgamma =', rgamma
+          WRITE(numout,*)     &
+          &   ' optimal temperature for zoo growth  toptgz =', toptgz
+          WRITE(numout,*)     &
+          &   ' maximal temperature for zoo growth  tmaxgz =', tmaxgz
+          WRITE(numout,*)     &
+          &   ' widtht of zoo temperature FUNCTION     rgz =', rgz
+          WRITE(numout,*)     &
+          &   ' zoo preference for phyto              rppz =', rppz
+          WRITE(numout,*)     &
+          &   ' maximal zoo grazing rate              taus =',86400*taus
+          WRITE(numout,*)     &
+          &   ' half saturation constant for zoo food  aks =', aks
+          WRITE(numout,*)     &
+          &   ' maximal mass clearance rate for zoo filmax =', filmax
+          WRITE(numout,*)     &
+          &   ' non-assimilated phyto by zoo         rpnaz =', rpnaz
+          WRITE(numout,*)     &
+          &   ' non-assimilated detritus by zoo      rdnaz =', rdnaz
+          WRITE(numout,*)     &
+          &   ' minimum  for zoo concentration      eggzoo =', eggzoo
+          WRITE(numout,*)     &
+          &   ' zoo specific excretion rate          tauzn =',86400   &
+          &   *tauzn
+          WRITE(numout,*)     &
+          &   ' maximal phyto mortality rate        tmmaxp =',86400   &
+          &   *tmmaxp
+          WRITE(numout,*)     &
+          &   ' minimal phyto mortality rate        tmminp =',86400   &
+          &   *tmminp
+          WRITE(numout,*)     &
+          &   ' maximal zoo mortality rate          tmmaxz =',86400   &
+          &   *tmmaxz
+          WRITE(numout,*)     &
+          &   ' minimal zoo mortality rate          tmminz =',86400   &
+          &   *tmminz
+          WRITE(numout,*)     &
+          &   ' nutrient threshold for phyto mort   anumin =', anumin
+          WRITE(numout,*)     &
+          &   ' food threshold for zoo mort         afdmin =', afdmin
+          WRITE(numout,*)     &
+          &   ' detrital breakdown rate              taudn =',86400   &
+          &   *taudn
+          WRITE(numout,*)     &
+          &   ' detritus sedimentation speed          vsed =',86400*vsed
+          WRITE(numout,*)     &
+          &   ' phyto max growth rate               tmumax =',86400   &
+          &   *tmumax
+          WRITE(numout,*)     &
+          &   ' light hlaf saturation constant         aki =', aki
+          WRITE(numout,*)     &
+          &   ' maximum damping for d z or p         tmaxr =', tmaxr
+          WRITE(numout,*)     &
+          &   ' damping-remineralisation rate        tminr =', tminr
+          WRITE(numout,*)     & 
+          &   ' nitrification rate                   taunn =', taunn
+          WRITE(numout,*)     & 
+          &   ' dom remineralisation rate          taudomn =', taudomn
+          WRITE(numout,*)     & 
+          &   ' coeff for martin''s remineralistion    xhr =', xhr
+          WRITE(numout,*)     & 
+          &   ' time coeff of POC in sediments      sedlam =', sedlam
+          WRITE(numout,*)     &
+          &   ' Sediment geol loss for POC  sedlostpoc =', sedlostpoc
+          WRITE(numout,*)     &
+          & ' NH4 fraction of phytoplankton exsudation fphylab =', fphylab
+          WRITE(numout,*)     &
+          & ' NH4 fraction of zooplankton excretion fzoolab =', fzoolab
+          WRITE(numout,*)     &
+          & ' NH4 fraction of detritus dissolution  fdetlab =', fdetlab
+          WRITE(numout,*)     &
+          & ' Zooplankton mortality fraction that goes to detritus fdbod =', fdbod
+      ENDIF
+
+      ! 1.5 namelist natopt : parameters for optic
+      ! ------------------------------------------
+
+      xkg0  = 0.
+      xkr0  = 0.
+      xkgp  = 0.
+      xkrp  = 0.
+      xlg   = 0.
+      xlr   = 0.
+      rpig  = 0.
+
+      READ(numnat,natopt)
+
+      IF(lwp) THEN
+         WRITE(numout,*) 'natopt'
+         WRITE(numout,*) ' '
+         WRITE(numout,*) ' green   water absorption coeff  xkg0  = ',xkg0
+         WRITE(numout,*) ' red water absorption coeff      xkr0  = ',xkr0
+         WRITE(numout,*) ' pigment red absorption coeff    xkrp  = ',xkrp
+         WRITE(numout,*) ' pigment green absorption coeff  xkgp  = ',xkgp
+         WRITE(numout,*) ' green chl exposant              xlg   = ',xlg
+         WRITE(numout,*) ' red   chl exposant              xlr   = ',xlr
+         WRITE(numout,*) ' chla/chla+phea ratio            rpig  = ',rpig
+         WRITE(numout,*) ' '
+
+      ENDIF
+
+#if defined key_trc_diabio
+
+      ! NAMELIST : natdbi 
+
+      ! default name for biological trends : short and long name, units
+
+      DO ji=1,jpdiabio
+         IF (ji < 10) THEN 
+            WRITE (ctrbio(ji),'("BIO_",I1)') ji
+         ELSE IF (ji < 100) THEN
+            WRITE (ctrbio(ji),'("BIO_",I2)') ji
+         ELSE
+            WRITE (ctrbio(ji),'("BIO_",I3)') ji
+         ENDIF
+         WRITE (ctrbil(ji),'("BIOLOGICAL TREND NUMBER ",I2)') ji
+         ctrbiu(ji)='mmoleN/m3/s '
+      END DO
+
+      nwritebio = 10
+
+      READ(numnat,natdbi)
+
+      IF(lwp) THEN
+         WRITE(numout,*) 'natdbi'
+         WRITE(numout,*) ' '
+         WRITE(numout,*)      &
+            &   ' frequency of outputs for biological outputs = '    &
+            &   ,nwritebio
+         WRITE(numout,*) ' '
+         DO ji=1,jpdiabio
+            WRITE(numout,*)     &
+               &   'name of biological trend number :',ji,' : ',ctrbio(ji)  
+            WRITE(numout,*) ctrbil(ji)  
+            WRITE(numout,*) ' in unit = ',ctrbiu(ji)
+         END DO
+      END IF
+#endif
+
+   END SUBROUTINE trc_lsm

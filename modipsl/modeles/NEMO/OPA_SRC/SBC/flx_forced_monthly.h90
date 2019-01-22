@@ -1,0 +1,272 @@
+   !!----------------------------------------------------------------------
+   !!                ***  flx_forced_monthly.h90  ***
+   !!----------------------------------------------------------------------
+
+   !!----------------------------------------------------------------------
+   !!   flx     : update the surface flx - monthly fields in NetCDF
+   !!             file.
+   !!----------------------------------------------------------------------
+   !! * local modules variables
+   INTEGER ::   &
+      numq,     &  ! 1
+      numqsr,   &  ! 2
+      numemp,   &  ! 3
+      ntau1, ntau2  ! index of the first and second record used
+
+   CHARACTER (len=34) ::   &      !!! * monthly climatology/interanual fields
+      cl_q = 'flx_q_1m.nc',  & !
+      cl_qsr = 'flx_qsr_1m.nc',     &!
+      cl_emp='flx_emp_1m.nc'
+
+   REAL(wp), DIMENSION(jpi,jpj,2) ::   &
+      bq_dta,    &  !
+      bqsr_dta,  &  !
+      bemp_dta
+   !!----------------------------------------------------------------------
+   !!   OPA 9.0 , LOCEAN-IPSL (2005)
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/OPA_SRC/SBC/tau_forced_monthly.h90,v 1.3 2005/03/27 18:35:14 opalod Exp $
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt
+   !!----------------------------------------------------------------------
+
+CONTAINS
+
+   SUBROUTINE flx( kt )
+      !!---------------------------------------------------------------------
+      !!                  ***  ROUTINE tau  ***
+      !!
+      !! ** Purpose :   provide to the ocean flx at each time step
+      !!
+      !! ** Method  : - Read the 2 monthly surface flx components in NetCDF
+      !!      file at 2 consecutive time-steps
+      !!              - a linear time-interpolation is performed to provide the
+      !!      stress at the kt time-step.
+      !!
+      !!    CAUTION: never mask the surface stress field !
+      !!
+      !! ** Action :
+      !!        update at each time-step the two components of the surface
+      !!      flx
+      !!
+      !! History :
+      !!   9.0  !  05-07  (ZL. Wang)  F90: Free form and module
+      !!        !                     daily/monthly, forced/coupled form
+      !!----------------------------------------------------------------------
+      !! * Modules used
+      USE ioipsl       ! NetCDF library
+      USE flx_oce
+      !! * Arguments
+      INTEGER, INTENT( in  ) ::   kt   ! ocean time step
+
+      !! * Local declarations
+      INTEGER, PARAMETER ::   jpmonth = 12
+      INTEGER ::   &
+         imois, iman, itime,   &
+         i15,   &
+         ipi, ipj, ipk
+      INTEGER, DIMENSION(jpmonth) ::   istep
+      REAL(wp) , DIMENSION(jpi,jpj)::  &
+         zlon  , &
+         zlat
+      REAL(wp) , DIMENSION(jpi,jpj)::zeri,zerps,ziclim
+      REAL(wp) , DIMENSION(jpk)::  &
+         zlev
+      REAL(wp) ::   &
+         zsecond,   & ! ???
+         zdate0,    & ! ???
+         zxy          ! coefficient of the linear time interpolation
+      !!---------------------------------------------------------------------
+
+      ! -------------- !
+      ! Initialization !
+      ! -------------- !
+
+      ! iman=number of dates in data file (12 for a year of monthly values)
+      iman  = INT( raamo )
+      ipi=jpiglo
+      ipj=jpjglo
+      ipk=jpk
+
+      i15 = INT( 2*FLOAT( nday ) / ( FLOAT( nobis(nmonth) ) + 0.5 ) )
+
+      imois = nmonth + i15 - 1
+      IF( imois == 0 ) imois = iman
+
+
+      ! -------------------- !
+      ! First call kt=nit000 !
+      ! -------------------- !
+
+      IF( kt == nit000 ) THEN
+         ntau1 = 0
+         IF(lwp) WRITE(numout,*)
+         IF(lwp) WRITE(numout,*) ' heat flux and emp: MONY climatological data'
+         IF(lwp) WRITE(numout,*) ' ~~~    '
+
+         ! title, dimensions and tests
+
+         CALL flinopen( cl_q, mig(1), nlci, mjg(1), nlcj,   &   ! t
+                        .FALSE., ipi   , ipj, ipk   ,        &
+                        zlon , zlat  , zlev   , itime,       &
+                        istep, zdate0, zsecond, numq )
+
+         IF( itime /= jpmonth ) THEN
+            IF(lwp) WRITE(numout,cform_err)
+            IF(lwp) WRITE(numout,*) 'problem with time coonates in file ', cl_q
+            IF(lwp) WRITE(numout,*) '   itime = ', itime,' jpmonth = ',jpmonth
+            STOP 'flx_forced_monthly.h90'
+         ENDIF
+         IF( ipi /= jpidta .AND. ipj /= jpjdta .AND. ipk /= 1 ) THEN
+            IF(lwp) WRITE(numout,cform_err)
+            IF(lwp) WRITE(numout,*) '   problem with size read in file ', cl_q
+            IF(lwp) WRITE(numout,*) '   ipi = ',ipi,' jpidta = ',jpidta
+            IF(lwp) WRITE(numout,*) '   ipj = ',ipj,' jpjdta = ',jpjdta
+            IF(lwp) WRITE(numout,*) '   ipk = ',ipk,' must be 1'
+            STOP 'flx_forced_monthly.h90'
+         ENDIF
+
+         CALL flinopen( cl_qsr, mig(1), nlci, mjg(1), nlcj,   &   !qsr
+                        .FALSE., ipi   , ipj, ipk   ,        &
+                        zlon , zlat  , zlev   , itime,       &
+                        istep, zdate0, zsecond, numqsr )
+
+         IF( itime /= jpmonth ) THEN
+            IF(lwp) WRITE(numout,cform_err)
+            IF(lwp) WRITE(numout,*) 'problem with time cooates in file ', cl_qsr
+            IF(lwp) WRITE(numout,*) '   itime = ', itime,' jpmonth = ',jpmonth
+            STOP 'flx_forced_monthly.h90'
+         ENDIF
+         IF( ipi /= jpidta .AND. ipj /= jpjdta .AND. ipk /= 1) THEN
+            IF(lwp) WRITE(numout,cform_err)
+            IF(lwp) WRITE(numout,*) '   problem with size read in file ', cl_qsr
+            IF(lwp) WRITE(numout,*) '   ipi = ',ipi,' jpidta = ',jpidta
+            IF(lwp) WRITE(numout,*) '   ipj = ',ipj,' jpjdta = ',jpjdta
+            IF(lwp) WRITE(numout,*) '   ipk = ',ipk,' must be 1'
+            STOP 'flx_forced_monthly.h90'
+         ENDIF
+
+         CALL flinopen( cl_emp, mig(1), nlci, mjg(1), nlcj,   &   !emp
+                        .FALSE., ipi   , ipj, ipk   ,        &
+                        zlon , zlat  , zlev   , itime,       &
+                        istep, zdate0, zsecond, numemp )
+
+         IF( itime /= jpmonth ) THEN
+            IF(lwp) WRITE(numout,cform_err)
+            IF(lwp) WRITE(numout,*) '   problem with time coes in file ', cl_emp
+            IF(lwp) WRITE(numout,*) '   itime = ', itime,' jpmonth = ',jpmonth
+            STOP 'flx_forced_monthly.h90'
+         ENDIF
+         IF( ipi /= jpidta .AND. ipj /= jpjdta .AND. ipk /= 1) THEN
+            IF(lwp) WRITE(numout,cform_err)
+            IF(lwp) WRITE(numout,*) '   problem with size read in file ', cl_emp
+            IF(lwp) WRITE(numout,*) '   ipi = ',ipi,' jpidta = ',jpidta
+            IF(lwp) WRITE(numout,*) '   ipj = ',ipj,' jpjdta = ',jpjdta
+            IF(lwp) WRITE(numout,*) '   ipk = ',ipk,' must be 1'
+            STOP 'flx_forced_monthly.h90'
+         ENDIF
+      ENDIF
+
+
+
+
+
+
+
+
+
+
+
+      ! ----------------- !
+      ! Read monthly file !
+      ! ----------------- !
+
+      IF( kt == nit000 .OR. imois /= ntau1 ) THEN
+
+         ! Calendar computation
+         ntau1 = imois          ! index of the first record
+         ntau2 = ntau1 + 1      ! index of the last  record
+         ntau1 = MOD( ntau1, iman )
+         IF( ntau1 == 0 ) ntau1 = iman
+         ntau2 = MOD( ntau2, iman )
+         IF( ntau2 == 0 ) ntau2 = iman
+         IF(lwp) WRITE(numout,*) 'first month used ntau1 = ', ntau1
+         IF(lwp) WRITE(numout,*) 'last  month used ntau2 = ', ntau2
+
+         ! Read the corresponding 2 monthly stress data
+         ! ntau1
+         CALL flinget( numq,'sohefldo',      &               ! q
+            jpidta,jpjdta,1,jpmonth,ntau1,   &
+            ntau1,mig(1),nlci,mjg(1),nlcj,bq_dta(1:nlci,1:nlcj,1) )
+         CALL flinget( numqsr,'soshfldo',    &               ! qsr
+            jpidta,jpjdta,1,jpmonth,ntau1,   &
+            ntau1,mig(1),nlci,mjg(1),nlcj,bqsr_dta(1:nlci,1:nlcj,1) )
+         CALL flinget( numemp,'sowaflup',    &               ! emp 
+            jpidta,jpjdta,1,jpmonth,ntau1,   &
+            ntau1,mig(1),nlci,mjg(1),nlcj,bemp_dta(1:nlci,1:nlcj,1) )
+
+
+
+
+         ! ntau2
+         CALL flinget( numq,'sohefldo',      &               ! q
+            jpidta,jpjdta,1,jpmonth,ntau2,   &
+            ntau2,mig(1),nlci,mjg(1),nlcj,bq_dta(1:nlci,1:nlcj,2) )
+         CALL flinget( numqsr,'soshfldo',    &               ! qsr
+            jpidta,jpjdta,1,jpmonth,ntau2,   &
+            ntau2,mig(1),nlci,mjg(1),nlcj,bqsr_dta(1:nlci,1:nlcj,2) )
+         CALL flinget( numemp,'sowaflup',    &               ! emp
+            jpidta,jpjdta,1,jpmonth,ntau2,   &
+            ntau2,mig(1),nlci,mjg(1),nlcj,bemp_dta(1:nlci,1:nlcj,2) )
+
+
+
+
+
+         IF(lwp .AND. nitend-nit000 <= 100 ) THEN
+            WRITE(numout,*)
+            WRITE(numout,*) ' monthly flux emp read'
+            WRITE(numout,*)
+            WRITE(numout,*) ' month: ', ntau1, '  q: 1 multiply by ', 1.
+            CALL prihre( bq_dta(1,1,1), jpi, jpj, 1, jpi, 20, 1, jpj, 10, 1., numout )
+            WRITE(numout,*)
+            WRITE(numout,*) ' month: ', ntau2, '  qsr: 2 multiply by ', 1.
+            CALL prihre( bqsr_dta(1,1,2), jpi, jpj, 1, jpi, 20, 1, jpj, 10, 1., numout )
+            WRITE(numout,*)
+            WRITE(numout,*) ' month: ', ntau2, '  emp: 2 multiply by ', 1.
+            CALL prihre( bemp_dta(1,1,2), jpi, jpj, 1, jpi, 20, 1, jpj, 10, 1., numout )
+
+
+
+         ENDIF
+
+         CALL FLUSH(numout)
+      ENDIF
+
+      ! ------------------------------- !
+      ! linear time interpolation at kt !
+      ! ------------------------------- !
+
+      ! zxy : coefficient for linear interpolation in time
+
+      zxy = FLOAT( nday ) / FLOAT( nobis(ntau1) ) + 0.5 - i15
+
+      p_bqt(:,:) = (1.-zxy) * bq_dta(:,:,1) + zxy * bq_dta(:,:,2)
+      p_bqsr(:,:) = (1.-zxy) * bqsr_dta(:,:,1) + zxy * bqsr_dta(:,:,2)
+      p_bemp(:,:) = (1.-zxy) * bemp_dta(:,:,1) + zxy * bemp_dta(:,:,2)
+
+      ! Save components
+
+      CALL lbc_lnk(p_bemp,'T',1. )
+      CALL FLUSH(numout)
+
+      ! ------------------- !
+      ! Last call kt=nitend !
+      ! ------------------- !
+
+      ! Closing of the 2 files (required in mpp)
+      IF( kt == nitend ) THEN
+          CALL flinclo(numq)
+          CALL flinclo(numqsr)
+          CALL flinclo(numemp)
+      ENDIF
+
+   END SUBROUTINE flx

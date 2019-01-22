@@ -1,0 +1,23 @@
+#-Q- linux    #- Global definitions for LINUX
+#-Q- linux    M_K = make
+#-Q- linux    P_C = /lib/cpp
+#-Q- linux    P_O = -P -C -traditional $(P_P)
+#-Q- linux    F_C = pgf90 -c
+#-Q- linux    #-D- MD    F_D =
+#-Q- linux    #-D- MN    F_D =
+#-Q- linux    #-P- I4R4  F_P = -i4
+#-Q- linux    #-P- I4R8  F_P = -i4 -r8
+#-Q- linux    #-P- I8R8  F_P = -i8 -r8
+#-Q- linux    #-P- ??    F_P = -i4 -r4
+#-Q- linux    F_O = $(F_D) $(F_P) -Mfree -module $(MODDIR)
+#-Q- linux    F_L = pgf90
+#-Q- linux    L_O = -Wl,-Bstatic -Mbounds
+#-Q- linux    A_C = ar -r
+#-Q- linux    A_G = ar -x
+#-Q- linux    C_C = gcc -c
+#-Q- linux    C_O = -Wall
+#-Q- linux    C_L = gcc
+#-Q- linux    #-
+#-Q- linux    NCDF_INC = /distrib/local/netcdf/pgf/include/
+#-Q- linux    NCDF_LIB = -L/distrib/local/netcdf/pgf/lib/ -lnetcdf
+#-Q- linux    #-

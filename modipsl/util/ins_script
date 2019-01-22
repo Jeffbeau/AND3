@@ -1,0 +1,174 @@
+#!/bin/ksh
+# $Id: ins_script,v 2.3 2005/01/31 16:40:29 adm Exp $
+#---------------------------------------------------------------------
+#- Installation de scripts de lancement d experiences propres a un environnement
+#---------------------------------------------------------------------
+b_n=$(basename $0)
+d_n=$(dirname $0)
+
+#- Saisie et validation des options
+x_v='silencious';
+x_d='normal';
+x_t="";
+x_n="";
+
+while getopts :hvd:t:n: V
+  do
+    case $V in
+      (h)  echo "Usage    : "${b_n} \
+                " [-h] [-v] [-d] [-t h]  [-n f]";
+           echo " -h       : help";
+           echo " -v       : verbose mode";
+           echo " -d       : debug mode";
+           echo " -t h     : target host_name";
+           echo " -n f     : Name";
+           echo "Defaults  : -t local_host";
+           exit 0;;
+      (v)  x_v='verbose';;
+      (d)  x_d='debug';;
+      (t)  x_t=${OPTARG};;
+      (n)  x_n=${OPTARG};;
+      (:)  echo ${b_n}" : -"${OPTARG}" option : missing value" 1>&2;
+           exit 2;;
+      (\?) echo ${b_n}" : -"${OPTARG}" option : not supported" 1>&2;
+           exit 2;;
+    esac
+  done
+shift $(($OPTIND-1));
+#- Traitement des options
+#- REAL precision
+#- Target_Host Name
+if [ '\?'${x_t} = '\?' ]; then
+  x_t=`${d_n}/w_i_h`;
+  if [ $? -ne 0 ]; then
+    echo "Bad installation : w_i_h/uname unreachable" 1>&2;
+    exit 1;
+  elif [ "$x_t" = "Unknown" ]; then
+    echo "Local_Host not supported" 1>&2;
+    exit 1;
+  fi;
+fi;
+
+if [ "$x_t" = "sxnec" ]; then
+   b_n_atlas=$(basename $HOMEGAYA)
+   d_n_atlas=$(dirname $HOMEGAYA)
+elif [ "$x_t" = "aix" ]; then
+   b_n_atlas=$LOGIN
+   d_n_atlas="/u/"$(dirname $HOME | awk -F\/ '{print $3"/"$4}')
+elif [ "$x_t" = "fjvpp" ]; then
+   b_n_atlas=$(basename $DMFDIR)
+   d_n_atlas=\/$(dirname $DMFDIR | awk -F\/ '{print $4}')
+elif [ "$x_t" = "sx6nec" ]; then
+   b_n_atlas=$(basename $DMFDIR)
+   d_n_atlas=$(dirname $DMFDIR)
+else
+echo "        !!! WARNING !!!"
+echo " The path for the output files on the storage server,"
+echo " needed for the descriptor files, is not automaticaly set."
+echo " Please specify manually this path by replacing the AAAAAAA"
+echo " string in the Output Job with the desired path."
+echo "        !!! WARNING !!!"
+fi
+
+case ${x_t} in
+  ( aix | cray | fjvpp | linux | lxiv7 | lxiv8 | osf1 | \
+    solaris | t3e | sxnec | sx6nec | unix ) ;;
+  (*)
+    echo "Target_Host "${x_t}" not supported" 1>&2;
+    exit 1;;
+esac
+#-
+x_m=$( (cd $d_n ; pwd) | sed -e "s,/util,," )
+
+if [ ${x_v} = 'verbose' ]; then
+  echo '--- Mode              : '${x_v};
+  echo '--- Compilation       : '${x_d};
+  echo '--- Target            : '${x_t};
+  echo '--- Name              : '${x_n};
+  echo '--- MODIPSL directory : '${x_m};
+fi;
+#-
+#-
+l_rep=`find ${d_n}/.. -name AA_job -print`
+#-
+W_OS=${x_t};
+#
+if [ ${W_OS}  = "sxnec" ]; then
+   format='\s'
+elif [ ${W_OS}  = "aix" ]; then
+   format='\s'
+elif [ ${W_OS}  = "fjvpp" ]; then
+   format='\d'
+elif [ ${W_OS}  = "sx6nec" ]; then
+   format='\s'
+else
+echo "        !!! WARNING !!!"
+echo " The display format of numbers,"
+echo " needed for the dates, is not automaticaly set."
+echo " Please specify manually this format by replacing the PPPPPPP"
+echo " string in the Output Job with the desired format."
+echo "        !!! WARNING !!!"
+fi
+echo " ";
+echo "Installation of simple execution jobs for $W_OS";
+echo " ";
+#-
+for i in $l_rep
+do
+  j=${i%/AA_job}
+  MKTR="$j"'/AA_job'
+  Job_name=`( grep '#-Q- '${W_OS}' #@$-r' ${MKTR} || grep '#-Q- '${W_OS}' #PBS -N' ${MKTR} || grep '#-Q- '${W_OS}' #@job_name' ${MKTR} ) | awk -F: '{print $3}'`
+  JN2=`( grep '#-Q- '${W_OS}' #@$-r' ${MKTR} || grep '#-Q- '${W_OS}' #PBS -N' ${MKTR} || grep '#-Q- '${W_OS}' #@job_name' ${MKTR} ) | awk -F: '{print $2}'`
+  JN4=`( grep '#-Q- '${W_OS}' #@$-r' ${MKTR} || grep '#-Q- '${W_OS}' #PBS -N' ${MKTR} || grep '#-Q- '${W_OS}' #@job_name' ${MKTR} ) | awk -F: '{print $4}'`
+  r=$( (cd $j ; pwd) )
+  echo "Installation in directory : $(cd $j ; pwd) ";
+  sed -e "s,MMMMMMM,${x_m}," -e "s,RRRRRRR,${r}," -e "s,AAAAAAA,${d_n_atlas}\/${b_n_atlas},g" ${MKTR}  > jb1.$$
+  W_XX='#-Q- '$W_OS
+  FILE_NAME="";
+
+if [ '\?'${x_n} = '\?' ] && [ '\?'${Job_name} = '\?' ]; then
+    FILE_NAME="$j/Job"
+elif [ '\?'${x_n} = '\?' ] && [ -n "${Job_name}" ] && [ ${Job_name} = XXX ]; then
+    FILE_NAME="$j/Job_LO1"
+elif [ '\?'${x_n} != '\?' ] && [ ${Job_name} = XXX ]; then
+  FILE_NAME="$j/Job_${x_n}"
+elif [ '\?'${x_n} = '\?' ] && [ -n "${Job_name}" ] && [ ${Job_name} != XXX ]; then
+  FILE_NAME="$j/Job_${Job_name}"
+elif [ '\?'${x_n} != '\?' ] && [ ${Job_name} != XXX ]; then
+  FILE_NAME="$j/Job_${x_n}"
+fi
+
+ if [ ! -f "${FILE_NAME}" ]; then
+   case ${FILE_NAME} in
+      "$j/Job") sed -e "s,PPPPPPP,${format},g" -e "s,^$W_XX *,," -e "s,JJJJJJJ,Job," jb1.$$ | grep -v '^#-Q- ' > ${FILE_NAME};;
+      "$j/Job_LO1") sed -e "s,PPPPPPP,${format},g" -e "s,^$W_XX *,," -e "s,XXXXXXX,LO1," -e "s,JJJJJJJ,Job_LO1," -e "s,:${JN2}:,," -e "s,${Job_name},LO1.1,"  -e "s,:${JN4}:,," jb1.$$ | grep -v '^#-Q- ' > ${FILE_NAME};;
+      "$j/Job_${x_n}") sed -e "s,PPPPPPP,${format},g" -e "s,^$W_XX *,," -e "s,XXXXXXX,${x_n}," -e "s,JJJJJJJ,Job_${x_n},"  -e "s,:${JN2}:,," -e "s,${Job_name},${x_n}.1,"  -e "s,:${JN4}:,,"  jb1.$$ | grep -v '^#-Q- ' > ${FILE_NAME};;
+      "$j/Job_${Job_name}") sed -e "s,PPPPPPP,${format},g" -e "s,^$W_XX *,," -e "s,XXXXXXX,${Job_name}," -e "s,JJJJJJJ,Job_${Job_name},"  -e "s,:${JN2}:,," -e "s,${Job_name},${Job_name}.1,"  -e "s,:${JN4}:,," jb1.$$ | grep -v '^#-Q- ' > ${FILE_NAME};;
+   esac
+   chmod 755 ${FILE_NAME}
+ else
+        echo " "
+        echo "WARNING : The file ${FILE_NAME} already exists, "
+        echo "WARNING : installation was not completed correctly "
+        echo "WARNING :       !!! NO FILE REPLACED !!!"
+        echo "WARNING : use parameter -n new_name to obtain Job_new_name script file"
+        echo "WARNING :   for example : ins_script -n LP1  "
+        echo " "
+   rm -f jb1.$$ 
+   exit 0;    
+ fi
+echo "Installation in file : `echo ${FILE_NAME} | sed -e 's,/.*/,,' ` ";
+ 
+#-$$ Introduire ici la selection de la technique de communication
+#-$$ pour OASIS (prefixe #-C- )
+done
+#-
+rm -f jb1.$$ 
+#-
+#-$$ launch ins_post if at least one post-processing utility exists
+#-$$
+OK_POST=`find ${d_n}/.. -name da2st`
+if [ -n "$OK_POST" ]; then
+${d_n}/ins_post -t ${x_t}
+fi
+exit 0;

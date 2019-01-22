@@ -1,0 +1,727 @@
+#!/bin/ksh
+#set -vx
+############################################################
+#
+# Purpose :
+# This script aims to create create the AA_make file
+# in the WORK directory. 
+# AA_make contains :
+#    - compilation options speccific to NEMO
+#    - compilation rules
+#    - dependancies
+# Running the modipsl/util/ins_make command is needed AFTER
+# fait_AA_make.
+#
+# Method :
+# We use temporary files to perform the following steps :
+#    1- search all CPP keys in the code
+#    2- write compilation rules 
+#    3- add compilation options add the beginning of AA_make 
+#    4- search and write dependancies
+#    5- add some specific rules (links creation in the WORK)
+#
+# Modification : - add F_F for .F file compiler option on aix
+#                - add KEY_CPP dependancy for source containing 
+#                              only #if defined CPP statement
+#
+############################################################
+#-
+# A.Gosselin
+echo "DEBUG modipsl/modeles/UTIL/fait_AA_make This script must be run while in the modipsl/modeles/NEMO directory"
+cd WORK
+
+#-
+#- Search CPP keys ---
+liste_cle=$(egrep '^# *if[!( &]*def|^# *elif' *.[Fh] *.[Fh]90  2> /dev/null | grep key_ | sed 's/||/\
+/' | sed 's/\&\&/\
+/' | sed 's/^.*key_/key_/' | sed 's/ *[) ] *$//' | sort -u  )
+
+#-
+#- Write main compilation rules ---
+echo "DEBUG modipsl/modeles/UTIL/fait_AA_make creating tampon"
+cat > tampon <<end
+
+.SUFFIXES: .f90 .F90 .F
+
+# Target
+all: 		diroce \$(EXEC_BIN)
+		@cp SRC_FILE_LIST.temp SRC_FILE_LIST
+		@echo OPA model is OK
+# Cleaning objects, libraries and executables
+clean:
+ifeq (\$(AGRIF),use)
+		-@(cd OPAFILES; ./efface)
+endif
+		\$(RM) model.o \$(MODDIR)/oce/*.mod \$(MODEL_LIB) \$(SXMODEL_LIB) \$(EXEC_BIN)
+		@echo OPA model \(.o .mod libraries and executables are removed\)
+
+# Dependancies
+diroce:
+		@if [ ! -d ../../../lib/oce ] ; then mkdir ../../../lib/oce ; fi
+
+\$(EXEC_BIN) :	libioipsl firstagrif mpiagrif key keyverif src_file_list libagrif \$(MODEL_LIB) \$(IOIPSL_LIB) \$(AGRIF_LIB) agrif2model.o model.o
+ifeq (\$(AGRIF),use)
+		\$(F_L) \$(L_X) -o \$(EXEC_BIN) model.o agrif2model.o \$(SXMODEL_LIB) \$(OASISMPI2_LIB) \$(IOIPSL_LIB) \$(AGRIF_LIB) \$(NCDF_LIB) \$(LIBMPI) \$(LIBMP)
+else
+		\$(F_L) \$(L_X) -o \$(EXEC_BIN) model.o \$(SXMODEL_LIB) \$(OASISMPI2_LIB) \$(IOIPSL_LIB) \$(NCDF_LIB) \$(LIBMPI) \$(LIBMP)
+endif
+
+# Agrif library and conv
+libagrif :
+ifeq (\$(AGRIF),use)
+	@( if [ ! -d OPAFILES ]; then mkdir OPAFILES; fi )
+	@( if [ ! -d OPAFILES/AGRIF_INC ]; then mkdir OPAFILES/AGRIF_INC ; fi )
+	@( if [ ! -d OPAFILES/AGRIF_MODELFILES ]; then mkdir OPAFILES/AGRIF_MODELFILES ; fi )
+	@(cd ../../AGRIF ; \$(M_K) -f Makefile P_P="\$(AGRIF_MPI)" )
+	@cp -rf ../../AGRIF/agrif_opa.in OPAFILES/. 
+	@cp -rf ../../AGRIF/conv OPAFILES/. 
+	@cp -rf ../../AGRIF/efface OPAFILES/. 
+endif
+
+# Agrif interface with NEMO
+agrif2model.o :
+ifeq (\$(AGRIF),use)
+	@\$(P_C) \$(P_O) -IOPAFILES/AGRIF_INC \$*.F90 > OPAFILES/\$*.F90 
+	@\$(F_C) \\
+#-Q- aix		-qsuffix=f=F90 \\
+#-Q- osxxlf		-qsuffix=f=F90 \\
+	\$(P_P) \$(F_O) \\
+#-Q- fjvpp		-Z \$*.L \\
+#-Q- sxnec		-R2 \\
+#-Q- sx6nec		-R2 \\
+#-Q- sxdkrz		-R2 \\
+#-Q- eshpux		-R2 \\
+#-Q- aix		-qsource \\
+	   OPAFILES/\$*.F90 || { mv \$(PREF).L \$(TMP) ; false ; exit ; }
+#-Q- sxnec		@\$(A_X) \$(SXMODEL_LIB) \$*.o  > /dev/null
+#-Q- sx6nec		@\$(A_X) \$(SXMODEL_LIB) \$*.o  > /dev/null
+#-Q- sxdkrz		@\$(A_X) \$(SXMODEL_LIB) \$*.o  > /dev/null
+#-Q- hpux			@\$(A_X) \$(SXMODEL_LIB) \$*.o  > /dev/null
+endif
+
+# IOIPSL library 
+libioipsl :
+	(cd ../../IOIPSL/src ; \$(M_K) -f Makefile )
+
+# Main program
+model.o :	model.f90
+		@\$(F_C) \$(F_O) -c model.f90
+
+# if the make script is stopped, one doesn't destroy library
+.PRECIOUS : \$(MODEL_LIB)
+#-Q- sxnec .PRECIOUS : \$(SXMODEL_LIB)
+#-Q- sx6nec .PRECIOUS : \$(SXMODEL_LIB)
+#-Q- sxdkrz .PRECIOUS : \$(SXMODEL_LIB)
+#-Q- eshpux .PRECIOUS : \$(SXMODEL_LIB)
+
+# library dependancies
+\$(MODEL_LIB):	\$(LIB_OBJ)
+		@echo
+		@echo La bibliotheque est a jour
+		@echo
+
+# Default rules
+.DEFAULTS:
+
+# rules for the .f90 files
+.f90.a :           
+		\$(F_C) \$(P_P) \$(F_O) \\
+#-Q- fjvpp		-Z \$*.L \\
+#-Q- sxnec		-R2 \\
+#-Q- sx6nec		-R2 \\
+#-Q- sxdkrz		-R2 \\
+#-Q- eshpux		-R2 \\
+#-Q- aix		-qsource \\
+		\$*.f90 || { if [ -f \$(PREF)\$*.L ] ; then mv \$(PREF)\$*.L \$(TMP) ; fi ; false ; exit ; }
+#-Q- sxnec		@\$(A_X) \$(SXMODEL_LIB) \$*.o  > /dev/null
+#-Q- sx6nec		@\$(A_X) \$(SXMODEL_LIB) \$*.o  > /dev/null
+#-Q- sxdkrz		@\$(A_X) \$(SXMODEL_LIB) \$*.o  > /dev/null
+#-Q- eshpux		@\$(A_X) \$(SXMODEL_LIB) \$*.o  > /dev/null
+		\$(A_C) \$(MODEL_LIB) \$*.o  > /dev/null
+		\$(RM) \$*.[of]
+		if [ -f \$*.mod ] ; then mv \$*.mod \$(MODDIR)/oce ; fi
+#-Q- aix		@mv \$(PREF)\$*.lst \$(PREF)\$*.L
+#-Q- osxxlf		@mv \$(PREF)\$*.lst \$(PREF)\$*.L
+		@if [ -f \$(PREF)\$*.L ] ; then mv \$(PREF)\$*.L \$(TMP) ; fi
+
+# rules for the .F90 files
+.F90.a :  
+ifeq (\$(AGRIF),use) 
+		@\$(P_C) \$(P_O) -IOPAFILES/AGRIF_INC \$*.F90 > OPAFILES/\$*.F90 
+		@(cd OPAFILES ; ./conv agrif_opa.in -rm \\
+#-Q- lxiv8		-SubloopScalar \\
+#-Q- g95			-SubloopScalar \\
+#-Q- f95			-SubloopScalar \\
+#-Q- osf1			-SubloopScalar \\
+		-comdirin ./ -comdirout AGRIF_MODELFILES/. -convfile \$*.F90)
+		-@mv -f OPAFILES/AGRIF_MODELFILES/\$*.F90 OPAFILES/\$*.F90
+		@\$(P_C) \$(P_O) -IOPAFILES/AGRIF_INC OPAFILES/\$*.F90 > OPAFILES/AGRIF_MODELFILES/\$*.F90
+		-@mv -f OPAFILES/AGRIF_MODELFILES/\$*.F90 OPAFILES/\$*.F90
+		@\$(F_C) \$(P_P) \$(F_O) \\
+#-Q- fjvpp		-Z \$*.L \\
+#-Q- sxnec		-R2 \\
+#-Q- sx6nec		-R2 \\
+#-Q- sxdkrz		-R2 \\
+#-Q- eshpux		-R2 \\
+#-Q- aix		-qsource \\
+		OPAFILES/\$*.F90 || { if [ -f \$(PREF)\$*.L ] ; then mv \$(PREF)\$*.L \$(TMP) ; fi ; false ; exit ; } 
+else
+		\$(F_C) \$(P_P) \$(F_O) \\
+#-Q- fjvpp		-Z \$*.L \\
+#-Q- sxnec		-R2 \\
+#-Q- sx6nec		-R2 \\
+#-Q- sxdkrz		-R2 \\
+#-Q- eshpux		-R2 \\
+#-Q- aix		-qsource \\
+		\$*.F90 || { if [ -f \$(PREF)\$*.L ] ; then mv \$(PREF)\$*.L \$(TMP) ; fi ; false ; exit ; }
+endif
+#-Q- sxnec		@\$(A_X) \$(SXMODEL_LIB) \$*.o  > /dev/null
+#-Q- sx6nec		@\$(A_X) \$(SXMODEL_LIB) \$*.o  > /dev/null
+#-Q- sxdkrz		@\$(A_X) \$(SXMODEL_LIB) \$*.o  > /dev/null
+#-Q- eshpux		@\$(A_X) \$(SXMODEL_LIB) \$*.o  > /dev/null
+		\$(A_C) \$(MODEL_LIB) \$*.o  > /dev/null
+		\$(RM) \$*.[of]
+		if [ -f \$*.mod ] ; then mv \$*.mod \$(MODDIR)/oce ; fi
+#-Q- aix		@mv \$(PREF)\$*.lst \$(PREF)\$*.L
+#-Q- osxxlf		@mv \$(PREF)\$*.lst \$(PREF)\$*.L
+		@if [ -f \$(PREF)\$*.L ] ; then mv \$(PREF)\$*.L \$(TMP) ; fi
+
+# rules for the .F files
+.F.a :           
+		\$(F_C) \$(P_P) \$(F_F) \\
+#-Q- fjvpp		-Z \$*.L \\
+#-Q- sxnec		-R2 \\
+#-Q- sx6nec		-R2 \\
+#-Q- sxdkrz		-R2 \\
+#-Q- eshpux		-R2 \\
+#-Q- aix		-qsource \\
+		\$*.F || { if [ -f \$(PREF)\$*.L ] ; then mv \$(PREF)\$*.L \$(TMP) ; fi ; false ; exit ; }
+#-Q- sxnec		@\$(A_X) \$(SXMODEL_LIB) \$*.o  > /dev/null
+#-Q- sx6nec		@\$(A_X) \$(SXMODEL_LIB) \$*.o  > /dev/null
+#-Q- sxdkrz		@\$(A_X) \$(SXMODEL_LIB) \$*.o  > /dev/null
+#-Q- eshpux		@\$(A_X) \$(SXMODEL_LIB) \$*.o  > /dev/null
+		\$(A_C) \$(MODEL_LIB) \$*.o  > /dev/null
+		\$(RM) \$*.[of]
+		if [ -f \$*.mod ] ; then mv \$*.mod \$(MODDIR)/oce ; fi
+#-Q- aix		@mv \$(PREF)\$*.lst \$(PREF)\$*.L
+#-Q- osxxlf		@mv \$(PREF)\$*.lst \$(PREF)\$*.L
+		@if [ -f \$(PREF)\$*.L ] ; then mv \$(PREF)\$*.L \$(TMP) ; fi
+
+# rules for the library from the .f files 
+.f.a : 		
+		\$(F_C) \$(F_O) \\
+#-Q- fjvpp		-Z \$*.L \\
+#-Q- sxnec		-R2 \\
+#-Q- sx6nec		-R2 \\
+#-Q- sxdkrz		-R2 \\
+#-Q- eshpux		-R2 \\
+#-Q- aix		-qsource \\
+		\$*.f|| { if [ -f \$(PREF)\$*.L ] ; then mv \$*.L \$(TMP) ; fi ; false ; exit ; }
+#-Q- sxnec		@\$(A_X) \$(SXMODEL_LIB) \$*.o  > /dev/null
+#-Q- sx6nec		@\$(A_X) \$(SXMODEL_LIB) \$*.o  > /dev/null
+#-Q- sxdkrz		@\$(A_X) \$(SXMODEL_LIB) \$*.o  > /dev/null
+#-Q- eshpux		@\$(A_X) \$(SXMODEL_LIB) \$*.o  > /dev/null
+		\$(A_C) \$(MODEL_LIB) \$*.o  > /dev/null
+		\$(RM) -f \$*.o
+#-Q- aix		@mv \$(PREF)\$*.lst \$(PREF)\$*.L
+#-Q- osxxlf		@mv \$(PREF)\$*.lst \$(PREF)\$*.L
+		@if [ -f \$(PREF)\$*.L ] ; then mv \$*.L \$(TMP) ; fi
+
+end
+echo "DEBUG modipsl/modeles/UTIL/fait_AA_make tampon created"
+#-
+#- Compilation options ---
+echo "DEBUG modipsl/modeles/UTIL/fait_AA_make pwd=`pwd` creating AA_make" 
+exec 1> AA_make
+MAIN="model"
+echo '# $Header: /home/opalod/NEMOCVSROOT/UTIL/fait_AA_make,v 1.25 2006/04/28 13:06:17 opalod Exp $'
+echo '# some variables'
+echo 'TMP = ../../../tmp'
+echo '#-Q- sxnec  # Compiler options for NEMO (IDRIS SX5-NEC) '
+echo '#-Q- sxnec  F_O = -dw -Wf\"-A idbl4\" -sx5 -ftrace -C vopt -Wf"-init stack=nan" -Wl"-f nan" -Wf"-P nh" -Wf,-pvctl noassume loopcnt=10000 -L transform -I $(MODDIR) -I $(MODDIR)/oce'
+echo '#-Q- sxnec  F_F = $(F_O)'
+echo '#-Q- sxnec  L_X = $(L_O) $(L_C) -ftrace'
+echo '#-Q- sx6nec  # Compiler options NEMO (CEA SX6-NEC) '
+echo '#-Q- sx6nec  F_O = -size_t64 -dw -Wf\"-A dbl4\" -sx6 -C vopt -Wf"-P nh" -Wf',-pvctl noassume loopcnt=10000 -L transform' -I $(MODDIR) -I $(MODDIR)/oce'
+echo '#-Q- sx6nec  F_O = -size_t64 -dw -Wf\"-A dbl4\" -sx6 -ftrace -C vopt -Wf"-init stack=nan" -Wl"-f nan" -Wf"-P nh" -Wf,-pvctl noassume loopcnt=10000 -L transform -I $(MODDIR) -I $(MODDIR)/oce'
+echo '#-Q- sx6nec  F_F = $(F_O)'
+echo '#-Q- sx6nec  L_X = $(L_O) $(L_C) -ftrace'
+echo '#-Q- sxdkrz  # Compiler options for NEMO (DKRZ SX6-NEC) '
+echo '#-Q- sxdkrz  F_O = -ew -sx6 -ftrace -C vopt -Wf"-init stack=nan" -Wl"-f nan" -Wf"-P nh" -Wf"-pvctl noassume loopcnt=10000" -L transform -I $(MODDIR) -I $(MODDIR)/oce'
+echo '#-Q- sxdkrz  F_F = $(F_O)'
+echo '#-Q- sxdkrz  L_X = $(L_O) $(L_C) -ftrace'
+echo '#-Q- eshpux  # Compiler options for NEMO (Earth Simulator)'
+echo '#-Q- eshpux  # for super perfs!'
+echo '#-Q- eshpux  # F_O = $(FTRACE) -pi nest=5 line=10000 expin=Fmpplib.F -Wf,-A idbl4 -C hopt -Wf"-P nh" -Wf,-pvctl noassume loopcnt=10000 -L transform -I $(MODDIR) -I $(MODDIR)/oce'
+echo '#-Q- eshpux  # regular options!'
+echo '#-Q- eshpux  F_O = $(FTRACE) -Wf,-A idbl4 -C vopt -P stack -Wf"-P nh" -Wf,-pvctl noassume loopcnt=10000 -L transform -Wf,-pvctl nomsg -Wf"-O nomsg" -I $(MODDIR) -I $(MODDIR)/oce'
+echo '#-Q- eshpux  F_F = $(F_O)'
+echo '#-Q- eshpux  L_X = $(L_O)'
+echo '#-Q- lxiv7  # Compiler options for NEMO (ifc version)'
+echo '#-Q- lxiv7  F_O = -O3 -r8  -I $(MODDIR) -I$(MODDIR)/oce'
+echo '#-Q- lxiv7  L_X = -r8 -O3'
+echo '#-Q- lxiv8  # Compiler options for NEMO (ifort version)'
+#echo '#-Q- lxiv8  F_O = -O3 -r8  -I $(MODDIR) -I$(MODDIR)/oce'
+#echo '#-Q- lxiv8  F_F = $(F_O) '
+#echo '#-Q- lxiv8  L_X = -r8 -O3'
+echo '#-Q- g95  # Compiler options for NEMO (g95 version)'
+echo '#-Q- g95  F_O = -O3 -fno-second-underscore -r8 -funroll-all-loops -I $(MODDIR) -I $(MODDIR)/oce'
+echo '#-Q- g95  F_F = $(F_O)'
+echo '#-Q- g95  L_X = -r8 -O3'
+echo '#-Q- aix    # Compiler options for NEMO (aix version)'
+echo '#-Q- aix    F_O = -O3 -qsave -qrealsize=8 -qsuffix=f=f90 -qsuffix=cpp=F90 -qextname -qsource -q64 -qlargepage -qmaxmem=-1 -I $(MODDIR) -I $(MODDIR)/oce' 
+echo '#-Q- aix    F_F = -O3 -qsave -qrealsize=8 -qsuffix=f=f -qsuffix=cpp=F -qfixed -qextname -qsource -q64 -qlargepage -qmaxmem=-1 -I $(MODDIR) -I $(MODDIR)/oce' 
+echo '#-Q- aix   L_O = $(F_P) -q64 -O3'
+echo '#-Q- aix   L_X = $(L_O) $(L_C) '
+echo '#-Q- osxxlf    # Compiler options for NEMO (osxxlf version)'
+echo '#-Q- osxxlf    F_O = -O3 -qsave -qrealsize=8 -qsuffix=f=f90 -qsuffix=cpp=F90 -qsource -qmaxmem=-1 -I $(MODDIR) -I $(MODDIR)/oce' 
+echo '#-Q- osxxlf    F_F = -O3 -qsave -qrealsize=8 -qsuffix=f=f -qsuffix=cpp=F -qfixed -qsource -qmaxmem=-1 -I $(MODDIR) -I $(MODDIR)/oce' 
+echo '#-Q- osxxlf    L_X = -qrealsize=8 -O3'
+
+echo 'PREF='
+echo '#-Q- sxnec	PREF=i.'
+echo '#-Q- sx6nec	PREF=i.'
+echo '#-Q- sxdkrz	PREF=i.'
+echo '#-Q- eshpux	PREF=i.'
+echo ''
+echo '# add suffix to P_P'
+echo 'P_P := $(P_P:%=$(prefix)%)'
+echo ''
+echo '# Some tests to define variables related to Agrif compilation'
+echo '# Please do not change '
+echo 'ifneq (,$(findstring key_agrif,$(P_P)))'
+echo 'AGRIF=use'
+echo 'else'
+echo 'AGRIF=notuse'
+echo 'AGRIF_LIB='
+echo 'endif'
+echo 'ifneq (,$(findstring key_mpp_mpi,$(P_P)))'
+echo 'AGRIF_MPI=-DAGRIF_MPI'
+echo 'else'
+echo 'AGRIF_MPI='
+echo 'endif'
+
+echo ''
+# Write the cpp key list with one key by line
+# MLIERROR : why \c ?
+#echo 'KEY_LIST = \c'
+echo 'KEY_LIST = \'
+for i in ${liste_cle}
+do
+# echo "\\"
+# echo "     $i \c"
+ echo "     $i \\"
+done
+
+echo ''
+echo '# .o file list in the library'
+#echo 'LIB_OBJ = \c'
+echo 'LIB_OBJ = \'
+#
+# find all .f in the current directory
+# build object files list  LIB_OBJ
+# one dependancy by line
+for i in `ls *.f 2> /dev/null`
+do
+  bn=`basename $i .f`
+  if [ "${bn}" != "${MAIN}" ] 
+  then 
+  if [ "${bn}" != "agrif2model" ] 
+  then 
+#    echo "\\"
+#    echo "		\$(MODEL_LIB)($bn.o)\c"
+    echo "		\$(MODEL_LIB)($bn.o)\\"
+  fi
+  fi
+done
+
+# find all .f90 in the current directory
+# build object files list  LIB_OBJ
+# one dependancy by line
+
+for i in `ls *.f90  `
+do
+  bn=`basename $i .f90`
+  if [ "${bn}" != "${MAIN}" ] 
+  then 
+  if [ "${bn}" != "agrif2model" ] 
+  then 
+#    echo "\\"
+#    echo "		\$(MODEL_LIB)($bn.o)\c"
+    echo "		\$(MODEL_LIB)($bn.o)\\"
+  fi
+  fi
+done
+
+# find all .F90 in the current directory
+# build object files list  LIB_OBJ
+# one dependancy by line
+
+for i in `ls *.F90  `
+do
+  bn=`basename $i .F90`
+  if [ "${bn}" != "${MAIN}" ] 
+  then 
+  if [ "${bn}" != "agrif2model" ] 
+  then 
+#    echo "\\"
+#    echo "		\$(MODEL_LIB)($bn.o)\c"
+    echo "		\$(MODEL_LIB)($bn.o)\\"
+  fi
+  fi
+done
+
+# find all .F in the current directory
+# build object files list  LIB_OBJ
+# one dependancy by line
+
+for i in `ls *.F 2> /dev/null `
+do
+  bn=`basename $i .F`
+  if [ "${bn}" != "${MAIN}" ] 
+  then 
+  if [ "${bn}" != "agrif2model" ] 
+  then 
+#    echo "\\"
+#    echo "		\$(MODEL_LIB)($bn.o)\c"
+    echo "		\$(MODEL_LIB)($bn.o)\\"
+  fi
+  fi
+ done
+
+echo ""
+
+cat tampon
+rm tampon
+#-
+#- Write all dependancies ---
+
+for fic in `ls *.f90 *.F90  *.F 2> /dev/null `
+do
+    if [ "${fic}" != "agrif2model.F90" ]
+    then
+    if [ "${fic}" != "${MAIN}.[Ff]" ]
+    then
+	i=0
+	j=0
+	dep=""
+	inc=""
+	inc2=""
+	inc3=""
+	luse0=""
+	luse1=""
+	luse2=""
+	luse3=""
+        key=""
+#- search include files (old ice model form, should it be suppressed ?)
+	for inc in `sed -n 's/^[  	]*[iI][nN][cC][lL][uU][dD][eE][ 	]*\(['\''"]\)\([^'\''"]*\)\1.*/\2/p' $fic | sort -u`
+	do
+# MLIERROR
+	    #dep="$dep\n$inc"
+	    dep="$dep $inc"
+	done
+
+#- take into account CPP dependancies  keys only (par_trc_trp example)
+	for key in `sed -n 's/^#[ 	eElL]*[iF][fF][ 	]*[dD][eE][fF][iI][nN][eE][dD][ 	]*//p' $fic | sort -u`
+	do
+	    j=1
+	done
+
+#- search include files on 3 levels
+	for inc in `sed -n 's/^#[ 	]*[iI][nN][cC][lL][uU][dD][eE][ 	]*\(['\''"]\)\([^'\''"]*\)\1.*/\2/p' $fic | sort -u`
+	do
+            # MLIERROR
+            if [ ! -f $inc ] ; then
+              echo "WARNING: cannot locate include file $inc" 1>&2
+              continue
+              fi
+	    j=1
+# MLIERROR
+            #dep="$dep\n$inc"
+	    dep="$dep $inc"
+		for inc2 in `sed -n 's/^#[ 	]*[iI][nN][cC][lL][uU][dD][eE][ 	]*\(['\''"]\)\([^'\''"]*\)\1.*/\2/p' $inc | sort -u`
+		do
+                    # MLIERROR
+                    if [ ! -f $inc2 ] ; then
+                      echo "WARNING: cannot locate include file $inc2" 1>&2
+                      continue
+                      fi
+# MLIERROR
+		    #dep="$dep\n$inc2"
+		    dep="$dep $inc2"
+		    #- search include  in include (third level !!!)
+		    for inc3 in `sed -n 's/^#[  	]*[iI][nN][cC][lL][uU][dD][eE][ 	]*\(['\''"]\)\([^'\''"]*\)\1.*/\2/p' $inc2 | sort -u`
+		    do
+# MLIERROR
+			#dep="$dep\n$inc3"
+			dep="$dep $inc3"
+		    done
+		done
+	done
+
+#- search USE in include files
+	for inc in `sed -n 's/^#[ 	]*[iI][nN][cC][lL][uU][dD][eE][ 	]*\(['\''"]\)\([^'\''"]*\)\1.*/\2/p' $fic | sort -u`
+	do
+                # MLIERROR
+                if [ ! -f $inc ] ; then
+                  echo "WARNING: cannot locate include file $inc" 1>&2
+                  continue
+                  fi
+		for fuse0 in `sed -n 's/^[ 	]*[uU][sS][eE] [ 	]*\([^!,;]*\).*/\1/p' $inc | sort -u`
+		do
+	        if [ $fuse0 != "ioipsl" ] 
+                then
+                if [ $fuse0 != "Agrif_Util" ] 
+                then
+                if [ $fuse0 != "Agrif_Types" ] 
+                then
+		    lfuse0=$fuse0.f90
+		    [ -f $fuse0.F90 ] && lfuse0=$fuse0.F90
+# MLIERROR
+		    #luse0="$luse0\n$lfuse0\n\$(MODEL_LIB)($fuse0.o)"
+		    luse0="$luse0 $lfuse0 \$(MODEL_LIB)($fuse0.o)"
+                fi
+                fi
+                fi
+		done
+
+#- search USE in  files included in included files and add to luse0
+
+		for inc2 in `sed -n 's/^#[ 	]*[iI][nN][cC][lL][uU][dD][eE][ 	]*\(['\''"]\)\([^'\''"]*\)\1.*/\2/p' $inc | sort -u`
+		do
+                    # MLIERROR
+                    if [ ! -f $inc ] ; then
+                      echo "WARNING: cannot locate include file $inc" 1>&2
+                      continue
+                      fi
+		    for fuse0 in `sed -n 's/^[ 	]*[uU][sS][eE] [ 	]*\([^!,;]*\).*/\1/p' $inc2 | sort -u`
+		    do
+	            if [ $fuse0 != "ioipsl" ] 
+                    then
+                    if [ $fuse0 != "Agrif_Util" ] 
+                    then
+                    if [ $fuse0 != "Agrif_Types" ] 
+                    then
+		        lfuse0=$fuse0.f90
+		        [ -f $fuse0.F90 ] && lfuse0=$fuse0.F90
+# MLIERROR
+		        #luse0="$luse0\n$lfuse0\n\$(MODEL_LIB)($fuse0.o)"
+		        luse0="$luse0 $lfuse0 \$(MODEL_LIB)($fuse0.o)"
+                    fi
+                    fi
+                    fi
+		    done
+  	        done
+	done
+
+#- search USE (and USE of USE and so on three levels)
+	for fuse1 in `sed -n 's/^[ 	]*[uU][sS][eE] [ 	]*\([^!,;]*\).*/\1/p' $fic | sort -u`
+	do
+	if [ $fuse1 != "ioipsl" ] 
+        then
+        if [ $fuse1 != "Agrif_Util" ] 
+        then
+        if [ $fuse1 != "Agrif_Types" ] 
+        then
+	    lfuse1=$fuse1.f90
+	    [ -f $fuse1.F90 ] && lfuse1=$fuse1.F90
+            # MLIERROR
+            if [ ! -f $lfuse1 ] ; then
+                echo "WARNING: cannot locate use file $lfuse1" 1>&2
+                continue
+                fi
+# MLIERROR
+	   #luse1="$luse1\n$lfuse1\n\$(MODEL_LIB)($fuse1.o)"
+	   luse1="$luse1 $lfuse1 \$(MODEL_LIB)($fuse1.o)"
+		for fuse2 in `sed -n 's/^[ 	]*[uU][sS][eE] [ 	]*\([^!,;]*\).*/\1/p' $lfuse1 | sort -u`
+		do
+	        if [ $fuse2 != "ioipsl" ] 
+                then
+                if [ $fuse2 != "Agrif_Util" ] 
+                then
+                if [ $fuse2 != "Agrif_Types" ] 
+                then
+		    lfuse2=$fuse2.f90
+		    [ -f $fuse2.F90 ] && lfuse2=$fuse2.F90
+                    # MLIERROR
+                    if [ ! -f $lfuse2 ] ; then
+                      echo "WARNING: cannot locate use $lfuse2" 1>&2
+                      continue
+                      fi
+# MLIERROR
+		    #luse2="$luse2\n$lfuse2\n\$(MODEL_LIB)($fuse2.o)"
+		    luse2="$luse2 $lfuse2 \$(MODEL_LIB)($fuse2.o)"
+		    # on cherche les USE  dans le fichier deja USE (3eme niveau! balaise!)
+		    for fuse3 in `sed -n 's/^#[  	]*[uU][sS][eE] [ 	]*\([^!,;]*\).*/\1/p' $lfuse2 | sort -u`
+		    do
+		    if [ $fuse3 != "ioipsl" ] 
+                    then
+                    if [ $fuse3 != "Agrif_Util" ] 
+                    then
+                    if [ $fuse3 != "Agrif_Types" ] 
+                    then
+# MLIERROR
+			#luse3="$luse3\n$lfuse3\n\$(MODEL_LIB)($fuse3.o)"
+			luse3="$luse3$ $lfuse3 \$(MODEL_LIB)($fuse3.o)"
+                    fi		    
+                    fi		    
+                    fi		    
+                    done
+                fi
+                fi
+                fi
+		done
+        fi
+        fi
+        fi
+	done
+#-
+#-  dep contains all dependancies 
+#	echo "\$(MODEL_LIB)(`echo $fic|awk -F. '{print $1}'`.o) :	\c"
+	echo "\$(MODEL_LIB)(`echo $fic|awk -F. '{print $1}'`.o) :	\\"
+	for depele in `echo $luse3 | sort -u` `echo $luse2 | sort -u` `echo $luse1 | sort -u` `echo $luse0 | sort -u` `echo $dep | sort -u`
+	do
+#	    echo "\\"
+# 	    echo "	$depele \c"
+ 	    echo "	$depele \\"
+ 	    let i=i+1 # pour signaler le premier
+	done
+
+#-
+#- add dependancies with IOIPSL library (if source files contains IOIPSL)
+#        grep -i 'use *ioipsl' ${fic} >/dev/null && ( echo "\\" ; echo "	\$(IOIPSL_LIB) \c")
+        grep -i 'use *ioipsl' ${fic} >/dev/null && ( echo "	\$(IOIPSL_LIB) \\")
+
+#-
+#- add dependancies with IOIPSL library (if source files contains Agrif_*)
+#        grep -i 'use Agrif_*' ${fic} >/dev/null && ( echo "\\" ; echo "	\$(AGRIF_LIB) \c")
+        grep -i 'use Agrif_*' ${fic} >/dev/null && ( echo "	\$(AGRIF_LIB) \\")
+
+#-
+#- add dependancies with KEY_CPP (if source file includes cpp  keys)
+	if [ ${j} != "0" ] 
+        then 
+#	  echo "\\"
+#	  echo "	KEY_CPP \c" 
+	  echo "	KEY_CPP \\" 
+	fi
+#-
+#- end with the file itself
+#	     echo "\\"
+       	     echo "	$fic"
+    fi
+    fi
+echo $fic done >/dev/tty
+done
+#-
+#- Write some special rules ---
+echo '# agrif previous use'
+echo "firstagrif:"
+echo "ifeq (\$(AGRIF),use)"
+echo '	@if [ -z "`cat KEY_CPP | grep key_agrif`" ]; then $(RM) model.o $(MODDIR)/oce/*.mod $(MODEL_LIB) $(SXMODEL_LIB); fi'
+echo "else"
+echo '	@if [ -n "`cat KEY_CPP | grep key_agrif`" ]; then $(RM) -r OPAFILES model.o $(MODDIR)/oce/*.mod $(MODEL_LIB) $(SXMODEL_LIB); fi'
+echo "endif"
+#-
+echo '#- RB : this rule is a pretty miserable trick to be able to re-compile NEMP-AGRIF-mono after NEMO-AGRIF-mpp'
+echo '#- I guess the good correction should be in AGRIF/LIB/toamr.c for the conv, to remove useless allocation declarations in AGRIF_INC'
+echo '# recompile all in this case' 
+echo "mpiagrif:"
+echo "ifeq (\$(AGRIF),use)"
+echo "ifeq (,\$(AGRIF_MPI))"
+echo '	@if [ -n "`cat KEY_CPP | grep key_mpp_mpi`" ]; then $(RM) -r OPAFILES model.o $(MODDIR)/oce/*.mod $(MODEL_LIB) $(SXMODEL_LIB); fi'
+echo "endif"
+echo "endif"
+#-
+echo '# key changing control'
+echo "key: "
+echo "	@echo CHANGE of CPP KEYS yes/no ?"
+echo "	-@if [ \"\`cat KEY_CPP\`\" != \"\$(P_P:\$(prefix)%=%)\" ] ; then \\"
+echo "		echo CPP options changed ; echo \"\$(P_P:\$(prefix)%=%)\" > KEY_CPP ; fi "
+#-
+echo '# check key values'
+echo "keyverif:"
+echo '	@echo CHECKING KEY'
+echo '	@echo KEY USED : '
+echo '	@for v in ` echo $(P_P:$(prefix)%=%) ` ; \'
+echo '	do \'
+echo '	echo $$v ;\'
+echo '        w=`echo $$v | cut -c1-3` ; \'
+echo '        if [ $$w = `echo "key"` ] ; then \'
+echo '        r=n ; \'
+echo '        echo " $(KEY_LIST) " | (grep $$v >/dev/null 2>&1) || r=o ; \'
+echo '           if [ $$r != "n" ] ; then \'
+echo '              echo "UNKNOWN KEY" ;\'
+echo '              false ;  \'
+echo '              exit ;  \'
+echo '           fi \'
+echo '        fi \'
+echo '	done'
+echo '# Checking the number of routines'
+echo "src_file_list: "
+echo '	@echo CHECKING THE NUMBER AND NAMES OF SOURCE FILES '
+echo '	@$(RM) `ls | fgrep -v -f .patron` '
+echo '	@check=`grep OPA_SRC .config`              ; \'
+echo '	if [ -n "$$check" ] ; then                   \'
+echo '	echo "   use OPA_SRC files"                ; \'
+echo '	    ln -sf ../OPA_SRC/*.[Ffh]90          . ; \'
+echo '	    ln -sf ../OPA_SRC/DYN/*.[Ffh]90      . ; \'
+echo '	    ln -sf ../OPA_SRC/TRA/*.[Ffh]90      . ; \'
+echo '	    ln -sf ../OPA_SRC/TRD/*.[Ffh]90      . ; \'
+echo '	    ln -sf ../OPA_SRC/DIA/*.[Ffh]90      . ; \'
+echo '	    ln -sf ../OPA_SRC/DOM/*.[Ffh]90      . ; \'
+echo '	    ln -sf ../OPA_SRC/OBC/*.[Ffh]90      . ; \'
+echo '	    ln -sf ../OPA_SRC/FLO/*.[Ffh]90      . ; \'
+echo '	    ln -sf ../OPA_SRC/LDF/*.[Ffh]90      . ; \'
+echo '	    ln -sf ../OPA_SRC/ZDF/*.[Ffh]90      . ; \'
+echo '	    ln -sf ../OPA_SRC/SOL/*.[Ffh]90      . ; \'
+echo '	    ln -sf ../OPA_SRC/DTA/*.[Ffh]90      . ; \'
+echo '	    ln -sf ../OPA_SRC/SBC/*.[Ffh]90      . ; \'
+echo '  fi '
+echo '	@check=`grep LIM_SRC .config`              ; \'
+echo '	if [ -n "$$check" ] ; then                   \'
+echo '	echo "   use LIM_SRC files"                ; \'
+echo '      ln -sf ../LIM_SRC/*.[Ffh]90          . ; \'
+echo '  fi '
+echo '	@check=`grep NST_SRC .config`              ; \'
+echo '	if [ -n "$$check" ] ; then                   \'
+echo '	echo "   use NST_SRC files"                ; \'
+echo '      \$(RM) agrif_opa_interp.F90           ; \'
+echo '      \$(RM) agrif_opa_sponge.F90           ; \'
+echo '      \$(RM) agrif_opa_update.F90           ; \'
+echo '      ln -sf ../NST_SRC/*.[Ffh]90      .     ; \'
+echo '  fi '
+echo '	@check=`grep C1D_SRC .config`              ; \'
+echo '	if [ -n "$$check" ] ; then                   \'
+echo '	echo "   use C1D_SRC files"                ; \'
+echo '      ln -sf ../C1D_SRC/*.[Ffh]90          . ; \'
+echo '  fi '
+echo '	@check=`grep TOP_SRC .config`              ; \'
+echo '	if [ -n "$$check" ] ; then  \'
+echo '	echo "   use TOP_SRC files"                ; \'
+echo '      \$(RM) trcstp.F90                      ; \'
+echo '      \$(RM) sms.F90                         ; \'
+echo '      \$(RM) initrc.F90                      ; \'
+echo '      ln -sf ../TOP_SRC/*.[Ffh]90          . ; \'
+echo '      ln -sf ../TOP_SRC/SMS/*.[Ffh]        . ; \'
+echo '      ln -sf ../TOP_SRC/SMS/*.[Ffh]90      . ; \'
+echo '      ln -sf ../TOP_SRC/TRP/*.[Ffh]90      . ; \'
+echo '  fi '
+echo '	@check=`grep OFF_SRC .config`              ; \'
+echo '	if [ -n "$$check" ] ; then                   \'
+echo '	echo "   use OFF_SRC files"                ; \'
+echo '      ln -sf ../OFF_SRC/*.[Ffh]90          . ; \'
+echo '      ln -sf ../OFF_SRC/*/*.[Ffh]90        . ; \'
+echo '  fi '
+echo '	@\$(RM) tmplist'
+echo '	@ls -1 | fgrep -v -f .patron  >tmplist'
+echo '	@cmp tmplist SRC_FILE_LIST.temp || { echo some routines have been added or suppressed ; \'
+echo '	sdiff -s tmplist SRC_FILE_LIST.temp ; cp tmplist SRC_FILE_LIST.temp ; \'
+echo '	\$(RM) model.o \$(MODEL_LIB) \$(SXMODEL_LIB) \$(EXEC_BIN) ; \'
+echo '	echo "Rebuilding the AA_make files" ; \'
+echo '	cd ..  ; ../UTIL/fait_AA_make ; echo " " ; \'
+echo '	echo "THE ins_make COMMAND in modipsl/util MUST BE RERUN PLEASE DO SO BEFORE gmake" ; \'
+echo '	echo "========================================== " ; \'
+echo '	../../util/ins_make ; echo " " ;  false ; exit ; }'
+exec > /dev/null
+

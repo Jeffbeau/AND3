@@ -1,0 +1,1 @@
+../C1D_SRC/diawri1d.F90

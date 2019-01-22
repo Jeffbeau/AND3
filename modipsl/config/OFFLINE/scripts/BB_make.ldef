@@ -1,0 +1,56 @@
+#----------------------------------------------------------------------
+#- NEMO SYSTEM : Ocean model + Sea Ice Model   (BB_make.ldef in scripts)
+#----------------------------------------------------------------------
+SHELL = /bin/sh
+#-
+#-Q- t3e     #--- Please use gmake instead of make
+#-Q- fjvpp   #--- Please use gmake instead of make
+
+#-
+#- Define the libraries ---
+LIBDIR = ../../../lib
+MODDIR = $(LIBDIR)
+MODEL_LIB = $(LIBDIR)/oce/libopa.a
+IOIPSL_LIB = $(LIBDIR)/libioipsl.a
+#-Q- sxnec  IOIPSL_LIB = $(LIBDIR)/libsxioipsl.a
+#-Q- sx6nec IOIPSL_LIB = $(LIBDIR)/libsxioipsl.a
+#-Q- sxdkrz IOIPSL_LIB = $(LIBDIR)/libsxioipsl.a
+AGRIF_LIB = $(LIBDIR)/libagrif.a
+#-Q- sxnec  AGRIF_LIB = $(LIBDIR)/libsxagrif.a
+#-Q- sx6nec AGRIF_LIB = $(LIBDIR)/libsxagrif.a
+#-Q- sxdkrc AGRIF_LIB = $(LIBDIR)/libsxagrif.a
+SXMODEL_LIB = $(MODEL_LIB)
+#-Q- sxnec  SXMODEL_LIB = $(LIBDIR)/oce/libsxopa.a
+#-Q- sx6nec SXMODEL_LIB = $(LIBDIR)/oce/libsxopa.a
+#-Q- sxdkrz SXMODEL_LIB = $(LIBDIR)/oce/libsxopa.a
+OASISMPI2_LIB = 
+LIBMPI  =
+LIBMP   =
+EXEC_BIN = ../../../bin/opa
+
+#-
+#- Key options for OPA ocean model + LIM sea ice model : ORCA_R2 - FORCED (CLIO)
+#  Keys have to be written on one single line (does NOT accept "\")
+
+#P_P = key_ss_bio key_dynspg_ts key_mpp_mpi key_zdftke key_obc  #change obcdta.F90 for barotropic run
+#P_P = key_ss_bio key_dynspg_ts key_mpp_mpi key_zdftke key_dtatem key_dtasal key_tau_daily key_flx_bulk_daily key_obc key_dynldf_c2d key_traldf_c2d key_ice_lim key_lim_fdd
+P_P = key_passivetrc key_mpp_mpi key_trc_dta key_trabbl_dif key_ss_bio key_dynspg_flt key_diaeiv key_ldfslp key_traldf_c2d key_traldf_eiv key_trcbbc key_zdftke key_zdfddm key_trc_zdfddm key_trcdmp key_trcbbl_dif key_flx_bulk_daily #OFFLINE
+#P_P = key_ss_bio key_dynspg_ts key_mpp_mpi key_zdfkpp key_dtatem key_dtasal key_tau_monthly key_flx_forced_monthly key_obc
+#P_P = key_ss_bio key_dynspg_ts key_mpp_mpi key_zdfkpp key_dtatem key_dtasal key_tau_monthly key_flx_forced_monthly
+#P_P = key_ss_bio key_dynspg_ts key_mpp_mpi key_zdftke key_dtatem key_dtasal key_tau_monthly key_flx_forced_monthly
+#P_P = key_traldf_eiv key_mpp_mpi key_zdftke key_dynldf_c2d key_tau_monthly key_flx_forced_monthly key_trabbl_dif key_dtatem key_dtasal key_trabbc key_ldfslp key_dynspg_ts key_traldf_c2d key_zdfddm key_ss_bio key_obc #Jenny's
+#P_P = key_partial_steps key_trabbl_dif key_vectopt_loop key_vectopt_memory key_orca_r2 key_ice_lim key_lim_fdd key_dynspg_flt key_diaeiv key_ldfslp key_traldf_c2d key_traldf_eiv key_dynldf_c3d key_dtatem key_dtasal key_tau_monthly key_flx_bulk_monthly key_tradmp key_trabbc key_zdftke key_zdfddm
+
+#-
+#- Prefix for preprocessing ---
+#-Q- sxnec  prefix = -D
+#-Q- sx6nec prefix = -D
+#-Q- eshpux prefix = -D
+#-Q- sxdkrz prefix = -D
+#-Q- linux  prefix = -D
+#-Q- lxiv7  prefix = -D
+#-Q- lxiv8  prefix = -D
+#-Q- g95    prefix = -D
+#-Q- aix    prefix = -WF,-D
+#-Q- osxxlf prefix = -WF,-D
+

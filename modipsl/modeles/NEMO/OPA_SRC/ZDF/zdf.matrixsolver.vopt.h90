@@ -1,0 +1,69 @@
+!! 
+!!         ZDF.MATRIXSOLVER
+!!       ********************
+!! 
+!! Matrix inversion
+!!----------------------------------------------------------------------
+!   solve m.x = y  where m is a tri diagonal matrix ( jpk*jpk )
+!
+!        ( zwd1 zws1   0    0    0  )( zwx1 ) ( zwy1 )
+!        ( zwi2 zwd2 zws2   0    0  )( zwx2 ) ( zwy2 )
+!        (  0   zwi3 zwd3 zws3   0  )( zwx3 )=( zwy3 )
+!        (        ...               )( ...  ) ( ...  )
+!        (  0    0    0   zwik zwdk )( zwxk ) ( zwyk )
+!
+!   m is decomposed in the product of an upper and lower triangular
+!   matrix
+!   The 3 diagonal terms are in 2d arrays: zwd, zws, zwi
+!   The second member is in 2d array zwy
+!   The solution is in 2d array zwx
+!   The 3d arry zwt is a work space array
+!   zwy is used and then used as a work space array : its value is modified!
+!
+!   N.B. the starting vertical index (ikst) is equal to 1 except for
+!   the resolution of tke matrix where surface tke value is prescribed
+!   so that ikstrt=2.
+!!----------------------------------------------------------------------
+!!  OPA 9.0 , LOCEAN-IPSL (2005) 
+!! $Header: /home/opalod/NEMOCVSROOT/NEMO/OPA_SRC/ZDF/zdf.matrixsolver.vopt.h90,v 1.2 2005/03/27 18:35:25 opalod Exp $ 
+!! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt
+!!----------------------------------------------------------------------
+
+      ikstp1 = ikst + 1
+      ikenm2 = jpk - 2
+
+      DO jj = 2, jpjm1
+         DO ji = fs_2, fs_jpim1
+            zwt(ji,jj,ikst) = zwd(ji,jj,ikst)
+         END DO
+      END DO
+
+      DO jk = ikstp1, jpkm1
+         DO jj = 2, jpjm1
+            DO ji = fs_2, fs_jpim1
+               zwt(ji,jj,jk) = zwd(ji,jj,jk) - zwi(ji,jj,jk) * zws(ji,jj,jk-1) / zwt(ji,jj,jk-1)
+            END DO
+         END DO
+      END DO
+
+      DO jk = ikstp1, jpkm1
+         DO jj = 2, jpjm1
+            DO ji = fs_2, fs_jpim1
+               zwy(ji,jj,jk) = zwy(ji,jj,jk) - zwi(ji,jj,jk) / zwt(ji,jj,jk-1) * zwy(ji,jj,jk-1)
+            END DO
+         END DO
+      END DO
+
+      DO jj = 2, jpjm1
+         DO ji = fs_2, fs_jpim1
+            zwx(ji,jj,jpkm1) = zwy(ji,jj,jpkm1) / zwt(ji,jj,jpkm1)
+         END DO
+      END DO
+
+      DO jk = ikenm2, ikst, -1
+         DO jj = 2, jpjm1
+            DO ji = fs_2, fs_jpim1
+               zwx(ji,jj,jk) = ( zwy(ji,jj,jk) - zws(ji,jj,jk) * zwx(ji,jj,jk+1) ) / zwt(ji,jj,jk)
+            END DO
+         END DO
+      END DO

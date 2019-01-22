@@ -1,0 +1,201 @@
+#!/bin/ksh
+# $Id: ins_make,v 2.19 2006/01/18 05:59:17 adm Exp $
+#---------------------------------------------------------------------
+#- Installation of Makefiles according to an environment
+#---------------------------------------------------------------------
+b_n=$(basename $0)
+d_n=$(dirname $0)
+#- Retrieving and validation of the options
+x_v='silencious';
+x_d='normal';
+x_p="";
+x_t="";
+x_m='??';
+while getopts :hvdp:m:t: V
+  do
+    case $V in
+      (h)  echo "Usage    : "${b_n} \
+                " [-h] [-v] [-d] [-p r] [-t h] ";
+           echo " -h      : help";
+           echo " -v      : verbose mode";
+           echo " -t h    : target host_name";
+           echo " -d      : debug mode";
+           echo " -p p    : int and real precision I4R4/I4R8/I8R8/4/8";
+           echo " -m m    : mpi context choosen for the coupling MPI1/MPI2";
+           echo "";
+           echo "Example for remote host compilation ";
+           echo "ins_make -t sxnec";
+           echo "";
+           echo "Defaults : -t local_host";
+           echo "";
+           exit 0;;
+      (v)  x_v='verbose';;
+      (d)  x_d='debug';;
+      (p)  x_p=${OPTARG};;
+      (t)  x_t=${OPTARG};;
+      (m)  x_m=${OPTARG};;
+      (:)  echo ${b_n}" : -"${OPTARG}" option : missing value" 1>&2;
+           exit 2;;
+      (\?) echo ${b_n}" : -"${OPTARG}" option : not supported" 1>&2;
+           exit 2;;
+    esac
+  done
+shift $(($OPTIND-1));
+#-
+# Treatment of the options
+#-
+# Default INTEGER and REAL precision
+case ${x_p} in
+  ( I4R4 | I4R8 | I8R8 ) ;;
+  ( 4 ) x_p='I4R4';;
+  ( 8 ) x_p='I8R8';;
+  ("")  x_p='??';;
+  (*)
+    echo 'Invalid precision ' 1>&2;
+    echo ${x_p}' (must be I4R4, I4R8, I8R8, 4 or 8)' 1>&2;
+    exit 1;;
+esac
+#-
+# Target_Host Name
+if [ '\?'${x_t} = '\?' ]; then
+  x_t=`${d_n}/w_i_h`;
+  if [ $? -ne 0 ]; then
+    echo "Bad installation : w_i_h/uname unreachable" 1>&2;
+    exit 1;
+  elif [ "$x_t" = "Unknown" ]; then
+    echo "Local_Host not supported" 1>&2;
+    exit 1;
+  fi;
+fi;
+case ${x_t} in
+ (aix | ax_mono | cray | Darwin | fjvpp | gfortran | eshpux |  \
+  linux | lxiv7 | lxiv8 | lxiv11 | IMLpgf | osf1 | osxxlf | sgi6 | \
+  solaris | sxdkrz | sxnec | sx6nec | t3e | tx7 | unix | hpintel) ;;
+ (*)
+   echo "Target_Host "${x_t}" not supported" 1>&2;
+   exit 1;;
+esac
+#-
+case ${x_m} in
+ ( mpi1 | mpi2 | MPI1 | MPI2 | ??) ;;
+ (*)
+   echo "MPI context  "${x_m}" not supported" 1>&2;
+   exit 1;;
+esac
+#-
+if [ ${x_v} = 'verbose' ]; then
+  echo '--- Mode         : '${x_v};
+  echo '--- Compilation  : '${x_d};
+  echo '--- Precision    : '${x_p};
+  echo '--- Target       : '${x_t};
+  echo '--- MPI context  : '${x_m};
+fi;
+#-
+l_rep=$(find ${d_n}/.. -name AA_make -print)
+#-
+W_OS=${x_t};
+echo " ";
+echo "Installation of makefiles for $W_OS";
+echo " ";
+#-
+MKTG=${d_n}'/AA_make.gdef'
+if [ ! -f "$MKTG" ]; then
+  echo "$MKTG unreachable ..."
+  exit 3;
+fi;
+#-
+for i in $l_rep
+do
+  j=${i%/AA_make}
+  echo "Installation in ${j} ...";
+  MKTL="${j}"'/AA_make.ldef'
+  if [ ! -f "$MKTL" ]; then
+    echo "$MKTL unreachable ..."
+    exit 3;
+  fi;
+  MKTR="${j}"'/AA_make'
+  cat ${MKTL} ${MKTG} ${MKTR} > mk1.$$
+  W_XX='#-Q- '$W_OS
+  sed -e "s/^$W_XX *//" mk1.$$ | grep -v '^#-Q- ' > mk2.$$
+#-
+# Default INTEGER and REAL precision
+  if   [ ${x_p} = 'I4R4' ]; then
+    W_XX='#-P- I4R4'
+  elif [ ${x_p} = 'I4R8' ]; then
+    W_XX='#-P- I4R8'
+  elif [ ${x_p} = 'I8R8' ]; then
+    W_XX='#-P- I8R8'
+  else
+    W_XX='#-P- ??'
+  fi
+  sed -e "s/^$W_XX *//" mk2.$$ | grep -v '^#-P- ' > mk1.$$
+#-
+# Remove the module "defprec.f90"
+# if the default precision has (eventually) been modified
+  if [ '!!'${j##*/modeles} = '!!/IOIPSL/src' ]; then
+    dp_n=${d_n}'/../modeles/IOIPSL/src/defprec.f90';
+    if [ -f ${dp_n} ]; then
+      W_NEW=$(grep 'D_P =' mk1.$$ | tail -1 | sed "s/D_P = //")
+      if [ -f ${j}/Makefile ]; then
+        W_OLD=$(grep 'D_P =' ${j}/Makefile | tail -1 | sed "s/D_P = //")
+      else
+        W_OLD='!??!'
+      fi
+      if [ ${W_OLD} != ${W_NEW} ]; then
+        echo 'Remove '${dp_n};
+        rm -f ${dp_n};
+      fi
+      unset W_NEW W_OLD;
+    fi
+    unset dp_n;
+  fi
+#-
+# Debug
+  if   [ ${x_d} = 'debug' ]; then
+    W_XX='#-D- MD'
+  else
+    W_XX='#-D- MN'
+  fi
+  sed -e "s/^$W_XX *//" mk1.$$ | grep -v '^#-D- ' > mk2.$$
+#-
+# Retrieve the path of the directory
+  cd ${j} > /dev/null; mk_dir=$(pwd); cd - > /dev/null;
+  W_XX='MAKE_DIR ='
+# Update the value
+  sed -e "s!^${W_XX}.*!${W_XX} ${mk_dir}!" mk2.$$ > mk1.$$
+  unset mk_dir;
+#-
+# Choice of mpi library for the coupling
+  W_XX='LIB_MPI ='
+  W_XX_BIS='LIB_MPI_BIS ='
+#-
+case ${x_m} in
+ ( mpi1 | MPI1 )
+    lib_mpi='MPI1'
+    lib_mpi_bis='MPI1'
+    sed -e "s!^${W_XX}.*!${W_XX} ${lib_mpi}!" \
+      -e "s!^${W_XX_BIS}.*!${W_XX_BIS} ${lib_mpi_bis}!" mk1.$$ > ${j}/Makefile ;;
+ ( mpi2 | MPI2 )
+    lib_mpi='MPI2'
+    lib_mpi_bis=''
+    sed -e "s!^${W_XX}.*!${W_XX} ${lib_mpi}!" \
+      -e "s!^${W_XX_BIS}.*!${W_XX_BIS} ${lib_mpi_bis}!" mk1.$$ > ${j}/Makefile ;;
+ (??) 
+    cp mk1.$$ ${j}/Makefile ;;
+ (*) ;;
+esac
+  unset lib_mpi;
+  unset lib_mpi_bis;
+#-
+done
+#-
+rm -f mk1.$$ mk2.$$
+#-
+exit 0;
+
+
+
+
+
+
+

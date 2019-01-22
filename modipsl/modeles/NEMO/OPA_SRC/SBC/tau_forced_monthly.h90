@@ -1,0 +1,236 @@
+   !!----------------------------------------------------------------------
+   !!                ***  tau_forced_monthly.h90  ***
+   !!----------------------------------------------------------------------
+
+   !!----------------------------------------------------------------------
+   !!   tau     : update the surface wind stress - monthly fields in NetCDF
+   !!             file.
+   !!----------------------------------------------------------------------
+   !! * local modules variables
+   INTEGER ::   &
+      numtau,   &  ! logical unit for the i-component of the wind data
+      numtav,   &  ! logical unit for the j-component of the wind data
+      ntau1, ntau2  ! index of the first and second record used
+
+   CHARACTER (len=34) ::   &      !!! * monthly climatology/interanual fields
+      cl_taux,  & ! generic name of the i-component monthly NetCDF file
+      cl_tauy     ! generic name of the j-component monthly NetCDF file
+
+   REAL(wp), DIMENSION(jpi,jpj,2) ::   &
+      taux_dta,    &  ! i- and j-components of the surface stress (Pascal)
+      tauy_dta        ! at 2 consecutive months in the (i,j) referential
+   !!----------------------------------------------------------------------
+   !!   OPA 9.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/OPA_SRC/SBC/tau_forced_monthly.h90,v 1.6 2006/03/10 10:55:42 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+   !!----------------------------------------------------------------------
+
+CONTAINS
+
+   SUBROUTINE tau( kt )
+      !!---------------------------------------------------------------------
+      !!                  ***  ROUTINE tau  ***
+      !!              
+      !! ** Purpose :   provide to the ocean the stress at each time step
+      !!
+      !! ** Method  : - Read the 2 monthly surface stress components in NetCDF 
+      !!      file at 2 consecutive time-steps
+      !!        They are given in the (i,j) referential 
+      !!        The i-component is given at U-point (INTERP package)
+      !!        The j-component is given at V-point (INTERP package)
+      !!              - a linear time-interpolation is performed to provide the
+      !!      stress at the kt time-step.
+      !!
+      !!    CAUTION: never mask the surface stress field !
+      !!
+      !! ** Action :
+      !!        update at each time-step the two components of the surface
+      !!      stress in both (i,j) and geographical referencial
+      !!
+      !! History :
+      !!   4.0  !  91-03  (G. Madec)  Original code
+      !!   6.0  !  92-07  (M. Imbard)
+      !!   8.1  !  00-08  (D. Ludicone) adapted to ERS-NCEP
+      !!   8.5  !  02-11  (G. Madec)  F90: Free form and module
+      !!        !                     daily/monthly, forced/coupled form
+      !!----------------------------------------------------------------------
+      !! * Modules used
+      USE ioipsl       ! NetCDF library
+      !! * Arguments
+      INTEGER, INTENT( in  ) ::   kt   ! ocean time step
+
+      !! * Local declarations
+      INTEGER, PARAMETER ::   jpmonth = 12
+      INTEGER ::   &
+         imois, iman, itime,   &
+         i15,   &
+         ipi, ipj, ipk
+      INTEGER, DIMENSION(jpmonth) ::   istep
+      REAL(wp) , DIMENSION(jpi,jpj)::  &
+         zlon  , &
+         zlat
+      REAL(wp) , DIMENSION(jpk)::  &
+         zlev
+      REAL(wp) ::   &
+         zsecond,   & ! ???
+         zdate0,    & ! ???
+         zxy          ! coefficient of the linear time interpolation
+      !!---------------------------------------------------------------------
+      cl_taux = 'taux_1m.nc'
+      cl_tauy = 'tauy_1m.nc'
+
+      ! -------------- !
+      ! Initialization !
+      ! -------------- !
+      
+      ! iman=number of dates in data file (12 for a year of monthly values)
+      iman  = INT( raamo )
+      itime = jpmonth
+      ipi   = jpiglo
+      ipj   = jpjglo
+      ipk   = jpk
+
+      i15 = INT( 2*FLOAT( nday ) / ( FLOAT( nobis(nmonth) ) + 0.5 ) )
+
+      imois = nmonth + i15 - 1
+      IF( imois == 0 ) imois = iman
+
+
+      ! -------------------- !
+      ! First call kt=nit000 !
+      ! -------------------- !
+
+      IF( kt == nit000 ) THEN
+         ntau1 = 0
+         IF(lwp) WRITE(numout,*)
+         IF(lwp) WRITE(numout,*) ' tau    : MONTHLY climatological wind stress (NetCDF files)'
+         IF(lwp) WRITE(numout,*) ' ~~~    '
+         
+         ! title, dimensions and tests
+
+#if defined key_agrif
+      if ( .NOT. Agrif_Root() ) then
+         cl_taux = TRIM(Agrif_CFixed())//'_'//TRIM(cl_taux)
+      endif
+#endif
+         
+         CALL flinopen( cl_taux, mig(1), nlci, mjg(1), nlcj,   &   ! taux on U-grid
+                        .FALSE., ipi   , ipj, ipk   ,        &
+                        zlon , zlat  , zlev   , itime,       &
+                        istep, zdate0, zsecond, numtau )
+         
+         IF( itime /= jpmonth ) THEN
+            IF(lwp) WRITE(numout,cform_err)
+            IF(lwp) WRITE(numout,*) '   problem with time coordinates in file ', cl_taux
+            IF(lwp) WRITE(numout,*) '   itime = ', itime,' jpmonth = ',jpmonth
+            nstop = nstop + 1
+         ENDIF
+         IF( ipi /= jpidta .AND. ipj /= jpjdta .AND. ipk /= 1 ) THEN
+            IF(lwp) WRITE(numout,cform_err)
+            IF(lwp) WRITE(numout,*) '   problem with size read in file ', cl_taux
+            IF(lwp) WRITE(numout,*) '   ipi = ',ipi,' jpidta = ',jpidta
+            IF(lwp) WRITE(numout,*) '   ipj = ',ipj,' jpjdta = ',jpjdta
+            IF(lwp) WRITE(numout,*) '   ipk = ',ipk,' must be 1'
+            nstop = nstop + 1
+         ENDIF
+#if defined key_agrif
+      if ( .NOT. Agrif_Root() ) then
+         cl_tauy = TRIM(Agrif_CFixed())//'_'//TRIM(cl_tauy)
+      endif
+#endif
+         CALL flinopen( cl_tauy, mig(1), nlci, mjg(1), nlcj,   &   ! tauy on V-grid
+                        .FALSE., ipi   , ipj, ipk   ,        &
+                        zlon , zlat  , zlev   , itime,       &
+                        istep, zdate0, zsecond, numtav )
+
+         IF( itime /= jpmonth ) THEN          
+            IF(lwp) WRITE(numout,cform_err)
+            IF(lwp) WRITE(numout,*) '   problem with time coordinates in file ', cl_tauy
+            IF(lwp) WRITE(numout,*) '   itime = ', itime,' jpmonth = ',jpmonth
+            nstop = nstop + 1
+         ENDIF
+         IF( ipi /= jpidta .AND. ipj /= jpjdta .AND. ipk /= 1) THEN
+            IF(lwp) WRITE(numout,cform_err)
+            IF(lwp) WRITE(numout,*) '   problem with size read in file ', cl_tauy
+            IF(lwp) WRITE(numout,*) '   ipi = ',ipi,' jpidta = ',jpidta
+            IF(lwp) WRITE(numout,*) '   ipj = ',ipj,' jpjdta = ',jpjdta
+            IF(lwp) WRITE(numout,*) '   ipk = ',ipk,' must be 1'
+            nstop = nstop + 1
+         ENDIF
+      ENDIF
+      
+      ! ----------------- !
+      ! Read monthly file !
+      ! ----------------- !
+
+      IF( kt == nit000 .OR. imois /= ntau1 ) THEN
+
+         ! Calendar computation
+         ntau1 = imois          ! index of the first record
+         ntau2 = ntau1 + 1      ! index of the last  record
+         ntau1 = MOD( ntau1, iman )
+         IF( ntau1 == 0 ) ntau1 = iman
+         ntau2 = MOD( ntau2, iman )
+         IF( ntau2 == 0 ) ntau2 = iman
+         IF(lwp) WRITE(numout,*) 'first month used ntau1 = ', ntau1
+         IF(lwp) WRITE(numout,*) 'last  month used ntau2 = ', ntau2
+
+         ! Read the corresponding 2 monthly stress data
+         ! ntau1
+         CALL flinget( numtau,'sozotaux',    &               ! i-component at U-pt
+            jpidta,jpjdta,1,jpmonth,ntau1,   &
+            ntau1,mig(1),nlci,mjg(1),nlcj,taux_dta(1:nlci,1:nlcj,1) )
+         CALL flinget( numtav,'sometauy',    &               ! j-component at V-pt
+            jpidta,jpjdta,1,jpmonth,ntau1,   &
+            ntau1,mig(1),nlci,mjg(1),nlcj,tauy_dta(1:nlci,1:nlcj,1) )
+         ! ntau2
+         CALL flinget( numtau,'sozotaux',    &               ! i-component at U-pt
+            jpidta,jpjdta,1,jpmonth,ntau2,   &
+            ntau2,mig(1),nlci,mjg(1),nlcj,taux_dta(1:nlci,1:nlcj,2) )
+         CALL flinget( numtav,'sometauy',    &               ! j-component at V-pt
+            jpidta,jpjdta,1,jpmonth,ntau2,   &
+            ntau2,mig(1),nlci,mjg(1),nlcj,tauy_dta(1:nlci,1:nlcj,2) )
+         
+         IF(lwp .AND. nitend-nit000 <= 100 ) THEN
+            WRITE(numout,*)
+            WRITE(numout,*) ' monthly stress read'
+            WRITE(numout,*)
+            WRITE(numout,*) ' month: ', ntau1, '  taux: 1 multiply by ', 1.
+            CALL prihre( taux_dta(:,:,1), jpi, jpj, 1, jpi, 20, 1, jpj, 10, 1., numout )
+            WRITE(numout,*)
+            WRITE(numout,*) ' month: ', ntau2, '  tauy: 2 multiply by ', 1.
+            CALL prihre( tauy_dta(:,:,2), jpi, jpj, 1, jpi, 20, 1, jpj, 10, 1., numout )
+         ENDIF
+
+         CALL FLUSH(numout)
+      ENDIF
+
+      ! ------------------------------- !
+      ! linear time interpolation at kt !
+      ! ------------------------------- !
+
+      ! zxy : coefficient for linear interpolation in time
+
+      zxy = FLOAT( nday ) / FLOAT( nobis(ntau1) ) + 0.5 - i15
+
+      taux(:,:) = (1.-zxy) * taux_dta(:,:,1) + zxy * taux_dta(:,:,2)
+      tauy(:,:) = (1.-zxy) * tauy_dta(:,:,1) + zxy * tauy_dta(:,:,2)
+
+      ! Save components 
+
+      tauxg(:,:) = taux(:,:)
+      tauyg(:,:) = tauy(:,:)
+
+      CALL FLUSH(numout)
+
+      ! ------------------- !
+      ! Last call kt=nitend !
+      ! ------------------- !
+
+      ! Closing of the 2 files (required in mpp)
+      IF( kt == nitend ) THEN
+          CALL flinclo(numtau)
+          CALL flinclo(numtav)
+      ENDIF
+
+   END SUBROUTINE tau

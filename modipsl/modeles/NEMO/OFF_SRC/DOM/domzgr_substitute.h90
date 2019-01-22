@@ -1,0 +1,61 @@
+   !!----------------------------------------------------------------------
+   !!                    ***  domzgr_substitute.h90   ***
+   !!----------------------------------------------------------------------
+   !! ** purpose :   substitute fsdep. and fse.., the vert. depth and scale
+   !!      factors depending on the vertical coord. used, using CPP macro.
+   !!----------------------------------------------------------------------
+   !!   OPA 9.0 , LOCEAN-IPSL  (2005)
+   !!   $Header: /home/opalod/NEMOCVSROOT/NEMO/OFF_SRC/DOM/domzgr_substitute.h90,v 1.2 2005/11/16 16:12:12 opalod Exp $
+   !!   This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt
+   !!----------------------------------------------------------------------
+#if defined key_s_coord
+   !! s-coord:  substitution  fsdep.(,,) ==>  hbat.(,) * gsig.()
+   !!                         fse3.(,,)  ==>  hbat.(,) * esig.()
+#   define  fsdept(i,j,k)   hbatt(i,j)*gsigt(k)
+#   define  fsdepu(i,j,k)   hbatu(i,j)*gsigt(k)
+#   define  fsdepv(i,j,k)   hbatv(i,j)*gsigt(k)
+#   define  fsdepf(i,j,k)   hbatf(i,j)*gsigt(k)
+#   define  fsdepw(i,j,k)   hbatt(i,j)*gsigw(k)
+#   define  fsdepuw(i,j,k)  hbatu(i,j)*gsi3w(k)
+#   define  fsdepvw(i,j,k)  hbatv(i,j)*gsi3w(k)
+#   define  fsde3w(i,j,k)   hbatt(i,j)*gsi3w(k)
+#   define  fse3t(i,j,k)    hbatt(i,j)*esigt(k)
+#   define  fse3u(i,j,k)    hbatu(i,j)*esigt(k)
+#   define  fse3v(i,j,k)    hbatv(i,j)*esigt(k)
+#   define  fse3f(i,j,k)    hbatf(i,j)*esigt(k)
+#   define  fse3w(i,j,k)    hbatt(i,j)*esigw(k)
+#   define  fse3uw(i,j,k)   hbatu(i,j)*esigw(k)
+#   define  fse3vw(i,j,k)   hbatv(i,j)*esigw(k)
+#elif defined key_partial_steps
+   !! z-coord:  substitution  fsdep.(,,) ==>  gdep._ps()
+   !!                         fse3.(,,)  ==>  e3._ps()
+#   define  fsdept(i,j,k)   gdept_ps(i,j,k)
+#   define  fsdepw(i,j,k)   gdepw_ps(i,j,k)
+#   define  fsde3w(i,j,k)   gdep3w(i,j,k)
+#   define  fsdepuw(i,j,k)  gdepw(k)
+#   define  fsdepvw(i,j,k)  gdepw(k)
+#   define  fse3t(i,j,k)    e3t_ps(i,j,k)
+#   define  fse3u(i,j,k)    e3u_ps(i,j,k)
+#   define  fse3v(i,j,k)    e3v_ps(i,j,k)
+#   define  fse3f(i,j,k)    e3f_ps(i,j,k)
+#   define  fse3w(i,j,k)    e3w_ps(i,j,k)
+#   define  fse3uw(i,j,k)   e3uw_ps(i,j,k)
+#   define  fse3vw(i,j,k)   e3vw_ps(i,j,k)
+#else
+   !! z-coord:  substitution  fsdep.(,,) ==>  gdep()
+   !!                         fse3.(,,)  ==>  e3.()
+#   define  fsdept(i,j,k)   gdept(k)
+#   define  fsdepu(i,j,k)   gdept(k)
+#   define  fsdepv(i,j,k)   gdept(k)
+#   define  fsdepf(i,j,k)   gdept(k)
+#   define  fsdepw(i,j,k)   gdepw(k)
+#   define  fsdepuw(i,j,k)  gdepw(k)
+#   define  fsdepvw(i,j,k)  gdepw(k)
+#   define  fse3t(i,j,k)   e3t(k)
+#   define  fse3u(i,j,k)   e3t(k)
+#   define  fse3v(i,j,k)   e3t(k)
+#   define  fse3f(i,j,k)   e3t(k)
+#   define  fse3w(i,j,k)   e3w(k)
+#   define  fse3uw(i,j,k)  e3w(k)
+#   define  fse3vw(i,j,k)  e3w(k)
+#endif

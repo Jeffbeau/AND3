@@ -1,0 +1,91 @@
+!
+! OPA MODEL general namelist for passive tracers
+ &NATTRC
+   nwritetrc  =  180  ! 540 ! = 3d @ 180/day  ! 180 = 1d 
+   lrsttr     = .false.
+   nrsttr     = 0
+   ctrcnm0  = 'track'                 !new variable names
+   ctrcnl0  = 'BW release location'
+   ctrcun0  = 'arbitrary'
+   lutini0  = .false.
+/
+!
+!       NATNUM  numerical schemes 
+!
+ &NATNUM
+   ndttrc   = 1 
+   rsc      = 1.
+   rtrn     = 1.e-15
+   ncortrc  = 1
+   crosster = .false.
+/
+!
+!       NATRTD   dynamical tracers trends (#ifdef key_trc_diatrd) 
+!
+ &NATRTD
+   nwritetrd =  900
+   luttrd(1) = .false.
+/
+!
+!
+!       NATADD    2/3 D diagnostics (#ifdef key_trc_diaadd)
+!
+!
+ &NATADD
+   nwriteadd = 365
+   ctrc3d(1) = 'PH'
+   ctrc3l(1) = 'PH'
+   ctrc3u(1) = '-'
+   ctrc2d(1) = 'Cflx'
+   ctrc2l(1) = 'DICflux'
+   ctrc2u(1) = 'molC/m2/s'
+/
+!
+!
+!'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+!       natdmp   passive tracer newtonian damping ('key_trc_dmp')
+!,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+!
+ &NATDMP
+   nmldmptr = 1
+   sdmptr   =  50.
+   bdmptr   = 360.
+   hdmptr   = 800.
+   ndmptr   =  1 
+   ndmpftr  =  0
+/
+!-----------------------------------
+!    NAMTRCADV
+!-----------------------------
+!
+!
+&namtrcadv
+   ln_trcadv_cen2    = .false.
+   ln_trcadv_tvd     = .true.
+   ln_trcadv_muscl   = .false.
+   ln_trcadv_muscl2  = .false.
+   ln_trcadv_smolar  = .false.
+/
+!
+!
+!
+!
+&NAMTRCLDF
+   ln_trcldf_diff    = .false.
+   ln_trcldf_lap     = .TRUE.
+   ln_trcldf_bilap   = .false.
+   ln_trcldf_level   = .false.
+   ln_trcldf_hor     = .TRUE.
+   ln_trcldf_iso     = .false.
+   ahtrc0            = 200.0
+   ahtrb0            = 1.E-3 
+   aeivtr0           = 2000
+   trcrat            = 15 
+/
+!
+!
+!
+ &NAMTRCZDF
+   ln_trczdf_exp    = .true.
+   n_trczdf_exp     = 1 
+/

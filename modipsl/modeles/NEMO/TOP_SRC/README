@@ -1,0 +1,22 @@
+
+2009.08.24
+
+DB
+
+This dir modified to eliminate all code NOT related to BGCM_01 key. 
+It will be broken for all the old OPA/NEMO keys (lobster, ...). 
+The F91 files are copies of the original F90 files, saved for possible reference.
+
+The key that works is:  key_BGCM_01 which requires key_passivetrc as well.
+
+The 2 files: bgcm_01_*.F90 are simple, clean BioGeoChemical Model (or "NPZ") routines.
+They can also serve as starting points for other BGCM code(s) by appropriate modification.
+
+
+2009.10.13
+
+Recent modifications cleaned up the above and created:
+lib_bgcm_01.F90, with modified bgcm_initrc & bgcm_model files.
+
+
+

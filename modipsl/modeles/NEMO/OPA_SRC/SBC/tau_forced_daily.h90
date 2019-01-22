@@ -1,0 +1,290 @@
+!!DB: 2008.10.06
+!!I/O routines migrated to lib_ncdf
+
+!!Read and time interpolate daily WS fields. 
+
+!!(1) num_recs is the number of frames in the input file. It is used to 
+!!    check if the file has jpday records (jpday=365). This is leftover
+!!    from original code.
+!!(2) the ice_conc.nc file is an ice cover climatology (like a simple ice model)
+!! If you want to use this see add_ice. 
+!!(3) Defaults to 4-hourly interpolation -- see update_freq
+!!(4) Uses kt as time-base -- not absolute day/time
+
+   !!----------------------------------------------------------------------
+   !!                   ***  tau_forced_daily.h90  ***
+   !!----------------------------------------------------------------------
+
+   !!----------------------------------------------------------------------
+   !!   tau     :   update the surface stress - daily fields in NetCDF file
+   !!----------------------------------------------------------------------
+   !! * local modules variables
+   INTEGER ::   &
+      numtau,         &  ! logical unit for the i-component of the wind data
+      numtav,         &  ! logical unit for the j-component of the wind data
+      ntau1, ntau2 ,  &  ! index of the first and second record used
+      ndaytau            ! new day for ers/ncep tau forcing
+
+   CHARACTER (len=34) ::   &      !!! * monthly climatology/interanual fields
+      cl_taux ,  & ! generic name of the i-component monthly NetCDF file
+      cl_tauy      ! generic name of the j-component monthly NetCDF file
+
+!!DB
+   REAL(wp), DIMENSION(jpi,jpj,2) ::   &
+      taux_dta,    &  ! i- and j-components of the surface stress (Pascal)
+      tauy_dta        ! at 2 consecutive months in the (i,j) referential
+   REAL(wp), DIMENSION(jpi,jpj,2) ::   &
+        ice_conc      ! for daily ice concentration
+   CHARACTER (len=34) ::   cl_ice
+   INTEGER :: numice, add_ice, num_recs
+
+
+
+   !!----------------------------------------------------------------------
+   !!   OPA 9.0 , LOCEAN-IPSL (2005) 
+   !!----------------------------------------------------------------------
+
+CONTAINS
+
+   SUBROUTINE tau( kt )
+      !!---------------------------------------------------------------------
+      !!                    ***  ROUTINE tau  ***
+      !!     
+      !! ** Purpose :   provide to the ocean the stress at each time step
+      !!
+      !! ** Method  :   Read the daily surface stress components in NetCDF 
+      !!      file. They are given in the (i,j) referential 
+      !!        The i-component is given at U-point (INTERP package)
+      !!        The j-component is given at V-point (INTERP package)
+      !!
+      !!    CAUTION: never mask the surface stress field !
+      !!
+      !! ** Action  :   update at each time-step the two components of the 
+      !!      surface stress in both (i,j) and geographical referencial
+      !!
+      !!----------------------------------------------------------------------
+      !! * Modules used
+      USE ioipsl       ! NetCDF library
+!!DB
+      USE oce, only :  perpetual_forcing, ramp
+      USE lib_ncdf
+
+      !! * Arguments
+      INTEGER, INTENT( in  ) ::   kt   ! ocean time step
+
+      !! * Local declarations
+      INTEGER, PARAMETER ::   jpday = 365
+      INTEGER ::   &
+         itime,   &
+         iday, idy,   &
+         ipi, ipj, ipk
+      INTEGER  , DIMENSION(jpday)  ::   istep
+      REAL(wp) , DIMENSION(jpi,jpj)::  &
+         zlon  , & 
+         zlat
+      REAL(wp) , DIMENSION(jpk)::  &
+         zlev
+      REAL(wp) ::   zsecond, zdate0
+!!DB
+      REAL(wp) :: zxy, update_frac
+      INTEGER :: update_freq, i, j, status
+
+
+      !!---------------------------------------------------------------------
+
+      cl_taux = 'taux_1d.nc'
+      cl_tauy = 'tauy_1d.nc'
+!!DB
+      cl_ice = 'ice_conc_1d.nc'
+      add_ice = 0
+
+
+      ! -------------- !
+      ! Initialization !
+      ! -------------- !
+
+      itime = jpday
+      ipi   = jpiglo
+      ipj   = jpjglo
+      ipk   = jpk
+      idy   = 365
+      IF ( nleapy == 1 ) idy = 366 
+
+
+      ! -------------------- !
+      ! First call kt=nit000 !
+      ! -------------------- !
+
+      IF( kt == nit000 ) THEN
+         IF(lwp) THEN
+            WRITE(numout,*) ' '
+            WRITE(numout,*) ' tau    : DAILY wind stress in NetCDF files'
+            WRITE(numout,*) ' ~~~~~~~'
+         ENDIF
+         ! title, dimensions and tests
+#if defined key_agrif
+      if ( .NOT. Agrif_Root() ) then
+         cl_taux = TRIM(Agrif_CFixed())//'_'//TRIM(cl_taux)
+      endif
+#endif
+
+!!DB: 
+         call ncdf_get_dim_size(cl_taux, 'time_counter', num_recs, status)
+         call ncdf_get_dim_size(cl_taux, 'x', ipi, status)
+         call ncdf_get_dim_size(cl_taux, 'y', ipj, status)
+         if( ipi /= jpidta .OR. ipj /= jpjdta) then
+            if(lwp) then
+               write(numout,*)
+               write(numout,*) 'problem with file ', cl_taux
+               write(numout,*) 'problem with dimensions'
+               write(numout,*) ' ipi ',ipi,' jpidta ',jpidta
+               write(numout,*) ' ipj ',ipj,' jpjdta ',jpjdta
+            endif
+            stop 'tau daily' 
+         endif
+         if( num_recs /= jpday ) then
+            if(lwp) then
+               write(numout,*)
+               write(numout,*) 'problem with file ', cl_taux
+               write(numout,*) 'problem with time coordinates'
+               write(numout,*) ' num_recs ',num_recs,' jpday ',jpday
+            endif
+            stop 'tau daily'
+         endif
+
+#if defined key_agrif
+      if ( .NOT. Agrif_Root() ) then
+         cl_tauy = TRIM(Agrif_CFixed())//'_'//TRIM(cl_tauy)
+      endif
+#endif
+!!DB: 
+         call ncdf_get_dim_size(cl_tauy, 'time_counter', num_recs, status)
+         call ncdf_get_dim_size(cl_tauy, 'x', ipi, status)
+         call ncdf_get_dim_size(cl_tauy, 'y', ipj, status)
+         if( ipi /= jpidta .OR. ipj /= jpjdta) then
+            if(lwp) then
+               write(numout,*)
+               write(numout,*) 'problem with file ', cl_tauy
+               write(numout,*) 'problem with dimensions'
+               write(numout,*) ' ipi ',ipi,' jpidta ',jpidta
+               write(numout,*) ' ipj ',ipj,' jpjdta ',jpjdta
+            endif
+            stop 'tau daily' 
+         endif
+         if( num_recs /= jpday ) then
+            if(lwp) then
+               write(numout,*)
+               write(numout,*) 'problem with file ', cl_tauy
+               write(numout,*) 'problem with time coordinates'
+               write(numout,*) ' num_recs ',num_recs,' jpday ',jpday
+            endif
+            stop 'tau daily'
+         endif
+
+!!DB check ice_conc file
+         if(add_ice /= 0) then
+            call ncdf_get_dim_size(cl_ice, 'time_counter', num_recs, status)
+            call ncdf_get_dim_size(cl_ice, 'x', ipi, status)
+            call ncdf_get_dim_size(cl_ice, 'y', ipj, status)
+            if( ipi /= jpidta .OR. ipj /= jpjdta) then
+               if(lwp) then
+                  write(numout,*)
+                  write(numout,*) 'problem with file ', cl_ice
+                  write(numout,*) 'problem with dimensions'
+                  write(numout,*) ' ipi ',ipi,' jpidta ',jpidta
+                  write(numout,*) ' ipj ',ipj,' jpjdta ',jpjdta
+               endif
+               stop 'tau daily' 
+            endif
+            if( num_recs /= jpday ) then
+               if(lwp) then
+                  write(numout,*)
+                  write(numout,*) 'problem with file ', cl_ice
+                  write(numout,*) 'problem with time coordinates'
+                  write(numout,*) ' num_recs ',num_recs,' jpday ',jpday
+               endif
+               stop 'tau daily'
+            endif
+         endif
+
+      ENDIF  !!END -- stuff done on first dt
+
+      ! ----------------- !
+      ! Read daily file   !
+      ! ----------------- !
+
+      IF ( ndaytau /= nday ) THEN
+            
+         ndaytau = nday
+         iday  = nday_year
+
+!!DB: set up input of multiple days. I think that nday_year == nday anyways.
+         ntau1 = nday_year
+         ntau2 = ntau1 + 1
+         if(ntau2 > idy) ntau2 = 1
+
+!!DB: perpetual_forcing from oce; see above
+         if(perpetual_forcing > 0) then
+            ntau2 = ntau1
+!!DBG
+            if(lwp .AND. kt==nit000) then 
+               write(numout,*)'DBG: In tau_forced_daily, perpetual_forcing = ', perpetual_forcing
+            endif
+
+         endif
+            
+
+!!DB: Note that I just reread the last field (now the first field), instead
+!!of shuffling indices
+
+         ! Read daily wind stress data
+         call ncdf_read(cl_taux,'sozotaux',taux_dta(:,:,1),-ntau1,status) 
+         call ncdf_read(cl_tauy,'sometauy',tauy_dta(:,:,1),-ntau1,status) 
+         call ncdf_read(cl_taux,'sozotaux',taux_dta(:,:,2),-ntau2,status) 
+         call ncdf_read(cl_tauy,'sometauy',tauy_dta(:,:,2),-ntau2,status) 
+!!DB
+         if(add_ice /= 0) then
+            call ncdf_read(cl_ice,'ice_conc',ice_conc(:,:,1),-ntau1,status)
+            call ncdf_read(cl_ice,'ice_conc',ice_conc(:,:,2),-ntau2,status)
+         endif
+
+!!DBG:
+         if(lwp) write(numout,*)'DBG: Input WS fields ', ntau1, ntau2
+
+
+!!DB: 2007.10.16 -- apply ice_conc mask
+!!DBG
+         if(add_ice /= 0) then
+            if(lwp) write(numout,'(A40,i2,1x,2(e12.6,2x))')   & 
+                 'DBG: narea, taux-&-ice_conc(10,10) ', narea, taux_dta(10,10,1), ice_conc(10,10,1)
+            taux_dta(:,:,1) = (1.0-ice_conc(:,:,1))*taux_dta(:,:,1)
+            tauy_dta(:,:,1) = (1.0-ice_conc(:,:,1))*tauy_dta(:,:,1)
+            taux_dta(:,:,2) = (1.0-ice_conc(:,:,2))*taux_dta(:,:,2)
+            tauy_dta(:,:,2) = (1.0-ice_conc(:,:,2))*tauy_dta(:,:,2)
+            if(lwp) write(numout,'(A30,i2,1x,e12.6)')  &
+                 'DBG: narea, taux(10,10) ', narea, taux_dta(10,10,1)
+         endif
+
+         CALL FLUSH(numout)
+
+      ENDIF   !!END input next records
+
+
+!!DB: 09.03 -- interpolate update_freq times per day
+!!Take daily field to start at the beginning of the day instead of the middle
+!!(lazy, for now). NB: good values for update_freq should divide 86400/rdt = 180,
+!! so 8 is not good (good = 2,4,6,9,10,12,...). 180 = default rdt
+      update_freq = 6  !! #-per-day
+      update_frac = 1.0/update_freq 
+      if(mod(kt-nit000,int(update_frac*86400/rdt)) == 0) then
+         zxy = float(kt-nit000)/(update_frac*86400/rdt)  !! total # of updates
+         zxy = update_frac* mod(zxy,float(update_freq))  
+         taux(:,:) = (1.-zxy) * taux_dta(:,:,1) + zxy * taux_dta(:,:,2)
+         tauy(:,:) = (1.-zxy) * tauy_dta(:,:,1) + zxy * tauy_dta(:,:,2)
+         taux = ramp * taux
+         tauy = ramp * tauy
+      endif
+
+         
+         
+   END SUBROUTINE tau

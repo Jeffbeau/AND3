@@ -1,0 +1,80 @@
+!!----------------------------------------------------------------------
+!!  TOP 1.0,  LOCEAN-IPSL (2005)
+!! $Header: /home/opalod/NEMOCVSROOT/NEMO/TOP_SRC/SMS/trcctl.lobster1.h90,v 1.2 2005/09/12 09:04:59 opalod Exp $
+!! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt
+!!----------------------------------------------------------------------
+!!!
+!!! Modifications:
+!!! --------------
+!!!    00-12 (E. Kestenare): 
+!!!           assign a parameter to name individual tracers
+!!!
+
+#if defined key_trc_lobster1
+      IF(lwp) THEN
+          WRITE(numout,*) ' use LOBSTER1 biological model '
+          WRITE(numout,*) ' '
+      ENDIF
+
+! Check number of tracers
+! -----------------------
+      IF (jptra /= 6) THEN 
+          IF (lwp) THEN 
+              WRITE (numout,*) ' ===>>>> : w a r n i n g '
+              WRITE (numout,*) ' =======   ============= '
+              WRITE (numout,*)                             &
+              &   ' STOP, change jptra to 6 in '           &
+              &   ,'parameter.passivetrc.lobster1.h '  
+          END IF 
+          STOP 'TRC_CTL'
+      END IF 
+
+! Check tracer names
+! ------------------
+      IF (    ctrcnm(jpdet) /= 'DET' .OR. ctrcnm(jpzoo) /= 'ZOO'     &
+         & .OR. ctrcnm(jpphy) /= 'PHY' .OR. ctrcnm(jpno3) /= 'NO3'   &
+         & .OR. ctrcnm(jpnh4) /= 'NH4' .OR. ctrcnm(jpdom) /= 'DOM'   & 
+         & .OR. ctrcnl(jpdet) /= 'Detritus'                          &
+         & .OR. ctrcnl(jpzoo) /= 'Zooplankton concentration'         &
+         & .OR. ctrcnl(jpphy) /= 'Phytoplankton concentration'       &
+         & .OR. ctrcnl(jpno3) /= 'Nitrate concentration'             &
+         & .OR. ctrcnl(jpnh4) /= 'Ammonium concentration'            &
+         & .OR. ctrcnl(jpdom) /= 'Dissolved organic matter' ) THEN 
+          ctrcnm(jpdet)='DET'
+          ctrcnl(jpdet)='Detritus'
+          ctrcnm(jpzoo)='ZOO'
+          ctrcnl(jpzoo)='Zooplankton concentration'
+          ctrcnm(jpphy)='PHY'
+          ctrcnl(jpphy)='Phytoplankton concentration'
+          ctrcnm(jpno3)='NO3'
+          ctrcnl(jpno3)='Nitrate concentration'
+          ctrcnm(jpnh4)='NH4'
+          ctrcnl(jpnh4)='Ammonium concentration'
+          ctrcnm(jpdom)='DOM'
+          ctrcnl(jpdom)='Dissolved organic matter'          
+          IF (lwp) THEN
+              WRITE (numout,*) ' ===>>>> : w a r n i n g '
+              WRITE (numout,*) ' =======   ============= '
+              WRITE (numout,*) ' we force tracer names'
+              DO jn=1,jptra
+                WRITE(numout,*) ' tracer nb: ',jn,' name = ',ctrcnm(jn), ctrcnl(jn)
+              END DO
+              WRITE(numout,*) ' '
+          ENDIF 
+      ENDIF 
+
+! Check tracer units
+
+      DO jn=1,jptra
+        IF (ctrcun(jn) /= 'mmole-N/m3') THEN
+            ctrcun(jn)='mmole-N/m3'
+            IF (lwp) THEN
+                WRITE (numout,*) ' ===>>>> : w a r n i n g '
+                WRITE (numout,*) ' =======   ============= '
+                WRITE (numout,*) ' we force tracer unit'
+                WRITE(numout,*) ' tracer  ',ctrcnm(jn), 'UNIT= ',ctrcun(jn)
+                WRITE(numout,*) ' '
+            ENDIF 
+        ENDIF 
+      END DO              
+#endif

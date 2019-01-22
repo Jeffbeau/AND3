@@ -1,0 +1,24 @@
+#!/bin/ksh
+# $Id: clr_make,v 2.3 2005/04/05 14:35:47 adm Exp $
+#---------------------------------------------------------------------
+#- Suppression des Makefile propres a un environnement
+#---------------------------------------------------------------------
+d_n=$(dirname $0)
+#-
+l_rep=$(find ${d_n}/.. -name AA_make -print)
+#-
+echo "Suppression des Makefile";
+for i in $l_rep
+do
+  j=${i%/AA_make}
+  echo "Suppression dans $j ...";
+  rm -f $j/Makefile
+done
+l_prism=${d_n}'/../prism' 
+if [ -d ${l_prism} ]; then
+  rm -f ${d_n}/../prism/src/mod/oasis3/COMP_oasis3*
+  rm -f ${d_n}/../prism/util/COMP_libs*
+  echo "Suppression de COMP_oasis3 et COMP_libs" 
+fi
+#-
+exit 0;

@@ -1,0 +1,41 @@
+05/02/06 11:23:32 model NEMO
+--- Model        : NEMO
+--- Action       : checkout
+--- Mode         : silencious
+--- Mail address : opatlod@lodyc.jussieu.fr
+---
+--- Component  : IOIPSL/src
+--- Tag        : ioipsl-3-1
+--- CVS Server : anonymous@cvs.ipsl.jussieu.fr:/home/ioipsl/CVSROOT
+--- Directory  : .
+--- Local Dir  : modeles
+---
+--- Component  : AGRIF
+--- Tag        : ?
+--- CVS Server : nemo@cvs.ipsl.jussieu.fr:/home/opalod/NEMOCVSROOT
+--- Directory  : .
+--- Local Dir  : modeles
+---
+--- Component  : NEMO
+--- Tag        : nemo_v1_12
+--- CVS Server : nemo@cvs.ipsl.jussieu.fr:/home/opalod/NEMOCVSROOT
+--- Directory  : .
+--- Local Dir  : modeles
+---
+--- Component  : UTIL
+--- Tag        : nemo_v1_12
+--- CVS Server : nemo@cvs.ipsl.jussieu.fr:/home/opalod/NEMOCVSROOT
+--- Directory  : .
+--- Local Dir  : modeles
+---
+--- Component  : CONFIG/GYRE
+--- Tag        : nemo_v1_12
+--- CVS Server : nemo@cvs.ipsl.jussieu.fr:/home/opalod/NEMOCVSROOT
+--- Directory  : GYRE
+--- Local Dir  : config
+---
+--- Component  : CONFIG/ORCA2_LIM
+--- Tag        : nemo_v1_12
+--- CVS Server : nemo@cvs.ipsl.jussieu.fr:/home/opalod/NEMOCVSROOT
+--- Directory  : ORCA2_LIM
+--- Local Dir  : config

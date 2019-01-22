@@ -1,0 +1,206 @@
+   !!----------------------------------------------------------------------
+   !!                    ***  flx_forced_daily  ***
+   !!----------------------------------------------------------------------
+
+   !!----------------------------------------------------------------------
+   !!   flx          : define the thermohaline fluxes for the ocean
+   !!                  in forced mode using flux formulation (not bulk)
+   !!                  (read in NetCDF file)
+   !!----------------------------------------------------------------------
+   !! * Modules used     C A U T I O N  already defined in flxmod.F90
+
+   !! * Module variables
+   INTEGER ::          &
+      numflx,          &  ! logical unit for surface fluxes data
+      nflx1, nflx2,    &  !  first and second record used
+      nflx11, nflx12,  &  ! ???
+      ndayflx,         &  ! new day for ecmwf flx forcing
+      nyearflx            ! new year for ecmwf flx forcing
+   REAL(wp), DIMENSION(jpi,jpj,3) ::   &
+      flxdta              ! 3 consecutive daily fluxes
+   !!----------------------------------------------------------------------
+   !!   OPA 9.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/OPA_SRC/SBC/flx_forced_daily.h90,v 1.6 2006/03/10 10:55:42 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+   !!----------------------------------------------------------------------
+
+CONTAINS
+
+   SUBROUTINE flx( kt )
+      !!---------------------------------------------------------------------
+      !!                    ***  ROUTINE flx  ***
+      !!                   
+      !! ** Purpose :   provide the thermohaline fluxes (heat and freshwater) 
+      !!      to the ocean at each time step.
+      !!
+      !! ** Method  :   READ daily flux file in NetCDF files
+      !!      the net downward radiative flux qsr      1 (watt/m2)
+      !!      the net downward heat flux      q        2 (watt/m2)
+      !!      the net upward water            emp      3 (kg/m2/s)
+      !!      (evaporation - precipitation)
+      !!
+      !! History :
+      !!        !  90-03  (O. Marti and P. Dandin)  Original code
+      !!        !  92-07  (M. Imbard)
+      !!        !  96-11  (E. Guilyardi)  Daily AGCM input files
+      !!        !  99-11  (M. Imbard)  NetCDF FORMAT with ioipsl
+      !!        !  00-10  (J.-P. Boulanger)  adjusted for reading any
+      !!                         daily wind stress data including a climatology
+      !!        !  01-09  (A. Lazar and C. Levy)  config with no ice model
+      !!   8.5  !  03-07  (G. Madec)  F90: Free form and module
+      !!----------------------------------------------------------------------
+      !! * Modules used
+      USE ioipsl
+      USE flx_oce
+
+      !! * arguments
+      INTEGER, INTENT( in  ) ::   kt ! ocean time step
+
+      !! * local declarations
+      INTEGER ::   ji, jj, jk        ! dummy loop arguments
+      INTEGER ::   iprint
+      INTEGER ::   i15, iy, iday, idy, ipi, ipj, ipk
+      INTEGER ,DIMENSION(366) :: istep
+
+      REAL(wp), DIMENSION(jpi,jpj) :: zlon, zlat
+      REAL(wp), DIMENSION(jpi,jpj) :: zeri, zerps, ziclim
+      REAL(wp), DIMENSION(jpk)     :: zlev
+      REAL(wp) ::   zdate0, zdt
+
+      CHARACTER (len=40) :: clname
+      !!---------------------------------------------------------------------
+
+      ! Initialization
+      ! -----------------
+      
+      ! year month day
+      i15 = INT( 2.* FLOAT(nday) / (FLOAT( nobis(nmonth) ) + 0.5) )
+      ipi = jpiglo
+      ipj = jpjglo
+      ipk = jpk
+      IF( nleapy == 0 ) THEN
+         idy = 365
+      ELSE IF( nleapy == 1 ) THEN
+         IF( MOD( nyear ,4 ) == 0 ) THEN
+            idy = 366
+         ELSE
+            idy = 365
+         ENDIF
+      ELSE IF( nleapy == 30 ) THEN
+         IF(lwp) WRITE(numout,cform_err)
+         IF(lwp) WRITE(numout,*)'flx.forced.h : nleapy = 30 is non compatible'
+         IF(lwp) WRITE(numout,*)'               with existing files'
+         nstop = nstop + 1
+      ENDIF
+
+
+      ! First call kt=nit000
+      ! --------------------
+
+      IF( kt == nit000 ) THEN
+         IF(lwp) WRITE(numout,*)
+         IF(lwp) WRITE(numout,*) 'flx   : daily fluxes Q, Qsr, EmP'
+         IF(lwp) WRITE(numout,*) '~~ '
+         ndayflx  = 0
+         nyearflx = 0
+      ENDIF
+
+
+      ! Open files if nyearflx
+      ! ----------------------
+
+      IF( nyearflx /= nyear ) THEN
+         nyearflx = nyear
+         iprint   = 1
+
+         ! Define file name and record
+         
+         ! Close/open file if new year 
+
+         IF( nyearflx /= 0 .AND. kt /= nit000 )   CALL flinclo(numflx)
+
+         iy = nyear
+         IF(lwp) WRITE (numout,*) iy
+         WRITE(clname,'("flx_1d.nc")') 
+#if defined key_agrif
+      if ( .NOT. Agrif_Root() ) then
+         clname = TRIM(Agrif_CFixed())//'_'//TRIM(clname)
+      endif
+#endif         
+         IF(lwp) WRITE (numout,*)' open flx file = ',clname
+         CALL FLUSH(numout)
+         
+         CALL flinopen(clname,mig(1),nlci,mjg(1),nlcj,.FALSE.,ipi,ipj   &
+              ,ipk,zlon,zlat,zlev,idy,istep,zdate0,zdt,numflx)
+
+         IF( ipi /= jpidta .AND. ipj /= jpjdta .AND. ipk /= 1 ) THEN
+            IF(lwp) WRITE(numout,cform_err)
+            IF(lwp) WRITE(numout,*)
+            IF(lwp) WRITE(numout,*) 'problem with dimensions'
+            IF(lwp) WRITE(numout,*) ' ipi ',ipi,' jpidta ',jpidta
+            IF(lwp) WRITE(numout,*) ' ipj ',ipj,' jpjdta ',jpjdta
+            IF(lwp) WRITE(numout,*) ' ipk ',ipk,' =? 1'
+            nstop = nstop + 1
+         ENDIF
+         IF(lwp) WRITE(numout,*) idy,istep,zdate0,zdt,numflx
+      ELSE
+         iprint = 0
+      ENDIF
+
+      ! Read daily fluxes in flxdta(1,1,jm) 
+      !     1. Qtot    (w/m2)
+      !     2. Qsr     (w/m2)
+      !     3. emp     (kg/m2/s)
+      
+      IF( ndayflx /= nday ) THEN 
+         ndayflx = nday
+         
+         iday = nday_year
+         
+         ! read Qtot
+         CALL flinget(numflx,'sohefldo',jpidta,jpjdta,1,idy,iday,   &
+              iday,mig(1),nlci,mjg(1),nlcj,flxdta(1:nlci,1:nlcj,1))
+         ! read qsr
+         CALL flinget(numflx,'soshfldo',jpidta,jpjdta,1,idy,iday,   &
+              iday,mig(1),nlci,mjg(1),nlcj,flxdta(1:nlci,1:nlcj,2))
+         ! read emp
+         CALL flinget(numflx,'sowaflup',jpidta,jpjdta,1,idy,iday,   &
+              iday,mig(1),nlci,mjg(1),nlcj,flxdta(1:nlci,1:nlcj,3))
+
+         IF(lwp) WRITE (numout,*)'Lecture flx record :',iday
+
+         IF( nit000 == 1 ) THEN 
+            IF( kt == nit000 ) THEN
+               IF(lwp) THEN
+                  WRITE(numout,*)
+                  WRITE(numout,*) ' read daily fluxes ok'
+                  WRITE(numout,*)
+                  WRITE(numout,*) ' Q * .1, day: ',ndastp
+                  CALL prihre(flxdta(:,:,1),jpi,jpj,1,jpi,20,1,jpj,10,.1,numout)
+                  WRITE(numout,*)
+                  WRITE(numout,*) ' QSR * .1, day: ',ndastp
+                  CALL prihre(flxdta(:,:,2),jpi,jpj,1,jpi,20,1,jpj,10,.1,numout)
+                  WRITE(numout,*)
+                  WRITE(numout,*) ' E-P *86400, day: ',ndastp
+                  CALL prihre(flxdta(:,:,3),jpi,jpj,1,jpi,20,1,jpj,10,86400.,numout)
+                  WRITE(numout,*) ' '
+               ENDIF
+            ENDIF
+         ENDIF
+      ENDIF
+
+      p_qt (:,:) = flxdta(:,:,1)
+      p_qsr(:,:) = flxdta(:,:,2)
+      p_emp(:,:) = flxdta(:,:,3)
+ 
+      ! Boundary condition on emp for free surface option
+      ! -------------------------------------------------
+      CALL lbc_lnk( p_emp, 'T', 1. )
+ 
+ 
+      ! Closing all files
+      ! -----------------
+ 
+      IF( kt == nitend ) CALL flinclo( numflx )
+ 
+   END SUBROUTINE flx

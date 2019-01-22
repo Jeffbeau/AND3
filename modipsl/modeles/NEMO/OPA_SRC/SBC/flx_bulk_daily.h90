@@ -1,0 +1,258 @@
+!!DB 2009.05.07
+!!Modified to make more similar to tau_forcing.h90 and corrected
+!!mistake if is_cyclical=.true.
+
+!!Read daily bulk files using lib_ncdf I/O routines
+!!Update fields as they are input -- i.e. no time interpolation
+!!See tau_forced_daily for time-interpolation routine
+!!Routine uses frame_daily to allow pointer to not-1st-record in file.
+!!frame_daily set to nday_year.
+!!Uses is_cyclical variable to account for cyclical forcing (HARDWIRED)
+
+   !!----------------------------------------------------------------------
+   !!                    ***  flx_bulk_cmc  ***
+   !!----------------------------------------------------------------------
+
+   !!----------------------------------------------------------------------
+   !!   bulk          : reading 
+   !!----------------------------------------------------------------------
+   !! * Modules used     C A U T I O N  already defined in flxmod.F90
+
+   !! * Module variables
+   
+!!DB
+   INTEGER :: bflx1, bflx2, num_recsd, ireadd, frame_daily
+
+   !!----------------------------------------------------------------------
+   !!   OPA 9.0 , LOCEAN-IPSL (2005) 
+   !!----------------------------------------------------------------------
+
+CONTAINS
+
+   SUBROUTINE flx( kt )
+      !!---------------------------------------------------------------------
+      !!                    ***  ROUTINE flx  ***
+      !!        
+      !! ** Purpose :   provide the thermohaline fluxes (heat and freshwater)
+      !!      to the ocean at each time step.
+      !!
+      !!       Read several cmc fluxes file
+      !!             temperature at 2m   tatm   (K)
+      !!             relative humidite   hatm   (%)
+      !!             wind speed          vatm   (m/s)
+      !!             precip              watm   (kg/m2/day)
+      !!             clouds              catm   (%)
+      !!
+      !! caution : now, in the opa global model, the net upward water flux is
+      !! -------   with mm/day unit.
+      !!
+      !! History :
+      !!        !  91-03  (O. Marti and Ph Dandin)  Original code
+      !!        !  92-07  (M. Imbard)
+      !!        !  96-11  (E. Guilyardi)  Daily AGCM input files
+      !!        !  00-05  (K. Rodgers) Daily Netcdf
+      !!   8.5  !  02-09  (C. Ethe and G. Madec)  F90: Free form and MODULE 
+      !!----------------------------------------------------------------------
+      !! * modules used
+      USE blk_oce         ! bulk variable
+      USE bulk            ! bulk module
+!!DB
+      USE oce, only :  perpetual_forcing, ramp
+      USE lib_ncdf
+
+      !! * arguments
+      INTEGER, INTENT( in  ) ::   kt ! ocean time step
+
+      !! * Local declarations      
+      CHARACTER(len=45)  ::  &
+         clname_n = 'tair_1d.nc',        &
+         clname_c = 'hum_cloud_1d.nc',   &
+         clname_x = 'rain_1d.nc',        &
+         clname_w = 'wspd_1d.nc'
+!!DB
+      REAL(wp) :: zxy, update_frac, rdt_in  !!NB: not used
+      INTEGER :: i, j,  status, ipi, ipj, idy, ndt, rec1, rec2
+      LOGICAL :: is_cyclical
+
+      !!---------------------------------------------------------------------
+
+
+      ! Initialization
+      ! --------------
+!!DB: 
+      is_cyclical = .false. !!NB: hardwired
+
+      rdt_in = rday/rdt    !# of timesteps between input records (float)
+      ndt = int(rday/rdt)  !int version (REM: daily input routine)
+      idy = 365
+      IF(nleapy == 1) idy = 366
+
+
+      ! 1. first call kt = nit000
+      ! -------------------------
+      
+      IF( kt == nit000 ) THEN
+
+!!DB  frame_daily is the offset into the files. 
+         if(is_cyclical) then
+            frame_daily = nday_year     
+         else
+            frame_daily = 1               ! for non-cyclical daily forcing
+         endif
+
+!!DB -- crucial assignments
+         call ncdf_get_dim_size(clname_x, 'time_counter',num_recsd,status)
+         if(status == 0) then
+            if(lwp)write(numout,*)'flx_bulk_daily: # records in ',clname_x, ' = ', num_recsd
+         else
+            if(lwp)write(numout,*)'DBG: prob with ncdf_get_dim_size ====> STOP'
+            stop
+         endif
+         if(num_recsd /= idy) then
+            if(lwp) then
+               write(numout,*)'DBG -- flx_bulk_daily: # records /= ', idy, ' Could be an error'
+            endif
+         endif
+         call ncdf_get_dim_size(clname_x, 'x', ipi, status)
+         call ncdf_get_dim_size(clname_x, 'y', ipj, status)
+         if( ipi /= jpidta .OR. ipj /= jpjdta) then
+            if(lwp) then
+               write(numout,*)
+               write(numout,*) 'problem with file ', clname_x
+               write(numout,*) 'problem with dimensions'
+               write(numout,*) ' ipi ',ipi,' jpidta ',jpidta
+               write(numout,*) ' ipj ',ipj,' jpjdta ',jpjdta
+            endif
+            stop 'flx_bulk_daily'
+         endif
+
+
+         bflx1 =  0 + (frame_daily-1)  !!NB: to get 1st record correct, see below
+         if(bflx1 .gt. num_recsd) bflx1 = num_recsd
+         bflx2 = bflx1 + 1
+         if(bflx2 .gt. num_recsd) bflx2 = num_recsd
+         ireadd = 0 ! next input timestep rel nit000 = 0 to start
+
+
+    ENDIF
+
+
+    ! 2. Read daily data
+    ! ----------------------------
+!!Account for cyclical nature of forcing
+!!Note that bflx1 must be continually incremented if is_cyclical=.true. 
+!!and rec1 & rec2 point to the appropriate record to input
+    if(kt-nit000 == ireadd) then   
+
+       bflx1 = bflx1 + 1
+       if(is_cyclical) then    !roll over to next cycle
+          rec1 = mod(bflx1,num_recsd)
+          if(rec1 == 0) rec1 = num_recsd
+       else                    !clamp if necessary
+          if(bflx1 .gt. num_recsd) bflx1 = num_recsd
+          rec1 = bflx1
+       endif
+       
+       bflx2 = bflx1 + 1
+       if(is_cyclical) then    !roll over to next cycle
+          rec2 = mod(bflx2,num_recsd)
+          if(rec2 == 0) rec2 = num_recsd
+       else                    !clamp if necessary
+          if(bflx2 .gt. num_recsd) bflx2 = num_recsd
+          rec2 = bflx2
+       endif
+
+!!DB: better formula if #-timesteps-per-day is NOT an integer (see tau_forcing.h90)
+       ireadd = nint((bflx1-(frame_daily-1))*rdt_in) !! next input timestep rel nit000       
+!       ireadd = ireadd + ndt  !! next input timestep rel nit000
+       
+!!DB: perpetual_forcing from oce; 
+       if(perpetual_forcing > 0) then
+          bflx1 = frame_daily
+          if(bflx1 .gt. num_recsd) bflx1 = num_recsd
+          bflx2 = bflx1 
+          rec1 = bflx1
+          rec2 = rec1
+          ireadd = -1   !ensures (kt-nit000) /= ireadd, thus only 1 input of files
+!!DBG
+          if(lwp .AND. kt==nit000) then 
+             write(numout,*)'DBG: In flx_bulk_daily, perpetual_forcing = ', perpetual_forcing
+             write(numout,*)'DBG: In flx_bulk_daily, bflx2 = bflx1 = ', frame_daily
+          endif
+       endif
+
+!!DB
+       if(lwp) write(numout,*)'DBG: In flx_bulk_daily -- reading field ',bflx1, 'at kt = ', kt 
+       if(lwp) write(numout,*)'DBG: In flx_bulk_daily -- next input at ireadd = ', ireadd
+       
+       ! Read data
+!!Adjust using frame_daily 
+       ! read temp at 2m (in K)
+       call ncdf_read(clname_n, 'air', tatm, -(rec1), status)
+       if(status /= 0) then
+          if(lwp) then
+             write(numout,*)'DBG: Prob reading tair file, status = ', status
+             !               nstop = nstop + 1
+          endif
+       endif
+       ! conversion of temperature Kelvin --> Celsius  [rt0=273.15]
+       tatm(:,:) = ( tatm(:,:) - rt0 ) 
+
+       ! read wind speed
+       call ncdf_read(clname_w, 'wspd', vatm, -(rec1), status)
+       if(status /= 0) then
+          if(lwp) then
+             write(numout,*)'DBG: Prob reading wspd file, status = ', status
+             !               nstop = nstop + 1
+          endif
+       endif
+       ! read humidity
+       call ncdf_read(clname_c, 'socliohu', hatm, -(rec1), status)
+       if(status /= 0) then
+          if(lwp) then
+             write(numout,*)'DBG: Prob reading hum_cloud file, status = ', status
+             !               nstop = nstop + 1
+          endif
+       endif
+       ! read clouds
+       call ncdf_read(clname_c, 'socliocl', catm, -(rec1), status)
+       if(status /= 0) then
+          if(lwp) then
+             write(numout,*)'DBG: Prob reading hum_cloud file, status = ', status
+             !               nstop = nstop + 1
+          endif
+       endif
+       ! read precipitation
+       call ncdf_read(clname_x, 'rain', watm, -(rec1), status)
+       if(status /= 0) then
+          if(lwp) then
+             write(numout,*)'DBG: Prob reading rain file, status = ', status
+             !               nstop = nstop + 1
+          endif
+       endif
+
+       call flush(numout)
+         
+    ENDIF
+
+
+!!DB: basic structure to do time interpolation every ndt_1h
+!!See tau_forced_cmc for more details
+!!NB: would have to have input the bflx2 fields as well (not done above)
+!!DB Use ndt_3h & ndt_1h
+!!Want a formula that also accounts for nature of ndt_* variables which may not
+!!be integers (depending on rdt), and still gives a consistent zxy upon restart
+!!NB: formula below is incorrect if perpetual_forcing is on so avoid this possibility 
+!      if(mod(kt-nit000,ndt_1h) == 0  .AND.  perpetual_forcing == 0) then
+!         zxy = (float(kt-nit000) - (bflx1-1)*rdt_3h)/rdt_3h
+!         zxy = min(zxy,1.0)  !to be safe
+!         taux(:,:) = (1.-zxy) * taux_dta(:,:,1) + zxy * taux_dta(:,:,2)
+!         tauy(:,:) = (1.-zxy) * tauy_dta(:,:,1) + zxy * tauy_dta(:,:,2)
+!      endif
+
+      CALL blk(kt)
+      
+      CALL FLUSH(numout)
+      
+   END SUBROUTINE flx
+

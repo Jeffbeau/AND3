@@ -1,0 +1,42 @@
+   !!----------------------------------------------------------------------
+   !!                    *** ldftra_substitute.h90  ***
+   !!----------------------------------------------------------------------
+   !! ** purpose :   substitute fsaht. the eddy diffusivity coeff.
+   !!      with a constant or 1D or 2D or 3D array, using CPP macro.
+   !!----------------------------------------------------------------------
+   !!----------------------------------------------------------------------
+   !!  OPA 9.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/OPA_SRC/LDF/ldftra_substitute.h90,v 1.2 2005/03/27 18:35:07 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+   !!----------------------------------------------------------------------
+#if defined key_traldf_c3d
+!   'key_traldf_c3d' :                 aht: 3D coefficient
+#       define   fsahtt(i,j,k)   ahtt(i,j,k)
+#       define   fsahtu(i,j,k)   ahtu(i,j,k)
+#       define   fsahtv(i,j,k)   ahtv(i,j,k)
+#       define   fsahtw(i,j,k)   ahtw(i,j,k)
+#elif defined key_traldf_smag
+!   'key_traldf_c3d' :                 aht: 3D coefficient
+#       define   fsahtt(i,j,k)   ahtt(i,j,k)
+#       define   fsahtu(i,j,k)   ahtu(i,j,k)
+#       define   fsahtv(i,j,k)   ahtv(i,j,k)
+#       define   fsahtw(i,j,k)   ahtw(i,j,k)
+#elif defined key_traldf_c2d
+!   'key_traldf_c2d' :                 aht: 2D coefficient
+#       define   fsahtt(i,j,k)   ahtt(i,j)
+#       define   fsahtu(i,j,k)   ahtu(i,j)
+#       define   fsahtv(i,j,k)   ahtv(i,j)
+#       define   fsahtw(i,j,k)   ahtw(i,j)
+#elif defined key_traldf_c1d
+!   'key_traldf_c1d' :                aht: 1D coefficient
+#       define   fsahtt(i,j,k)   ahtt(k)
+#       define   fsahtu(i,j,k)   ahtu(k)
+#       define   fsahtv(i,j,k)   ahtv(k)
+#       define   fsahtw(i,j,k)   ahtw(k)
+#else
+!   Default option :             aht: Constant coefficient
+#      define   fsahtt(i,j,k)   aht0
+#      define   fsahtu(i,j,k)   aht0
+#      define   fsahtv(i,j,k)   aht0
+#      define   fsahtw(i,j,k)   aht0
+#endif

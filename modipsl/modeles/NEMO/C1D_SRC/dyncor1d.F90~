@@ -1,0 +1,169 @@
+MODULE dyncor1d
+   !!======================================================================
+   !!                     ***  MODULE  ini1D  ***
+   !! Ocean state   :  1D initialization
+   !!=====================================================================
+#if defined key_cfg_1d
+   !!----------------------------------------------------------------------
+   !!   'key_cfg_1d'               1D Configuration
+   !!----------------------------------------------------------------------
+   !!----------------------------------------------------------------------
+   !!   fcorio_1d   : Coriolis factor at T-point
+   !!   dyn_cor_1d  : vorticity trend due to Coriolis
+   !!----------------------------------------------------------------------
+   !! * Modules used
+   USE oce            ! ocean dynamics and tracers
+   USE dom_oce        ! ocean space and time domain
+   USE phycst         ! physical constants
+   USE in_out_manager ! I/O manager
+   USE prtctl         ! Print control
+
+   IMPLICIT NONE
+   PRIVATE
+
+   !! * Routine accessibility
+   PUBLIC fcorio_1d   ! routine called by OPA.F90
+   PUBLIC dyn_cor_1d  ! routine called by step1d.F90
+
+   !! * Substitutions
+#  include "vectopt_loop_substitute.h90"
+   !!----------------------------------------------------------------------
+   !!   OPA 9.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/C1D_SRC/dyncor1d.F90,v 1.3 2005/10/03 09:20:35 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+   !!----------------------------------------------------------------------
+
+CONTAINS
+
+   SUBROUTINE fcorio_1d
+      !!----------------------------------------------------------------------
+      !!                   ***  ROUTINE fcorio_1d  ***
+      !! 
+      !! ** Purpose : Compute the Coriolis factor at T-point
+      !!
+      !! ** Method  :
+      !!
+      !! History :
+      !!   9.0  !  04-09  (C. Ethe) 1D configuration
+      !!----------------------------------------------------------------------
+      !! * Local declarations
+      !!----------------------------------------------------------------------
+      REAL(wp) ::   &
+         zphi0, zbeta, zf0         !  temporary scalars
+ 
+
+      !!----------------------------------------------------------------------
+
+      ! ================= !
+      !  Coriolis factor  !
+      ! ================= !
+      IF(lwp) WRITE(numout,*)
+      IF(lwp) WRITE(numout,*) 'fcorio_1d : Coriolis factor at T-point'
+      IF(lwp) WRITE(numout,*) '~~~~~~~~~~~'
+
+      SELECT CASE( jphgr_msh )   ! type of horizontal mesh
+
+      CASE ( 0, 1, 4 )               ! mesh on the sphere
+
+         ff(:,:) = 2. * omega * SIN( rad * gphit(:,:) ) 
+
+      CASE ( 2 )                     ! f-plane at ppgphi0 
+
+         ff(:,:) = 2. * omega * SIN( rad * ppgphi0 )
+
+         IF(lwp) WRITE(numout,*) '          f-plane: Coriolis parameter = constant = ', ff(1,1)
+
+      CASE ( 3 )                     ! beta-plane
+
+         zbeta   = 2. * omega * COS( rad * ppgphi0 ) / ra                     ! beta at latitude ppgphi0
+         zphi0   = ppgphi0 - FLOAT( jpjglo/2) * ppe2_m *1.e-3  / ( ra * rad ) ! latitude of the first row F-points
+         zf0     = 2. * omega * SIN( rad * zphi0 )                            ! compute f0 1st point south
+
+         ff(:,:) = ( zf0  + zbeta * gphit(:,:) * 1.e+3 )                      ! f = f0 +beta* y ( y=0 at south)
+
+         IF(lwp) WRITE(numout,*) '          Beta-plane: Beta parameter = constant = ', ff(1,1)
+         IF(lwp) WRITE(numout,*) '                      Coriolis parameter varies from ', ff(1,1),' to ', ff(1,jpj)
+
+      CASE ( 5 )                     ! beta-plane and rotated domain
+
+         zbeta = 2. * omega * COS( rad * ppgphi0 ) / ra                     ! beta at latitude ppgphi0
+         zphi0 = 15.e0                                                      ! latitude of the first row F-points
+         zf0   = 2. * omega * SIN( rad * zphi0 )                            ! compute f0 1st point south
+
+         ff(:,:) = ( zf0 + zbeta * ABS( gphit(:,:) - zphi0 ) * rad * ra )   ! f = f0 +beta* y ( y=0 at south)
+
+         IF(lwp) WRITE(numout,*) '          Beta-plane: Beta parameter = constant = ', ff(1,1)
+         IF(lwp) WRITE(numout,*) '                      Coriolis parameter varies from ', ff(1,1),' to ', ff(1,jpj)
+
+      END SELECT
+
+   END SUBROUTINE fcorio_1d
+
+
+   SUBROUTINE dyn_cor_1d( kt )
+      !!----------------------------------------------------------------------
+      !!                   ***  ROUTINE dyn_cor_1d  ***
+      !! 
+      !! ** Purpose :   Compute the now total vorticity trend and add it to 
+      !!               the general trend of the momentum equation
+      !!
+      !! ** Method  :
+      !!
+      !! History :
+      !!   9.0  !  04-09  (C. Ethe) 1D configuration
+      !!----------------------------------------------------------------------
+      !! * Arguments
+      INTEGER, INTENT( in ) ::   kt        ! ocean time-step index
+
+      !! * Local declarations
+      INTEGER ::   ji, jj, jk              ! dummy loop indices
+      REAL(wp) ::   &
+         zua, zva                          ! temporary scalars
+
+      !!----------------------------------------------------------------------
+
+      IF( kt == nit000 ) THEN
+         IF(lwp) WRITE(numout,*)
+         IF(lwp) WRITE(numout,*) 'dyn_cor_1d : total vorticity trend in 1D'
+         IF(lwp) WRITE(numout,*) '~~~~~~~~~~'
+      ENDIF
+
+      DO jk = 1, jpkm1
+         DO jj = 2, jpjm1
+            DO ji = fs_2, fs_jpim1   ! vector opt.
+               zua =    ff(ji,jj) * vn(ji,jj,jk)
+               zva =  - ff(ji,jj) * un(ji,jj,jk)
+               ua(ji,jj,jk) = ua(ji,jj,jk) + zua
+               va(ji,jj,jk) = va(ji,jj,jk) + zva
+            END DO
+         END DO
+      END DO   
+
+      IF(ln_ctl)   THEN
+         CALL prt_ctl(tab3d_1=ua, clinfo1=' cor  - Ua: ', mask1=umask, &
+            &         tab3d_2=va, clinfo2=' Va: ', mask2=vmask)
+      ENDIF
+
+!     IF(l_ctl) THEN         ! print sum trends (used for debugging)
+!        zua = SUM( ua(2:nictl,2:njctl,1:jpkm1) * umask(2:nictl,2:njctl,1:jpkm1) )
+!        zva = SUM( va(2:nictl,2:njctl,1:jpkm1) * vmask(2:nictl,2:njctl,1:jpkm1) )
+!        WRITE(numout,*) ' cor  - Ua: ', zua-u_ctl, ' Va: ', zva-v_ctl
+!        u_ctl = zua   ;   v_ctl = zva
+!     ENDIF
+
+   END SUBROUTINE dyn_cor_1d
+
+#else
+   !!----------------------------------------------------------------------
+   !!   Default key                                     NO 1D Config
+   !!----------------------------------------------------------------------
+CONTAINS
+   SUBROUTINE fcorio_1d      ! Empty routine
+   END SUBROUTINE fcorio_1d   
+   SUBROUTINE dyn_cor_1d ( kt )
+      WRITE(*,*) 'dyn_cor_1d: You should not have seen this print! error?', kt
+   END SUBROUTINE dyn_cor_1d
+#endif
+
+   !!=====================================================================
+END MODULE dyncor1d

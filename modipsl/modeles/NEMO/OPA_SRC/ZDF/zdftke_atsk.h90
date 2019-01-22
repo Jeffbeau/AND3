@@ -1,0 +1,486 @@
+   SUBROUTINE zdf_tke( kt )
+      !!----------------------------------------------------------------------
+      !!                   ***  ROUTINE zdf_tke  ***
+      !!                     
+      !! ** Purpose :   Compute the vertical eddy viscosity and diffusivity
+      !!      coefficients using a 1.5 turbulent closure scheme.
+      !!
+      !! ** Method  :   The time evolution of the turbulent kinetic energy 
+      !!      (tke) is computed from a prognostic equation :
+      !!         d(en)/dt = eboost eav (d(u)/dz)**2       ! shear production
+      !!                  + d( efave eav d(en)/dz )/dz    ! diffusion of tke
+      !!                  + g/rau0 pdl eav d(rau)/dz      ! stratif. destruc.
+      !!                  - ediss / emxl en**(2/3)        ! dissipation
+      !!      with the boundary conditions:
+      !!         surface: en = max( emin0,ebb sqrt(taux^2 + tauy^2) )
+      !!         bottom : en = emin
+      !!      -1- The dissipation and mixing turbulent lengh scales are computed
+      !!      from the usual diagnostic buoyancy length scale:  
+      !!         mxl= 1/(sqrt(en)/N)  WHERE N is the brunt-vaisala frequency
+      !!      Four cases : 
+      !!         nmxl=0 : mxl bounded by the distance to surface and bottom.
+      !!                  zmxld = zmxlm = mxl
+      !!         nmxl=1 : mxl bounded by the vertical scale factor.
+      !!                  zmxld = zmxlm = mxl
+      !!         nmxl=2 : mxl bounded such that the vertical derivative of mxl 
+      !!                  is less than 1 (|d/dz(xml)|<1). 
+      !!                  zmxld = zmxlm = mxl
+      !!         nmxl=3 : lup = mxl bounded using |d/dz(xml)|<1 from the surface 
+      !!                        to the bottom
+      !!                  ldown = mxl bounded using |d/dz(xml)|<1 from the bottom 
+      !!                        to the surface
+      !!                  zmxld = sqrt (lup*ldown) ; zmxlm = min(lup,ldown)
+      !!      -2- Compute the now Turbulent kinetic energy. The time differencing
+      !!      is implicit for vertical diffusion term, linearized for kolmo-
+      !!      goroff dissipation term, and explicit forward for both buoyancy
+      !!      and dynamic production terms. Thus a tridiagonal linear system is
+      !!      solved.
+      !!         Note that - the shear production is multiplied by eboost in order
+      !!      to set the critic richardson number to ri_c (namelist parameter)
+      !!                   - the destruction by stratification term is multiplied
+      !!      by the Prandtl number (defined by an empirical funtion of the local 
+      !!      Richardson number) if npdl=1 (namelist parameter)
+      !!      coefficient (zesh2):
+      !!      -3- Compute the now vertical eddy vicosity and diffusivity
+      !!      coefficients from en (before the time stepping) and zmxlm:
+      !!              avm = max( avtb, ediff*zmxlm*en^1/2 )
+      !!              avt = max( avmb, pdl*avm )  (pdl=1 if npdl=0)
+      !!              eav = max( avmb, avm )
+      !!      avt and avm are horizontally averaged to avoid numerical insta-
+      !!      bilities.
+      !!        N.B. The computation is done from jk=2 to jpkm1 except for
+      !!      en. Surface value of avt avmu avmv are set once a time to
+      !!      their background value in routine zdftke_init.
+      !!
+      !! ** Action :   compute en (now turbulent kinetic energy)
+      !!               update avt, avmu, avmv (before vertical eddy coeff.)
+      !!
+      !! References :
+      !!      Gaspar et al., jgr, 95, 1990,
+      !!      Blanke and Delecluse, jpo, 1991
+      !! History :
+      !!   9.0  !  02-08  (G. Madec)  autotasking optimization
+      !!----------------------------------------------------------------------
+      !! * Modules used
+      USE oce       , zwd   => ua,  &  ! use ua as workspace
+                      zmxlm => ta,  &  ! use ta as workspace
+                      zmxld => sa      ! use sa as workspace
+      !! * arguments
+      INTEGER, INTENT( in  ) ::   kt   ! ocean time step
+
+      !! * local declarations
+      INTEGER ::   ji, jj, jk          ! dummy loop arguments
+      REAL(wp) ::                   &
+         zmlmin, zbbrau,            &  ! temporary scalars
+         zfact1, zfact2, zfact3,    &  !
+         zrn2, zesurf,              &  !
+         ztx2, zty2, zav,           &  !
+         zcoef, zcof, zsh2,         &  !
+         zdku, zdkv, zpdl, zri,     &  !
+         zsqen, zesh2,              &  !
+         zemxl, zemlm, zemlp
+      !!--------------------------------------------------------------------
+      !!  OPA 9.0 , LOCEAN-IPSL (2005) 
+      !! $Header: /home/opalod/NEMOCVSROOT/NEMO/OPA_SRC/ZDF/zdftke_atsk.h90,v 1.4 2005/09/02 15:45:43 opalod Exp $ 
+      !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+      !!--------------------------------------------------------------------
+
+
+      ! 0. Initialization
+      !    --------------
+      IF( kt == nit000  )   CALL zdf_tke_init
+
+      ! Local constant 
+      zmlmin = 1.e-8
+      zbbrau =  .5 * ebb / rau0
+      zfact1 = -.5 * rdt * efave
+      zfact2 = 1.5 * rdt * ediss
+      zfact3 = 0.5 * rdt * ediss
+
+
+      !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+      ! I.  Mixing length
+      !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+      !                                                ! ===============
+      DO jj = 2, jpjm1                                 !  Vertical slab
+         !                                             ! =============== 
+         ! Buoyancy length scale: l=sqrt(2*e/n**2)
+         ! ---------------------
+         zmxlm(:,jj, 1 ) = zmlmin   ! surface set to the minimum value
+         zmxlm(:,jj,jpk) = zmlmin   ! bottom  set to the minimum value
+!CDIR NOVERRCHK
+         DO jk = 2, jpkm1
+!CDIR NOVERRCHK
+            DO ji = 2, jpim1
+               zrn2 = MAX( rn2(ji,jj,jk), rsmall )
+               zmxlm(ji,jj,jk) = MAX( SQRT( 2. * en(ji,jj,jk) / zrn2 ), zmlmin  )
+            END DO
+         END DO
+
+
+         ! Physical limits for the mixing length
+         ! -------------------------------------
+         zmxld(:,jj, 1 ) = zmlmin   ! surface set to the minimum value
+         zmxld(:,jj,jpk) = zmlmin   ! bottom  set to the minimum value
+
+         SELECT CASE ( nmxl )
+
+         CASE ( 0 )           ! bounded by the distance to surface and bottom
+
+            DO jk = 2, jpkm1
+               DO ji = 2, jpim1
+                  zemxl = MIN( fsdepw(ji,jj,jk), zmxlm(ji,jj,jk),   &
+                  &            fsdepw(ji,jj,mbathy(ji,jj)) - fsdepw(ji,jj,jk) )
+                  zmxlm(ji,jj,jk) = zemxl
+                  zmxld(ji,jj,jk) = zemxl
+               END DO
+            END DO
+
+         CASE ( 1 )           ! bounded by the vertical scale factor
+
+            DO jk = 2, jpkm1
+               DO ji = 2, jpim1
+                  zemxl = MIN( fse3w(ji,jj,jk), zmxlm(ji,jj,jk) )
+                  zmxlm(ji,jj,jk) = zemxl
+                  zmxld(ji,jj,jk) = zemxl
+               END DO
+            END DO
+
+         CASE ( 2 )           ! |dk[xml]| bounded by e3t :
+
+            DO jk = 2, jpk           ! from the surface to the bottom :
+               DO ji = 2, jpim1
+                  zmxlm(ji,jj,jk) = MIN( zmxlm(ji,jj,jk-1) + fse3t(ji,jj,jk-1), zmxlm(ji,jj,jk) )
+               END DO
+            END DO
+            DO jk = jpkm1, 2, -1     ! from the bottom to the surface :
+               DO ji = 2, jpim1
+                  zemxl = MIN( zmxlm(ji,jj,jk+1) + fse3t(ji,jj,jk+1), zmxlm(ji,jj,jk) )
+                  zmxlm(ji,jj,jk) = zemxl
+                  zmxld(ji,jj,jk) = zemxl
+               END DO
+            END DO
+
+         CASE ( 3 )           ! lup and ldown, |dk[xml]| bounded by e3t :
+
+            DO jk = 2, jpk           ! from the surface to the bottom : lup
+               DO ji = 2, jpim1
+                  zmxld(ji,jj,jk) = MIN( zmxld(ji,jj,jk-1) + fse3t(ji,jj,jk-1), zmxlm(ji,jj,jk) )
+               END DO
+            END DO
+            DO jk = jpkm1, 1, -1     ! from the bottom to the surface : ldown
+               DO ji = 2, jpim1
+                  zmxlm(ji,jj,jk) = MIN( zmxlm(ji,jj,jk+1) + fse3t(ji,jj,jk+1), zmxlm(ji,jj,jk) )
+               END DO
+            END DO
+!CDIR NOVERRCHK
+            DO jk = 1, jpk
+!CDIR NOVERRCHK
+               DO ji = 2, jpim1
+                  zemlm = MIN ( zmxld(ji,jj,jk),  zmxlm(ji,jj,jk) )
+                  zemlp = SQRT( zmxld(ji,jj,jk) * zmxlm(ji,jj,jk) )
+                  zmxlm(ji,jj,jk) = zemlm
+                  zmxld(ji,jj,jk) = zemlp
+               END DO
+            END DO
+
+         END SELECT
+
+
+         !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+         ! II  Tubulent kinetic energy time stepping
+         !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+         ! 1. Vertical eddy viscosity on tke (put in zmxlm) and first estimate of avt
+         ! ---------------------------------------------------------------------
+!CDIR NOVERRCHK
+         DO jk = 2, jpkm1
+!CDIR NOVERRCHK
+            DO ji = 2, jpim1
+               zsqen = SQRT( en(ji,jj,jk) )
+               zav   = ediff * zmxlm(ji,jj,jk) * zsqen
+               avt  (ji,jj,jk) = MAX( zav, avtb(jk) ) * tmask(ji,jj,jk)
+               zmxlm(ji,jj,jk) = MAX( zav, avmb(jk) ) * tmask(ji,jj,jk)
+               zmxld(ji,jj,jk) = zsqen / zmxld(ji,jj,jk)
+            END DO
+         END DO
+
+
+         ! 2. Surface boundary condition on tke and its eddy viscosity (zmxlm)
+         ! -------------------------------------------------
+         ! en(1)   = ebb sqrt(taux^2+tauy^2) / rau0  (min value emin0)
+         ! zmxlm(1) = avmb(1) and zmxlm(jpk) = 0.
+!CDIR NOVERRCHK
+         DO ji = 2, jpim1
+            ztx2 = taux(ji-1,jj  ) + taux(ji,jj)
+            zty2 = tauy(ji  ,jj-1) + tauy(ji,jj)
+            zesurf = zbbrau * SQRT( ztx2 * ztx2 + zty2 * zty2 )
+            en (ji,jj,1) = MAX( zesurf, emin0 ) * tmask(ji,jj,1)
+            zmxlm(ji,jj,1  ) = avmb(1) * tmask(ji,jj,1)
+            zmxlm(ji,jj,jpk) = 0.e0
+         END DO
+
+
+         ! 3. Now Turbulent kinetic energy (output in en)
+         ! -------------------------------
+         ! Resolution of a tridiagonal linear system by a "methode de chasse"
+         ! computation from level 2 to jpkm1  (e(1) already computed and
+         ! e(jpk)=0 ). 
+
+         SELECT CASE ( npdl )
+
+         CASE ( 0 )           ! No Prandtl number
+            DO jk = 2, jpkm1
+               DO ji = 2, jpim1
+                  ! zesh2 = eboost * (du/dz)^2 - N^2
+                  zcoef = 0.5 / fse3w(ji,jj,jk)
+                  ! shear
+                  zdku = zcoef * (   ub(ji-1, jj ,jk-1) + ub(ji,jj,jk-1)   &
+                  &                - ub(ji-1, jj ,jk  ) - ub(ji,jj,jk  )  )
+                  zdkv = zcoef * (   vb( ji ,jj-1,jk-1) + vb(ji,jj,jk-1)   &
+                  &                - vb( ji ,jj-1,jk  ) - vb(ji,jj,jk  )  )
+                  ! coefficient (zesh2)
+                  zesh2 =  eboost * ( zdku*zdku + zdkv*zdkv ) - rn2(ji,jj,jk)
+
+                  ! Matrix
+                  zcof = zfact1 * tmask(ji,jj,jk)
+                  ! lower diagonal
+                  avmv(ji,jj,jk) = zcof * ( zmxlm(ji,jj,jk  ) + zmxlm(ji,jj,jk-1) )   &
+                  &                    / ( fse3t(ji,jj,jk-1) * fse3w(ji,jj,jk  ) )
+                  ! upper diagonal
+                  avmu(ji,jj,jk) = zcof * ( zmxlm(ji,jj,jk+1) + zmxlm(ji,jj,jk  ) )   &
+                  &                    / ( fse3t(ji,jj,jk  ) * fse3w(ji,jj,jk) )
+                  ! diagonal
+                  zwd(ji,jj,jk) = 1. - avmv(ji,jj,jk) - avmu(ji,jj,jk) + zfact2 * zmxld(ji,jj,jk)
+                  ! right hand side in en 
+                  en(ji,jj,jk) = en(ji,jj,jk) + zfact3 * zmxld(ji,jj,jk) * en   (ji,jj,jk)   &
+                  &                           +   rdt  * zmxlm(ji,jj,jk) * zesh2
+               END DO
+            END DO
+
+         CASE ( 1 )           ! Prandtl number
+            DO jk = 2, jpkm1
+               DO ji = 2, jpim1
+                  ! zesh2 =  eboost * (du/dz)^2 - pdl * N^2
+                  zcoef = 0.5 / fse3w(ji,jj,jk)
+                  ! shear
+                  zdku = zcoef * (   ub(ji-1,jj  ,jk-1) + ub(ji,jj,jk-1) &
+                  &                - ub(ji-1,jj  ,jk  ) - ub(ji,jj,jk  )   )
+                  zdkv = zcoef * (   vb(ji  ,jj-1,jk-1) + vb(ji,jj,jk-1) &
+                  &                - vb(ji  ,jj-1,jk  ) - vb(ji,jj,jk  )   )
+                  ! square of vertical shear
+                  zsh2 = zdku * zdku + zdkv * zdkv
+                  ! Prandtl number
+                  zri  = MAX( rn2(ji,jj,jk), 0. ) / ( zsh2 + 1.e-20 )
+                  zpdl = 1.0
+                  IF( zri >= 0.2 ) zpdl = 0.2 / zri
+                  zpdl = MAX( 0.1, zpdl )
+                  ! coefficient (esh2)
+                  zesh2 = eboost * zsh2 - zpdl * rn2(ji,jj,jk)
+
+                  ! Matrix
+                  zcof = zfact1 * tmask(ji,jj,jk)
+                  ! lower diagonal
+                  avmv(ji,jj,jk) = zcof * ( zmxlm(ji,jj,jk  ) + zmxlm(ji,jj,jk-1) )   &
+                  &                     / ( fse3t(ji,jj,jk-1) * fse3w(ji,jj,jk  ) )
+                  ! upper diagonal
+                  avmu(ji,jj,jk) = zcof * ( zmxlm(ji,jj,jk+1) + zmxlm(ji,jj,jk  ) )   &
+                  &                     / ( fse3t(ji,jj,jk  ) * fse3w(ji,jj,jk) )
+                  ! diagonal
+                  zwd(ji,jj,jk) = 1. - avmv(ji,jj,jk) - avmu(ji,jj,jk) + zfact2 * zmxld(ji,jj,jk)
+                  ! right hand side in en 
+                  en(ji,jj,jk) = en(ji,jj,jk) + zfact3 * zmxld(ji,jj,jk) * en   (ji,jj,jk)   &
+                  &                           +   rdt  * zmxlm(ji,jj,jk) * zesh2
+                  ! save masked Prandlt number in zmxlm array
+                  zmxld(ji,jj,jk) = zpdl * tmask(ji,jj,jk)
+               END DO
+            END DO
+
+         END SELECT
+
+
+         ! 4. Matrix inversion from level 2 (tke prescribed at level 1)
+         !---------------------------------
+
+         ! First recurrence : Dk = Dk - Lk * Uk-1 / Dk-1
+         DO jk = 3, jpkm1
+            DO ji = 2, jpim1
+               zwd(ji,jj,jk) = zwd(ji,jj,jk) - avmv(ji,jj,jk) * avmu(ji,jj,jk-1) / zwd(ji,jj,jk-1)
+            END DO
+         END DO
+
+         ! Second recurrence : Lk = RHSk - Lk / Dk-1 * Lk-1
+         DO ji = 2, jpim1
+            avmv(ji,jj,2) = en(ji,jj,2) - avmv(ji,jj,2) * en(ji,jj,1)    ! Surface boudary conditions on tke
+         END DO
+         DO jk = 3, jpkm1
+            DO ji = 2, jpim1
+               avmv(ji,jj,jk) = en(ji,jj,jk) - avmv(ji,jj,jk) / zwd(ji,jj,jk-1) *avmv(ji,jj,jk-1)
+            END DO
+         END DO
+
+         ! thrid recurrence : Ek = ( Lk - Uk * Ek+1 ) / Dk
+         DO ji = 2, jpim1
+            en(ji,jj,jpkm1) = avmv(ji,jj,jpkm1) / zwd(ji,jj,jpkm1)
+         END DO
+         DO jk = jpk-2, 2, -1
+            DO ji = 2, jpim1
+               en(ji,jj,jk) = ( avmv(ji,jj,jk) - avmu(ji,jj,jk) * en(ji,jj,jk+1) ) / zwd(ji,jj,jk)
+            END DO
+         END DO
+
+         ! Save the result in en and set minimum value of tke : emin
+         DO jk = 2, jpkm1
+            DO ji = 2, jpim1
+               en(ji,jj,jk) = MAX( en(ji,jj,jk), emin ) * tmask(ji,jj,jk)
+            END DO
+         END DO
+         !                                             ! ===============
+      END DO                                           !   End of slab
+      !                                                ! ===============
+
+      ! Lateral boundary conditions on ( avt, en )  (sign unchanged)
+      ! --------------------------------=========
+      CALL lbc_lnk( avt, 'W', 1. )   ;   CALL lbc_lnk( en , 'W', 1. )
+
+
+      !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+      ! III.  Before vertical eddy vicosity and diffusivity coefficients
+      !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+      !                                                ! ===============
+      DO jk = 2, jpkm1                                 ! Horizontal slab
+         !                                             ! =============== 
+         SELECT CASE ( nave )
+            
+         CASE ( 0 )                ! no horizontal average
+
+            ! Vertical eddy viscosity
+
+            DO jj = 2, jpjm1
+               DO ji = fs_2, fs_jpim1   ! vector opt.
+                  avmu(ji,jj,jk) = ( avt  (ji,jj,jk) + avt  (ji+1,jj  ,jk) ) * umask(ji,jj,jk)   &
+                  &     / MAX( 1.,   tmask(ji,jj,jk) + tmask(ji+1,jj  ,jk) )
+                  avmv(ji,jj,jk) = ( avt  (ji,jj,jk) + avt  (ji  ,jj+1,jk) ) * vmask(ji,jj,jk)   &
+                  &     / MAX( 1.,   tmask(ji,jj,jk) + tmask(ji  ,jj+1,jk) )
+               END DO
+            END DO
+
+            
+         CASE ( 1 )                ! horizontal average
+
+            !                                                ( 1/2  1/2 )
+            ! Eddy viscosity: horizontal average: avmu = 1/4 ( 1    1   )
+            !                      ( 1/2  1 1/2 )            ( 1/2  1/2 )
+            !           avmv = 1/4 ( 1/2  1 1/2 )      
+            
+!! caution vectopt_memory change the solution (last digit of the solver stat)
+#  if defined key_vectopt_memory
+            DO jj = 2, jpjm1
+               DO ji = fs_2, fs_jpim1   ! vector opt.
+                  avmu(ji,jj,jk) = (      avt(ji,jj  ,jk) + avt(ji+1,jj  ,jk)   &
+                  &                 +.5*( avt(ji,jj-1,jk) + avt(ji+1,jj-1,jk)   &
+                  &                      +avt(ji,jj+1,jk) + avt(ji+1,jj+1,jk) ) ) * eumean(ji,jj,jk)
+
+                  avmv(ji,jj,jk) = (      avt(ji  ,jj,jk) + avt(ji  ,jj+1,jk)   &
+                  &                 +.5*( avt(ji-1,jj,jk) + avt(ji-1,jj+1,jk)   &
+                  &                      +avt(ji+1,jj,jk) + avt(ji+1,jj+1,jk) ) ) * evmean(ji,jj,jk)
+               END DO
+            END DO
+#  else
+            DO jj = 2, jpjm1
+               DO ji = fs_2, fs_jpim1   ! vector opt.
+                  avmu(ji,jj,jk) = (   avt  (ji,jj  ,jk) + avt  (ji+1,jj  ,jk)   &
+                  &              +.5*( avt  (ji,jj-1,jk) + avt  (ji+1,jj-1,jk)   &
+                  &                   +avt  (ji,jj+1,jk) + avt  (ji+1,jj+1,jk) ) ) * umask(ji,jj,jk)  &
+                  &       / MAX( 1.,   tmask(ji,jj  ,jk) + tmask(ji+1,jj  ,jk)   &
+                  &              +.5*( tmask(ji,jj-1,jk) + tmask(ji+1,jj-1,jk)   &
+                  &                   +tmask(ji,jj+1,jk) + tmask(ji+1,jj+1,jk) )  )
+
+                  avmv(ji,jj,jk) = (   avt  (ji  ,jj,jk) + avt  (ji  ,jj+1,jk)   &
+                  &              +.5*( avt  (ji-1,jj,jk) + avt  (ji-1,jj+1,jk)   &
+                  &                   +avt  (ji+1,jj,jk) + avt  (ji+1,jj+1,jk) ) ) * vmask(ji,jj,jk)  &
+                  &      /  MAX( 1.,   tmask(ji  ,jj,jk) + tmask(ji  ,jj+1,jk)   &
+                  &              +.5*( tmask(ji-1,jj,jk) + tmask(ji-1,jj+1,jk)   &
+                  &                   +tmask(ji+1,jj,jk) + tmask(ji+1,jj+1,jk) )  )
+               END DO
+            END DO
+#  endif
+         END SELECT
+         !                                             ! ===============
+      END DO                                           !   End of slab
+      !                                                ! ===============
+
+      ! Lateral boundary conditions (avmu,avmv)  (sign unchanged)
+      CALL lbc_lnk( avmu, 'U', 1. )   ;   CALL lbc_lnk( avmv, 'V', 1. )
+
+      !                                                ! ===============
+      DO jk = 2, jpkm1                                 ! Horizontal slab
+         !                                             ! =============== 
+         SELECT CASE ( nave )
+            
+         CASE ( 1 )                ! horizontal average
+
+            ! Vertical eddy diffusivity
+            ! ------------------------------
+            !                                (1 2 1)
+            ! horizontal average  avt = 1/16 (2 4 2)
+            !                                (1 2 1)
+!! caution vectopt_memory change the solution (last digit of the solver stat)
+#  if defined key_vectopt_memory
+            DO jj = 2, jpjm1
+               DO ji = fs_2, fs_jpim1   ! vector opt.
+                  avt(ji,jj,jk) = ( avmu(ji,jj,jk) + avmu(ji-1,jj  ,jk)    &
+                  &               + avmv(ji,jj,jk) + avmv(ji  ,jj-1,jk)  ) * etmean(ji,jj,jk)
+               END DO
+            END DO
+#  else
+            DO jj = 2, jpjm1
+               DO ji = fs_2, fs_jpim1   ! vector opt.
+                  avt(ji,jj,jk) = ( avmu (ji,jj,jk) + avmu (ji-1,jj  ,jk)   &
+                  &               + avmv (ji,jj,jk) + avmv (ji  ,jj-1,jk)  ) * tmask(ji,jj,jk)   &
+                  &     / MAX( 1.,  umask(ji,jj,jk) + umask(ji-1,jj  ,jk)   &
+                  &               + vmask(ji,jj,jk) + vmask(ji  ,jj-1,jk)  )
+               END DO
+            END DO
+#  endif
+         END SELECT
+
+
+         ! multiplied by the Prandtl number (npdl>1)
+         ! ----------------------------------------
+         IF( npdl == 1 ) THEN
+            DO jj = 2, jpjm1
+               DO ji = fs_2, fs_jpim1   ! vector opt.
+                  zpdl = zmxld(ji,jj,jk)
+                  avt(ji,jj,jk) = MAX( zpdl * avt(ji,jj,jk), avtb(jk) ) * tmask(ji,jj,jk)
+               END DO
+            END DO
+         ENDIF
+
+         ! Minimum value on the eddy viscosity
+         ! ----------------------------------------
+         DO jj = 1, jpj
+            DO ji = 1, jpi
+               avmu(ji,jj,jk) = MAX( avmu(ji,jj,jk), avmb(jk) ) * umask(ji,jj,jk)
+               avmv(ji,jj,jk) = MAX( avmv(ji,jj,jk), avmb(jk) ) * vmask(ji,jj,jk)
+            END DO
+         END DO
+         !                                             ! ===============
+      END DO                                           !   End of slab
+      !                                                ! ===============
+
+
+      ! Lateral boundary conditions on avt   (W-point (=T), sign unchanged)
+      ! ------------------------------=====
+      CALL lbc_lnk( avt, 'W', 1. )
+
+      IF(ln_ctl) THEN
+         CALL prt_ctl(tab3d_1=en  , clinfo1=' tke  - e: ', tab3d_2=avt , clinfo2=' t: ', ovlap=1, kdim=jpk)
+         CALL prt_ctl(tab3d_1=avmu, clinfo1=' tke  - u: ', tab3d_2=avmv, clinfo2=' v: ', ovlap=1, kdim=jpk)
+      ENDIF
+
+
+   END SUBROUTINE zdf_tke

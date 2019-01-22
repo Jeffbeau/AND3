@@ -1,0 +1,247 @@
+   SUBROUTINE trc_rst
+      !!===========================================================================================
+      !!
+      !!                       ROUTINE trc_rst
+      !!                     *******************
+      !!
+      !!------------------------------------------------------------------------
+      !!  TOP 1.0,  LOCEAN-IPSL (2005) 
+      !! $Header: /home/opalod/NEMOCVSROOT/NEMO/TOP_SRC/trcrst_fdir.h90,v 1.5 2005/12/08 10:41:59 opalod Exp $ 
+      !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+      !!----------------------------------------------------------------------
+      
+      !! * Local declarations
+      INTEGER :: ino0,ino1,it0,it1,idast1,jn,iarak0,iarak1
+      INTEGER ::   ibloc, ilglo
+      INTEGER :: inum   ! temporary logical unit
+      REAL(wp),DIMENSION(jpi,jpj) :: zq
+      ! open restart file
+      ibloc = 4096
+      ilglo = ibloc*((jpiglo*jpjglo*jpbyt-1 )/ibloc+1)
+      CALL ctlopn(inum,'restarti.trc','OLD','UNFORMATTED','DIRECT',   &
+         ilglo,numout,lwp,1)
+      ! restart options
+      IF(nrsttr == 0) THEN
+         IF(lwp) WRITE(numout,*) ' nrsttr = 0 no control of nit000'
+      ELSE IF(nrsttr == 1) THEN
+         IF(lwp) WRITE(numout,*) ' nrsttr = 1 we control the date'
+      ELSE
+         IF(lwp) WRITE(numout,*) '  ===>>>> nrsttr not equal 0 or 1'
+         IF(lwp) WRITE(numout,*) ' =======                   ======'
+         IF(lwp) WRITE(numout,*) ' we dont control the date'
+      ENDIF
+
+      ! 0. initialisations
+      ! ------------------
+
+      ino0 =no
+      it0  =nit000
+
+      IF( ln_trcadv_cen2 .OR. ln_trcadv_tvd ) THEN
+         iarak0 = 1
+      ELSE
+         iarak0=0
+      ENDIF
+
+      IF(lwp) THEN
+         WRITE(numout,*) ' '
+         WRITE(numout,*) ' *** trcrst beginning of restart for'
+         WRITE(numout,*) ' passive tracer'
+         WRITE(numout,*) ' the present run :'
+         WRITE(numout,*) '   number job is  : ',no
+         WRITE(numout,*) '   with the time nit000 : ',nit000
+         IF(iarak0.eq.1) then
+            WRITE(numout,*) '   and before fields for Arakawa sheme '
+         ENDIF
+         WRITE(numout,*) ' '
+      ENDIF
+
+      ! 1. READ
+      ! -------
+
+      ! 1.1 first record
+
+      READ(inum,REC=1) ino1,it1,iarak1
+
+      IF(lwp) THEN
+         WRITE(numout,*) ' '
+         WRITE(numout,*) ' READ nutrst with '
+         WRITE(numout,*) '   number job is  : ',ino1
+         WRITE(numout,*) '   with the time it : ',it1
+         IF(iarak1.eq.1) then
+            WRITE(numout,*) '   and before fields for Arakawa sheme '
+         ENDIF
+         WRITE(numout,*) ' '
+      ENDIF
+
+      ! 1.2 control of date
+
+      IF((it0-it1) /= 1 .AND. ABS(nrsttr) == 1) THEN
+         IF(lwp) THEN
+            WRITE(numout,*) ' ===>>>> : problem with nit000 for the',   &
+               ' passive tracer restart'
+            WRITE(numout,*) ' =======                              ',   &
+               ' ======================'
+            WRITE(numout,*) ' we stop. verify the FILE'
+            WRITE(numout,*) ' or rerun with the value  0 for the'
+            WRITE(numout,*) ' control of time PARAMETER   nrstdt'
+            WRITE(numout,*) ' '
+         ENDIF
+         STOP 'trc_rst'
+      ENDIF
+
+      ! 1.3 Control of the sheme
+
+      IF (iarak0 /= iarak1) THEN
+         IF(lwp) THEN
+            WRITE(numout,*) ' ===>>>> : problem with the',    &
+               ' passive tracer restart file'
+            WRITE(numout,*) ' =======                              ',   &
+               ' ==========================='
+            WRITE(numout,*) ' we stop. verify the FILE'
+            WRITE(numout,*) ' before field required IF 1=',iarak0
+            WRITE(numout,*) ' before field present in file IF 1=',    &
+               iarak1
+            WRITE(numout,*) ' '
+         ENDIF
+         STOP 'trc_rst'
+      ENDIF
+
+
+      ! 1.4 READ prognostic variables
+
+      DO jn=1,jptra
+         CALL read3(inum,trn(1,1,1,jn), jn + 1 )
+      END DO
+
+      DO jn=1,jptra
+         CALL read3(inum,trb(1,1,1,jn), jptra + jn + 1 )
+      END DO
+
+#if defined key_trc_lobster1
+      CALL read2(inum,sedpocb(:,:),jpk,2*jptra+2)
+      CALL read2(inum,sedpocn(:,:),jpk,2*jptra+3)
+#elif defined key_trc_pisces
+
+      CALL read2(inum,xksi(:,:),jpk,2*jptra+2)
+      xksimax(:,:)=xksi(:,:)
+
+      CALL read2(inum,sedcal(:,:),jpk,2*jptra+3)
+      CALL read2(inum,sedsil(:,:),jpk,2*jptra+4)
+      CALL read2(inum,sedpoc(:,:),jpk,2*jptra+5)
+
+#elif defined key_cfc
+      DO jn=1,jptra
+         CALL read2(inum,zq(:,:),jpk,2*jptra+2)
+         qint(:,:,jn) = zq(:,:)
+         CALL read2(inum,zq(:,:),jpk,2*jptra+3)
+         qtr(:,:,jn)=zq(:,:)
+      ENDDO
+#endif
+
+#if  defined key_trc_pisces
+
+
+      !!  Initialization of chemical variables of the carbon cycle
+      !!  --------------------------------------------------------
+
+      DO jk = 1,jpk
+         DO jj = 1,jpj
+            DO ji = 1,jpi
+               caralk = trn(ji,jj,jk,jptal)-       &
+                  &        borat(ji,jj,jk)/(1.+1.E-8/(rtrn+akb3(ji,jj,jk)))
+               co3(ji,jj,jk)=(caralk-trn(ji,jj,jk,jpdic))*tmask(ji,jj,jk)   &
+                  &        +(1.-tmask(ji,jj,jk))*.5e-3
+               bicarb = (2.*trn(ji,jj,jk,jpdic)-caralk)
+               hi(ji,jj,jk) = (ak23(ji,jj,jk)*bicarb/co3(ji,jj,jk))     &
+                  &  *tmask(ji,jj,jk)+(1.-tmask(ji,jj,jk))*1.e-9
+               h2co3(ji,jj) = 1.e-5
+            ENDDO
+         ENDDO
+      ENDDO
+#endif
+
+      CLOSE( inum )
+
+   END SUBROUTINE trc_rst
+
+   SUBROUTINE trc_wri(kt)
+      !! ==================================================================================
+      !!
+      !!                       ROUTINE trc_wri
+      !!                     ******************
+      !!
+      !!========================================================================================!
+      !! * Arguments
+      !! -----------
+      INTEGER, INTENT( in ) :: kt
+
+      !! * Local declarations
+      INTEGER :: jn
+      INTEGER :: ino0,it0,iarak0
+      REAL(wp),DIMENSION(jpi,jpj) :: zq
+
+      IF( kt == nit000 ) THEN
+         IF(lwp) WRITE(numout,*)
+         IF(lwp) WRITE(numout,*) 'trc_wri : write restart.trc.output direct access file'
+         IF(lwp) WRITE(numout,*) '~~~~~~~~~'
+         ibloc = 4096
+         ilglo = ibloc*((jpiglo*jpjglo*jpbyt-1 )/ibloc+1)
+         CALL ctlopn( nutwrs,'restart.trc.output', 'UNKNOWN','UNFORMATTED','DIRECT', ilglo, numout, lwp, 1 )
+      ENDIF
+
+      IF( MOD( kt, nstock ) == 0 .OR. kt == nitend ) THEN
+
+         ! 0. Initializations
+         ! ------------------
+
+         IF(lwp) THEN
+            WRITE(numout,*) ' '
+            WRITE(numout,*)       &
+               &  ' trcwri: restart OUTPUT done in nutwrs = ',nutwrs    &
+               &  ,' at it= ',kt,' date= ',ndastp
+            WRITE(numout,*) ' -------'
+         ENDIF
+
+         ino0 =no
+         it0  =kt
+         IF( ln_trcadv_cen2 .OR. ln_trcadv_tvd ) THEN
+            iarak0 = 1
+         ELSE
+            iarak0=0
+         ENDIF
+
+         ! 1. Write in nutwrs
+         ! ------------------
+
+         IF(lwp) WRITE(nutwrs,REC=1)   &                 ! first record
+            ino0, it0, iarak0
+
+         DO jn=1,jptra
+            CALL write3(nutwrs,trn(1,1,1,jn), jn + 1 )
+         END DO
+
+         DO jn=1,jptra
+            CALL write3(nutwrs,trb(1,1,1,jn), jptra + jn + 1 )
+         END DO
+
+#if defined key_trc_lobster1
+         CALL write2(nutwrs,sedpocb,jpk,2*jptra+2)
+         CALL write2(nutwrs,sedpocn,jpk,2*jptra+3)
+#elif defined key_trc_pisces
+         CALL write2(nutwrs,xksi,jpk,2*jptra+2)
+
+         CALL write2(nutwrs,sedcal,jpk,2*jptra+3)
+         CALL write2(nutwrs,sedsil,jpk,2*jptra+4)
+         CALL write2(nutwrs,sedpoc,jpk,2*jptra+5)
+#elif defined key_cfc
+         DO jn=1,jptra
+            zq(:,:)=qint(:,:,jn)
+            CALL write2(nutwrs,zq,jpk,2*jptra+2)
+            zq(:,:)=qtr(:,:,jn)
+            CALL write2(nutwrs,zq,jpk,2*jptra+3)
+         ENDDO
+#endif
+      ENDIF
+
+   END SUBROUTINE trc_wri

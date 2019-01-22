@@ -1,0 +1,124 @@
+#- $Id: AA_make,v 1.2 2006/04/26 10:37:06 opalod Exp $
+
+TMP=../../../tmp
+
+SRM=/bin/rm -f
+
+#-Q- sxnec C_L = $(FC_L)   
+#-Q- sxnec C_O = $(FC_O)   
+#-Q- sx6nec C_L	= $(FC_L) 
+#-Q- sx6nec C_O	= $(FC_O) 
+#-Q- sxdkrz C_L	= $(FC_L) 
+#-Q- sxdkrz C_O	= $(FC_O) 
+#-Q- eshpux C_L	= $(FC_L) 
+#-Q- eshpux C_O	= $(FC_O) 
+#-Q- aix F_O = $(w_w) -I$(MODDIR) -qmoddir=$(MODDIR) -qextname
+#-Q- osxxlf F_O = $(w_w) -I$(MODDIR) -qmoddir=$(MODDIR) -qextname
+#-Q- linux F_O = $(F_D) $(F_P) -Mfixed -module $(MODDIR)
+
+AGRIFOBJS=AGRIF_OBJS
+AGRIFFILES=AGRIF_FILES
+AGRIFYOURFILES=AGRIF_YOURFILES
+
+FILENAMES= modbc modmpp modcluster modinit modinitvars modinterp  \
+	   modtypes modbcfunction modutil modcurgridfunctions \
+	   modmask modsauv modupdate modinterpbasic\
+	   modupdatebasic modlinktomodel modarrays
+	   
+OBJS1=$(addprefix $(AGRIFOBJS)/,$(FILENAMES))
+OBJS=$(addsuffix .o,$(OBJS1))
+
+
+AGRIF_FILES1=$(addprefix $(AGRIFFILES)/,$(FILENAMES))
+AGRIF_FILES=$(addsuffix .F,$(AGRIF_FILES1))
+
+all :   conv_exe key $(MODDIR)/libagrif.a $(SXMODEL_LIB)
+	@echo AGRIF is OK
+
+conv_exe : 
+	@( cd LIB ; $(M_K) -f Makefile C_L="$(C_L)" C_O="$(C_O)" )
+
+key : 
+	-@if [ "`cat KEY_CPP`" != "$(P_P)" ] ; then \
+	echo "$(P_P)" > KEY_CPP ; fi
+
+$(MODDIR)/libagrif.a : $(OBJS)
+	@$(A_C) $@ $(OBJS)
+
+$(SXMODEL_LIB) : 
+#-Q- sxnec	$(A_X) $@ $(OBJS)
+#-Q- sx6nec	$(A_X) $@ $(OBJS)
+#-Q- sxdkrz	$(A_X) $@ $(OBJS)
+#-Q- eshpux	$(A_X) $@ $(OBJS)
+
+$(AGRIFOBJS)/%.o : $(AGRIFFILES)/%.F KEY_CPP
+	@$(SRM) $(AGRIFYOURFILES)/$(*F).f
+	@$(P_C) $(P_O) $(AGRIFFILES)/$(*F).F > $(AGRIFYOURFILES)/$(*F).f
+	@$(F_C) $(F_O) $(FFLAGS_EXTEND) $(AGRIF_OPTS) -c $(AGRIFYOURFILES)/$(*F).f -o $(AGRIFOBJS)/$(*F).o
+#-Q- linux	@$(SRM) $*.lst
+#-Q- ibm	@$(SRM) $*.lst
+#-Q- aix	@$(SRM) $*.lst
+#-Q- sxnec	mv *.mod $(MODDIR)
+#-Q- sx6nec	mv *.mod $(MODDIR)
+#-Q- sxdkrz	mv *.mod $(MODDIR)
+#-Q- eshpux	mv *.mod $(MODDIR)
+#-Q- solaris	mv *.mod $(MODDIR)
+
+
+$(AGRIFOBJS)/modarrays.o: $(AGRIFOBJS)/modtypes.o
+
+$(AGRIFOBJS)/modbc.o: $(AGRIFOBJS)/modinterp.o
+
+$(AGRIFOBJS)/modbcfunction.o: $(AGRIFOBJS)/modupdate.o \
+			 $(AGRIFOBJS)/modbc.o 
+
+$(AGRIFOBJS)/modcluster.o: $(AGRIFOBJS)/modsauv.o \
+			$(AGRIFOBJS)/modinitvars.o \
+			$(AGRIFOBJS)/modcurgridfunctions.o
+
+$(AGRIFOBJS)/modcurgridfunctions.o: $(AGRIFOBJS)/modinit.o
+
+$(AGRIFOBJS)/modinit.o: $(AGRIFOBJS)/modlinktomodel.o \
+			$(AGRIFOBJS)/modtypes.o
+
+$(AGRIFOBJS)/modinitvars.o: $(AGRIFOBJS)/modlinktomodel.o \
+			$(AGRIFOBJS)/modtypes.o
+
+$(AGRIFOBJS)/modinterpbasic.o: $(AGRIFOBJS)/modtypes.o
+
+$(AGRIFOBJS)/modinterp.o: $(AGRIFOBJS)/modcurgridfunctions.o \
+			$(AGRIFOBJS)/modmask.o \
+			$(AGRIFOBJS)/modarrays.o \
+			$(AGRIFOBJS)/modmpp.o \
+			$(AGRIFOBJS)/modinterpbasic.o
+
+$(AGRIFOBJS)/modlinktomodel.o: $(AGRIFOBJS)/modtypes.o
+
+$(AGRIFOBJS)/modmask.o: $(AGRIFOBJS)/modtypes.o
+
+$(AGRIFOBJS)/modsauv.o: $(AGRIFOBJS)/modarrays.o \
+			$(AGRIFOBJS)/modlinktomodel.o \
+			$(AGRIFOBJS)/modtypes.o
+
+$(AGRIFOBJS)/modupdatebasic.o: $(AGRIFOBJS)/modtypes.o
+
+$(AGRIFOBJS)/modupdate.o: $(AGRIFOBJS)/modmask.o \
+			$(AGRIFOBJS)/modcurgridfunctions.o \
+			$(AGRIFOBJS)/modarrays.o \
+			$(AGRIFOBJS)/modmpp.o \
+			$(AGRIFOBJS)/modupdatebasic.o
+
+$(AGRIFOBJS)/modutil.o: $(AGRIFOBJS)/modcurgridfunctions.o \
+			$(AGRIFOBJS)/modcluster.o
+
+$(AGRIFOBJS)/modmpp.o: $(AGRIFOBJS)/modtypes.o \
+			$(AGRIFOBJS)/modarrays.o
+
+clean : FORCE
+	$(SRM) $(OBJS) $(MODOBJS)$(LIBDIR)/libagrif.a 
+	
+cleanall : FORCE
+	$(SRM) $(OBJS) $(MODOBJS)$(LIBDIR)/libagrif.a 
+	@(cd LIB ; $(M_K) -f Makefile clean )
+
+FORCE :

@@ -1,0 +1,441 @@
+   !!----------------------------------------------------------------------
+   !!                      ***  domzgr_zps.h90  ***
+   !!----------------------------------------------------------------------
+   !!----------------------------------------------------------------------
+   !!  OPA 9.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/OPA_SRC/DOM/domzgr_zps.h90,v 1.5 2006/03/09 17:21:56 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+   !!----------------------------------------------------------------------
+
+#if defined key_partial_steps
+   !!----------------------------------------------------------------------
+   !!   'key_partial_steps' :               z-coordinate with partial steps
+   !!----------------------------------------------------------------------
+
+   SUBROUTINE zgr_zps
+      !!----------------------------------------------------------------------
+      !!                  ***  ROUTINE zgr_zps  ***
+      !!                     
+      !! ** Purpose :   the depth and vertical scale factor in partial step
+      !!      z-coordinate case
+      !!
+      !! ** Method  :   Partial steps : computes the 3D vertical scale factors
+      !!      of T-, U-, V-, W-, UW-, VW and F-points that are associated with
+      !!      a partial step representation of bottom topography.
+      !!
+      !!        The reference depth of model levels is defined from an analytical
+      !!      function the derivative of which gives the reference vertical
+      !!      scale factors.
+      !!        From  depth and scale factors reference, we compute there new value
+      !!      with partial steps  on 3d arrays ( i, j, k ).
+      !!
+      !!              w-level: gdepw_ps(i,j,k)  = fsdep(k)
+      !!                       e3w_ps(i,j,k) = dk(fsdep)(k)     = fse3(i,j,k)
+      !!              t-level: gdept_ps(i,j,k)  = fsdep(k+0.5)
+      !!                       e3t_ps(i,j,k) = dk(fsdep)(k+0.5) = fse3(i,j,k+0.5)
+      !!
+      !!        With the help of the bathymetric file ( bathymetry_depth_ORCA_R2.nc),
+      !!      we find the mbathy index of the depth at each grid point.
+      !!      This leads us to three cases:
+      !!
+      !!              - bathy = 0 => mbathy = 0
+      !!              - 1 < mbathy < jpkm1    
+      !!              - bathy > gdepw(jpk) => mbathy = jpkm1  
+      !!
+      !!        Then, for each case, we find the new depth at t- and w- levels
+      !!      and the new vertical scale factors at t-, u-, v-, w-, uw-, vw- 
+      !!      and f-points.
+      !! 
+      !!        This routine is given as an example, it must be modified
+      !!      following the user s desiderata. nevertheless, the output as
+      !!      well as the way to compute the model levels and scale factors
+      !!      must be respected in order to insure second order accuracy
+      !!      schemes.
+      !!
+      !!         c a u t i o n : gdept, gdepw and e3 are positives
+      !!         - - - - - - -   gdept_ps, gdepw_ps and e3_ps are positives
+      !!      
+      !!  Reference :
+      !!     Pacanowsky & Gnanadesikan 1997, Mon. Wea. Rev., 126, 3248-3270.
+      !!
+      !!  History :
+      !!    8.5  !  02-09 (A. Bozec, G. Madec)  F90: Free form and module
+      !!    9.0  !  02-09 (A. de Miranda)  rigid-lid + islands
+      !!----------------------------------------------------------------------
+      !! * Local declarations
+      INTEGER  ::   ji, jj, jk    ! dummy loop indices
+      INTEGER  ::   &
+         ik, it            ! temporary integers
+      
+      REAL(wp) ::   &  
+         ze3tp, ze3wp,    &  ! Last ocean level thickness at T- and W-points
+         zdepwp,          &  ! Ajusted ocean depth to avoid too small e3t
+         zdepth,          &  !    "         "
+         zmax, zmin,      &  ! Maximum and minimum depth
+         zdiff               ! temporary scalar
+
+      REAL(wp), DIMENSION(jpi,jpj) ::   &
+         zprt  !    "           "
+
+      LOGICAL ::  ll_print                          ! Allow  control print for debugging
+
+      !!---------------------------------------------------------------------
+      !! OPA8.5, LODYC-IPSL (2002)
+      !!---------------------------------------------------------------------
+      
+      ! Local variable for debugging
+      ll_print=.FALSE.
+!!!   ll_print=.TRUE.
+      
+      ! Initialization of constant
+      zmax = gdepw(jpk) + e3t(jpk)
+      zmin = gdepw(4)
+      
+      ! Ocean depth
+      IF(lwp .AND. ll_print) THEN 
+         WRITE(numout,*)
+         WRITE(numout,*) 'dom_zgr_zps:  bathy (in hundred of meters)'
+         CALL prihre( bathy, jpi, jpj, 1,jpi, 1, 1, jpj, 1, 1.e-2, numout )
+      ENDIF
+
+      IF(lwp) WRITE(numout,*)
+      IF(lwp) WRITE(numout,*) '    zgr_zps : z-coordinate with partial steps'
+      IF(lwp) WRITE(numout,*) '    ~~~~~~~ '
+      IF(lwp) WRITE(numout,*) '              mbathy is recomputed : bathy_level file is NOT used'
+
+
+      ! bathymetry in level (from bathy_meter)
+      ! ===================
+
+      ! initialize mbathy to the maximum ocean level available
+      mbathy(:,:) = jpkm1
+
+      ! storage of land and island's number (zera and negative values) in mbathy
+      DO jj = 1, jpj
+         DO ji= 1, jpi
+            IF( bathy(ji,jj) <= 0. )   mbathy(ji,jj) = INT( bathy(ji,jj) )
+         END DO
+      END DO
+
+      ! bounded value of bathy
+      ! minimum depth == 3 levels
+      ! maximum depth == gdepw(jpk)+e3t(jpk) 
+      ! i.e. the last ocean level thickness cannot exceed e3t(jpkm1)+e3t(jpk)
+      DO jj = 1, jpj
+         DO ji= 1, jpi
+            IF( bathy(ji,jj) <= 0. ) THEN
+               bathy(ji,jj) = 0.e0
+            ELSE
+               bathy(ji,jj) = MAX( bathy(ji,jj), zmin )
+               bathy(ji,jj) = MIN( bathy(ji,jj), zmax )
+            ENDIF
+         END DO
+      END DO
+
+      ! Compute mbathy for ocean points (i.e. the number of ocean levels)
+      ! find the number of ocean levels such that the last level thickness
+      ! is larger than the minimum of e3zps_min and e3zps_rat * e3t (where
+      ! e3t is the reference level thickness
+      DO jk = jpkm1, 1, -1
+         zdepth = gdepw(jk) + MIN( e3zps_min, e3t(jk)*e3zps_rat )
+         DO jj = 1, jpj
+            DO ji = 1, jpi
+               IF( 0. < bathy(ji,jj) .AND. bathy(ji,jj) <= zdepth )   mbathy(ji,jj) = jk-1
+            END DO
+         END DO
+      END DO
+
+     ! Scale factors and depth at T- and W-points
+     
+     ! intitialization to the reference z-coordinate
+     DO jk = 1, jpk
+        gdept_ps(:,:,jk) = gdept(jk)
+        gdepw_ps(:,:,jk) = gdepw(jk)
+        e3t_ps(:,:,jk) = e3t(jk)
+        e3w_ps(:,:,jk) = e3w(jk)
+     END DO
+     hdept(:,:) = gdept_ps(:,:,2 )
+     hdepw(:,:) = gdepw_ps(:,:,3 )     
+     
+     ! 
+     DO jj = 1, jpj
+        DO ji = 1, jpi
+           ik = mbathy(ji,jj)
+           ! ocean point only
+           IF( ik > 0 ) THEN
+              ! max ocean level case
+              IF( ik == jpkm1 ) THEN
+                 zdepwp = bathy(ji,jj)
+                 ze3tp  = bathy(ji,jj) - gdepw(ik)
+                 ze3wp = 0.5 * e3w(ik) * ( 1. + ( ze3tp/e3t(ik) ) )
+                 e3t_ps(ji,jj,ik  ) = ze3tp
+                 e3t_ps(ji,jj,ik+1) = ze3tp
+                 e3w_ps(ji,jj,ik  ) = ze3wp
+                 e3w_ps(ji,jj,ik+1) = ze3tp
+                 gdepw_ps(ji,jj,ik+1) = zdepwp
+                 gdept_ps(ji,jj,ik  ) = gdept(ik-1) + ze3wp
+                 gdept_ps(ji,jj,ik+1) = gdept_ps(ji,jj,ik) + ze3tp
+                 ! standard case
+              ELSE
+!!alex
+                 IF( bathy(ji,jj) <= gdepw(ik+1) ) THEN
+                    gdepw_ps(ji,jj,ik+1) = bathy(ji,jj)
+                 ELSE
+!!alex ctl          write(*,*) 'zps',ji,jj,'bathy', bathy(ji,jj), 'depw_ps ',gdepw(ik+1)
+                    gdepw_ps(ji,jj,ik+1) = gdepw(ik+1)
+                 ENDIF
+!!Alex
+!!Alex           gdepw_ps(ji,jj,ik+1) = bathy(ji,jj)
+                 gdept_ps(ji,jj,ik  ) =  gdepw(ik) + ( gdepw_ps(ji,jj,ik+1) - gdepw(ik))   &
+                                      * ((gdept   (      ik  ) - gdepw(ik))   &
+                                      / ( gdepw   (      ik+1) - gdepw(ik)))
+                 e3t_ps(ji,jj,ik) = e3t(ik) * ( gdepw_ps(ji,jj,ik+1) - gdepw(ik))   & 
+                                  /( gdepw   (      ik+1) - gdepw(ik)) 
+                 e3w_ps(ji,jj,ik) = 0.5 *( gdepw_ps(ji,jj,ik+1) + gdepw(ik+1)-2.*gdepw(ik))   &
+                                  *( e3w(ik) / ( gdepw(ik+1) - gdepw(ik)))
+                 !       ... on ik+1
+                 e3w_ps(ji,jj,ik+1) = e3t_ps(ji,jj,ik)
+                 e3t_ps(ji,jj,ik+1) = e3t_ps(ji,jj,ik)
+                 gdept_ps(ji,jj,ik+1) = gdept_ps(ji,jj,ik) + e3t_ps  (ji,jj,ik)
+              ENDIF
+           ENDIF
+        END DO
+     END DO
+
+     it = 0
+     DO jj = 1, jpj
+        DO ji = 1, jpi
+           ik = mbathy(ji,jj)
+           ! ocean point only
+           IF( ik > 0 ) THEN
+              ! bathymetry output
+              hdept(ji,jj) = gdept_ps(ji,jj,ik  )
+              hdepw(ji,jj) = gdepw_ps(ji,jj,ik+1)
+              e3tp (ji,jj) = e3t_ps(ji,jj,ik  )
+              e3wp (ji,jj) = e3w_ps(ji,jj,ik  )
+              ! test
+              zdiff= gdepw_ps(ji,jj,ik+1) - gdept_ps(ji,jj,ik  )
+              IF( zdiff <= 0. .AND. lwp ) THEN 
+                 it=it+1
+                 WRITE(numout,*) ' it      = ', it, ' ik      = ', ik, ' (i,j) = ', ji, jj
+                 WRITE(numout,*) ' bathy = ', bathy(ji,jj)
+                 WRITE(numout,*) ' gdept_ps= ', gdept_ps(ji,jj,ik), ' gdepw_ps= ', gdepw_ps(ji,jj,ik+1),   &
+                                 ' zdiff   = ', zdiff
+                 WRITE(numout,*) ' e3tp    = ', e3t_ps(ji,jj,ik  ), ' e3wp    = ', e3w_ps(ji,jj,ik  )
+              ENDIF
+           ENDIF
+        END DO
+      END DO
+
+      ! Scale factors and depth at U-, V-, UW and VW-points
+
+      ! initialisation to z-scale factors
+      DO jk = 1, jpk
+         e3u_ps (:,:,jk)  = e3t(jk)
+         e3v_ps (:,:,jk)  = e3t(jk)
+         e3uw_ps(:,:,jk)  = e3w(jk)
+         e3vw_ps(:,:,jk)  = e3w(jk)
+      END DO
+
+     ! Computed as the minimum of neighbooring scale factors
+     DO jk = 1,jpk
+        DO jj = 1, jpjm1
+           DO ji = 1, fs_jpim1   ! vector opt.
+              e3u_ps (ji,jj,jk) = MIN( e3t_ps(ji,jj,jk), e3t_ps(ji+1,jj,jk))
+              e3v_ps (ji,jj,jk) = MIN( e3t_ps(ji,jj,jk), e3t_ps(ji,jj+1,jk))
+              e3uw_ps(ji,jj,jk) = MIN( e3w_ps(ji,jj,jk), e3w_ps(ji+1,jj,jk) )
+              e3vw_ps(ji,jj,jk) = MIN( e3w_ps(ji,jj,jk), e3w_ps(ji,jj+1,jk) )
+           END DO
+        END DO
+     END DO
+     
+     ! Boundary conditions
+     CALL lbc_lnk( e3u_ps , 'U', 1. )   ;   CALL lbc_lnk( e3uw_ps, 'U', 1. )
+     CALL lbc_lnk( e3v_ps , 'V', 1. )   ;   CALL lbc_lnk( e3vw_ps, 'V', 1. )
+     
+     ! set to z-scale factor if zero (i.e. along closed boundaries)
+     DO jk = 1, jpk
+        DO jj = 1, jpj
+           DO ji = 1, jpi
+              IF( e3u_ps (ji,jj,jk) == 0.e0 ) e3u_ps (ji,jj,jk) = e3t(jk)
+              IF( e3v_ps (ji,jj,jk) == 0.e0 ) e3v_ps (ji,jj,jk) = e3t(jk)
+              IF( e3uw_ps(ji,jj,jk) == 0.e0 ) e3uw_ps(ji,jj,jk) = e3w(jk)
+              IF( e3vw_ps(ji,jj,jk) == 0.e0 ) e3vw_ps(ji,jj,jk) = e3w(jk)
+           END DO
+        END DO
+     END DO
+     
+     ! Scale factor at F-point
+     
+     ! initialisation to z-scale factors
+     DO jk = 1, jpk
+        e3f_ps (:,:,jk) = e3t(jk)
+     END DO
+     
+     ! Computed as the minimum of neighbooring V-scale factors
+     DO jk = 1, jpk
+        DO jj = 1, jpjm1
+           DO ji = 1, fs_jpim1   ! vector opt.
+              e3f_ps(ji,jj,jk) = MIN( e3v_ps(ji,jj,jk), e3v_ps(ji+1,jj,jk) )
+           END DO
+        END DO
+     END DO
+     ! Boundary conditions
+     CALL lbc_lnk( e3f_ps, 'F', 1. )
+     
+     ! set to z-scale factor if zero (i.e. along closed boundaries)
+     DO jk = 1, jpk
+        DO jj = 1, jpj
+           DO ji = 1, jpi
+              IF( e3f_ps(ji,jj,jk) == 0.e0 ) e3f_ps(ji,jj,jk) = e3t(jk)
+           END DO
+        END DO
+     END DO
+     ! we duplicate factor scales for jj = 1 and jj = 2
+     e3t_ps(:,mj0(1),:) = e3t_ps(:,mj0(2),:) 
+     e3w_ps(:,mj0(1),:) = e3w_ps(:,mj0(2),:) 
+     e3u_ps(:,mj0(1),:) = e3u_ps(:,mj0(2),:) 
+     e3v_ps(:,mj0(1),:) = e3v_ps(:,mj0(2),:) 
+     e3f_ps(:,mj0(1),:) = e3f_ps(:,mj0(2),:) 
+
+
+     
+     ! Compute gdep3w (vertical sum of e3w)
+     
+     gdep3w   (:,:,1) = 0.5 * e3w_ps (:,:,1)
+     DO jk = 2, jpk
+        gdep3w   (:,:,jk) = gdep3w   (:,:,jk-1) + e3w_ps (:,:,jk) 
+     END DO
+          
+     ! Control print
+ 9600 FORMAT(9x,' level   gdept    gdepw     e3t      e3w   ')
+ 9610 FORMAT(10x,i4,4f9.2)
+      IF(lwp .AND. ll_print) THEN
+         DO jj = 1,jpj
+            DO ji = 1, jpi
+               ik = MAX(mbathy(ji,jj),1)
+               zprt(ji,jj) = e3t_ps(ji,jj,ik)
+            END DO
+         END DO
+         WRITE(numout,*)
+         WRITE(numout,*) 'domzgr e3t(mbathy)'
+         CALL prihre(zprt,jpi,jpj,1,jpi,1,1,jpj,1,1.e-3,numout)
+         DO jj = 1,jpj
+            DO ji = 1, jpi
+               ik = MAX(mbathy(ji,jj),1)
+               zprt(ji,jj) = e3w_ps(ji,jj,ik)
+            END DO
+         END DO
+         WRITE(numout,*)
+         WRITE(numout,*) 'domzgr e3w(mbathy)'
+         CALL prihre(zprt,jpi,jpj,1,jpi,1,1,jpj,1,1.e-3,numout)
+         DO jj = 1,jpj
+            DO ji = 1, jpi
+               ik = MAX(mbathy(ji,jj),1)
+               zprt(ji,jj) = e3u_ps(ji,jj,ik)
+            END DO
+         END DO
+
+         WRITE(numout,*)
+         WRITE(numout,*) 'domzgr e3u(mbathy)'
+         CALL prihre(zprt,jpi,jpj,1,jpi,1,1,jpj,1,1.e-3,numout)
+         DO jj = 1,jpj
+            DO ji = 1, jpi
+               ik = MAX(mbathy(ji,jj),1)
+               zprt(ji,jj) = e3v_ps(ji,jj,ik)
+            END DO
+         END DO
+         WRITE(numout,*)
+         WRITE(numout,*) 'domzgr e3v(mbathy)'
+         CALL prihre(zprt,jpi,jpj,1,jpi,1,1,jpj,1,1.e-3,numout)
+         DO jj = 1,jpj
+            DO ji = 1, jpi
+               ik = MAX(mbathy(ji,jj),1) 
+               zprt(ji,jj) = e3f_ps(ji,jj,ik)
+            END DO
+         END DO
+
+         WRITE(numout,*)
+         WRITE(numout,*) 'domzgr e3f(mbathy)'
+         CALL prihre(zprt,jpi,jpj,1,jpi,1,1,jpj,1,1.e-3,numout)
+         DO jj = 1,jpj
+            DO ji = 1, jpi
+               ik =  MAX(mbathy(ji,jj),1)
+               zprt(ji,jj) = gdep3w(ji,jj,ik)
+            END DO
+         END DO
+         WRITE(numout,*)
+         WRITE(numout,*) 'domzgr gdep3w(mbathy)'
+         CALL prihre(zprt,jpi,jpj,1,jpi,1,1,jpj,1,1.e-3,numout)
+
+      ENDIF  
+
+
+      DO jk = 1,jpk
+         DO jj = 1, jpj
+            DO ji = 1, jpi 
+               IF( e3w_ps(ji,jj,jk) <= 0. .or. e3t_ps(ji,jj,jk) <= 0. ) THEN
+                  IF(lwp) THEN
+                     WRITE(numout,*) ' e r r o r :         e3w or e3t =< 0 '
+                     WRITE(numout,*) ' =========           --------------- '
+                     WRITE(numout,*)
+                  ENDIF
+                  STOP 'domzgr.psteps'
+               ENDIF
+               IF( gdepw_ps(ji,jj,jk) < 0. .or. gdept_ps(ji,jj,jk) < 0. ) THEN
+                  IF(lwp) THEN
+                     WRITE(numout,*) ' e r r o r :      gdepw or gdept < 0 '
+                     WRITE(numout,*) ' =========        ------------------ '
+                     WRITE(numout,*)
+                  ENDIF
+                  STOP 'domzgr.psteps'
+               ENDIF
+            END DO
+         END DO
+      END DO  
+
+   IF(lwp) THEN
+      WRITE(numout,*) ' e3t lev 21 '
+      CALL prihre(e3t_ps(:,:,21),jpi,jpj,50,59,1,1,5,1,0.,numout)
+      WRITE(numout,*) ' e3w lev 21  '
+      CALL prihre(e3w_ps(:,:,21),jpi,jpj,50,59,1,1,5,1,0.,numout)
+      WRITE(numout,*) ' e3u lev 21  '
+      CALL prihre(e3u_ps(:,:,21),jpi,jpj,50,59,1,1,5,1,0.,numout)
+      WRITE(numout,*) ' e3v lev 21  '
+      CALL prihre(e3v_ps(:,:,21),jpi,jpj,50,59,1,1,5,1,0.,numout)
+      WRITE(numout,*) ' e3f lev 21  '
+      CALL prihre(e3f_ps(:,:,21),jpi,jpj,50,59,1,1,5,1,0.,numout)
+      WRITE(numout,*) ' e3t lev 22 '
+      CALL prihre(e3t_ps(:,:,22),jpi,jpj,50,59,1,1,5,1,0.,numout)
+      WRITE(numout,*) ' e3w lev 22  '
+      CALL prihre(e3w_ps(:,:,22),jpi,jpj,50,59,1,1,5,1,0.,numout)
+      WRITE(numout,*) ' e3u lev 22  '
+      CALL prihre(e3u_ps(:,:,22),jpi,jpj,50,59,1,1,5,1,0.,numout)
+      WRITE(numout,*) ' e3v lev 22  '
+      CALL prihre(e3v_ps(:,:,22),jpi,jpj,50,59,1,1,5,1,0.,numout)
+      WRITE(numout,*) ' e3f lev 22  '
+      CALL prihre(e3f_ps(:,:,22),jpi,jpj,50,59,1,1,5,1,0.,numout)
+   ENDIF
+
+      ! ===========
+      ! Zoom domain 
+      ! ===========
+
+      IF( lzoom )   CALL zgr_bat_zoom
+
+      ! ================
+      ! Bathymetry check
+      ! ================
+
+      CALL zgr_bat_ctl
+
+
+   END SUBROUTINE zgr_zps
+
+#else
+   !!----------------------------------------------------------------------
+   !!   Default option :                                      Empty routine
+   !!----------------------------------------------------------------------
+   SUBROUTINE zgr_zps
+   END SUBROUTINE zgr_zps
+#endif

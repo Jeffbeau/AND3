@@ -1,0 +1,32 @@
+   !!---------------------------------------------------------------------
+   !!                     ***  sms_cfc.h90  ***  
+   !!                    CFC Source Minus Sink model
+   !!---------------------------------------------------------------------
+
+   !!----------------------------------------------------------------------
+   !!  TOP 1.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/TOP_SRC/SMS/sms_cfc.h90,v 1.6 2005/11/14 16:42:42 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+   !!----------------------------------------------------------------------
+
+    INTEGER, PUBLIC :: &
+       ndate_beg,     & ! initial calendar date (aammjj) for CFC
+       nyear_res,     & ! restoring time constant (year)
+       nyear_beg        ! initial year (aa) 
+   
+    REAL(wp), PUBLIC, DIMENSION(jpi,jpj)  ::  &
+       xphem            ! spatial interpolation factor for patm
+
+
+    REAL(wp), PUBLIC, DIMENSION(jpyear,jphem, jptra)  ::  &   
+       p_cfc            ! partial hemispheric pressure for CFC          
+
+ 
+    REAL(wp), PUBLIC, DIMENSION(jpi,jpj,jptra) ::  &  
+       pp_cfc           ! temporal interpolation of atmospheric concentrations 
+
+
+    REAL(wp), PUBLIC, DIMENSION(jpi,jpj,jptra) ::  &  
+       qtr,          & ! input function
+       qint            ! flux function
+

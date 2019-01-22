@@ -1,0 +1,554 @@
+#-
+#- $Id: AA_make.gdef,v 2.24 2006/03/24 15:31:56 adm Exp $
+#-
+#-Q- aix      #- Global definitions for IBM AIX (MPP)
+#-Q- aix      M_K = gmake
+#-Q- aix      P_C = /usr/lib/cpp
+#-Q- aix      P_O = -P -I/usr/lpp/ppe.poe/include/thread64 -C $(P_P:-WF,-D%=-D%)
+#-Q- aix      F_C = mpxlf90_r -c
+#-Q- aix      #-D- MD    F_D =
+#-Q- aix      #-D- MN    F_D =
+#-Q- aix      #-P- I4R4  F_P = -qrealsize=4
+#-Q- aix      #-P- I4R8  F_P = -qrealsize=8
+#-Q- aix      #-P- I8R8  F_P =
+#-Q- aix      #-P- ??    F_P = -qrealsize=8
+#-Q- aix      w_w = $(F_P) -O3 -qsuffix=f=f90
+#-Q- aix      F_O = $(w_w) -I$(MODDIR) -qmoddir=$(MODDIR)
+#-Q- aix      F_L = mpxlf90_r
+#-Q- aix      L_O = $(F_P) -q64 -bmaxdata:2000000000 -O3
+#-Q- aix      A_C = ar -rs -X64
+#-Q- aix      A_G = ar -x -X64
+#-Q- aix      C_C = cc -c
+#-Q- aix      C_O = -O
+#-Q- aix      C_L = cc
+#-Q- aix      #-
+#-Q- aix      NCDF_INC = /usr/local/pub/include
+#-Q- aix      NCDF_LIB = -L/usr/local/pub/lib -lnetcdf
+#-Q- aix      #-
+#-Q- ax_mono  #- Global definitions for IBM AIX (monoprocessing)
+#-Q- ax_mono  M_K = gmake
+#-Q- ax_mono  P_C = /usr/ccs/lib/cpp
+#-Q- ax_mono  P_O = $(P_P)
+#-Q- ax_mono  F_C = xlf90_r -c
+#-Q- ax_mono  #-D- MD    F_D =
+#-Q- ax_mono  #-D- MN    F_D =
+#-Q- ax_mono  #-P- I4R4  F_P = -qrealsize=4
+#-Q- ax_mono  #-P- I4R8  F_P = -qrealsize=8
+#-Q- ax_mono  #-P- I8R8  F_P =
+#-Q- ax_mono  #-P- ??    F_P = -qrealsize=8
+#-Q- ax_mono  w_w = $(F_P) -O3 -qsuffix=f=f90
+#-Q- ax_mono  F_O = $(w_w) -I$(MODDIR) -qmoddir=$(MODDIR)
+#-Q- ax_mono  F_L = xlf90_r
+#-Q- ax_mono  L_O = $(F_P) -q64 -bmaxdata:2000000000 -O3
+#-Q- ax_mono  A_C = ar -rs
+#-Q- ax_mono  A_G = ar -x
+#-Q- ax_mono  C_C = cc -c
+#-Q- ax_mono  C_O =
+#-Q- ax_mono  C_L = cc
+#-Q- ax_mono  #-
+#-Q- ax_mono  NCDF_INC = /usr/local/pub/include
+#-Q- ax_mono  NCDF_LIB = -L/usr/local/pub/lib -lnetcdf
+#-Q- ax_mono  #-
+#-Q- cray     #- Global definitions for CRAY
+#-Q- cray     M_K = make
+#-Q- cray     P_C = cpp
+#-Q- cray     P_O = -P -C $(P_P)
+#-Q- cray     F_C = f90 -c
+#-Q- cray     #-D- MD    F_D =
+#-Q- cray     #-D- MN    F_D =
+#-Q- cray     #-P- I4R4  F_P =
+#-Q- cray     #-P- I4R8  F_P =
+#-Q- cray     #-P- I8R8  F_P =
+#-Q- cray     #-P- ??    F_P =
+#-Q- cray     F_O = $(F_D) $(F_P) -v -p $(MODEL_LIB)
+#-Q- cray     F_L = f90
+#-Q- cray     L_O =
+#-Q- cray     A_C = bld -r
+#-Q- cray     A_G = bld -x
+#-Q- cray     C_C = cc -c
+#-Q- cray     C_O = -Wall
+#-Q- cray     C_L = cc
+#-Q- cray     #-
+#-Q- cray     NCDF_INC = /usr/local/pub/include
+#-Q- cray     NCDF_LIB = -L/usr/local/pub/lib -lnetcdf
+#-Q- cray     #-
+#-Q- Darwin   #- Global definitions for Mac OSX, g95
+#-Q- Darwin   M_K = make
+#-Q- Darwin   P_C = cpp
+#-Q- Darwin   P_O = -fpreprocessed -P -C -traditional $(P_P)
+#-Q- Darwin   F_C = /usr/local/bin/mpif90 -fno-second-underscore -c
+#-Q- Darwin   #-D- MD    F_D =
+#-Q- Darwin   #-D- MN    F_D =
+#-Q- Darwin   #-P- I4R4  F_P = -i4
+#-Q- Darwin   #-P- I4R8  F_P = -i4 -r8
+#-Q- Darwin   #-P- I8R8  F_P = -i8 -r8
+#-Q- Darwin   #-P- ??    F_P =
+#-Q- Darwin   F_O = -I$(MODDIR)
+#-Q- Darwin   F_L = f90
+#-Q- Darwin   L_O =
+#-Q- Darwin   A_C = ar -rs
+#-Q- Darwin   A_G = ar -x
+#-Q- Darwin   C_C = cc -c
+#-Q- Darwin   C_O =
+#-Q- Darwin   C_L = cc
+#-Q- Darwin   #-
+#-Q- Darwin   NCDF_INC = /usr/local/include
+#-Q- Darwin   NCDF_LIB = -L/usr/local/lib -lnetcdf
+#-Q- Darwin   #-
+#-Q- fjvpp    #- Global definitions for FUJITSU VPP
+#-Q- fjvpp    M_K = gmake
+#-Q- fjvpp    P_C = cpp
+#-Q- fjvpp    P_O = -P -C $(P_P)
+#-Q- fjvpp    F_C = frt -c
+#-Q- fjvpp    #-D- MD    F_D =
+#-Q- fjvpp    #-D- MN    F_D =
+#-Q- fjvpp    #-P- I4R4  F_P = -AD
+#-Q- fjvpp    #-P- I4R8  F_P = -Ad
+#-Q- fjvpp    #-P- I8R8  F_P = -Ad
+#-Q- fjvpp    #-P- ??    F_P = -Ad
+#-Q- fjvpp    w_w = -X9 -Oe -Sw $(F_D) $(F_P) -Am -M$(MODDIR)
+#-Q- fjvpp    F_O = $(w_w) -Of -Wv,-Of,-ilfunc,-preload
+#-Q- fjvpp    F_L = frt
+#-Q- fjvpp    L_O = -Wg,-c -Wl,-J,-t,-dy
+#-Q- fjvpp    A_C = ar -r
+#-Q- fjvpp    A_G = ar -x
+#-Q- fjvpp    C_C = cc -c
+#-Q- fjvpp    C_O =
+#-Q- fjvpp    C_L = cc
+#-Q- fjvpp    #-
+#-Q- fjvpp    NCDF_INC = /usr/local/include/netcdf
+#-Q- fjvpp    NCDF_LIB = /usr/local/lib/netcdf/libnetcdf.a
+#-Q- fjvpp    #-
+#-Q- gfortran      #- Global definitions for gnu gfortran compiler
+#-Q- gfortran      M_K = gmake
+#-Q- gfortran      P_C = cpp
+#-Q- gfortran      P_O = -P -C -traditional $(P_P)
+#-Q- gfortran      F_C = /usr/bin/mpif90 -c
+#-Q- gfortran      #-D- MD    F_D =
+#-Q- gfortran      #-D- MN    F_D =
+#-Q- gfortran      #-P- I4R4  F_P =
+#-Q- gfortran      #-P- I4R8  F_P = -fdefault-real-8
+#-Q- gfortran      #-P- I8R8  F_P = -fdefault-integer-8 -fdefault-real-8
+#-Q- gfortran      #-P- ??    F_P = -fdefault-real-8
+#-Q- gfortran      w_w = -O2 -funroll-all-loops $(F_D) $(F_P) -I$(MODDIR)
+#-Q- gfortran      F_O = $(w_w) -J$(MODDIR) -fno-second-underscore
+#-Q- gfortran      F_L =  /usr/bin/mpif90
+#-Q- gfortran      L_O =
+#-Q- gfortran      A_C = ar -r
+#-Q- gfortran      A_G = ar -x
+#-Q- gfortran      C_C = cc -c
+#-Q- gfortran      C_O =
+#-Q- gfortran      C_L = cc
+#-Q- gfortran      #-
+#-Q- gfortran      NCDF_INC = /share/apps/netcdf362_gfort/include
+#-Q- gfortran      NCDF_LIB = -L/share/apps/netcdf362_gfort/lib -lnetcdf
+#-Q- gfortran      #-
+#-Q- g95      #- Global definitions for gnu g95 compiler
+#-Q- g95      M_K = gmake
+#-Q- g95      P_C = cpp
+#-Q- g95      P_O = -P -C -traditional $(P_P)
+#-Q- g95      F_C = g95 -c
+#-Q- g95      #-D- MD    F_D =
+#-Q- g95      #-D- MN    F_D =
+#-Q- g95      #-P- I4R4  F_P = -i4
+#-Q- g95      #-P- I4R8  F_P = -i4 -r8
+#-Q- g95      #-P- I8R8  F_P = -i8 -r8
+#-Q- g95      #-P- ??    F_P = -i4 -r8
+#-Q- g95      w_w = -O5 -funroll-all-loops $(F_D) $(F_P) -I$(MODDIR)
+#-Q- g95      F_O = $(w_w) -fmod=$(MODDIR) -fno-second-underscore
+#-Q- g95      F_L = g95
+#-Q- g95      L_O =
+#-Q- g95      A_C = ar -r
+#-Q- g95      A_G = ar -x
+#-Q- g95      C_C = cc -c
+#-Q- g95      C_O =
+#-Q- g95      C_L = cc
+#-Q- g95      #-
+#-Q- g95      NCDF_INC = /usr/local/include
+#-Q- g95      NCDF_LIB = -L/usr/local/lib -lnetcdf
+#-Q- g95      #-
+#-Q- eshpux     #- Global definitions for eshpux used as Earth Simulator front-end
+#-Q- eshpux     M_K = gmake
+#-Q- eshpux     P_C = escpp
+#-Q- eshpux     # FTRACE used for profiling
+#-Q- eshpux     FTRACE = -ftrace
+#-Q- eshpux     # FTRACE =
+#-Q- eshpux     P_O = -P -C $(P_P)
+#-Q- eshpux     F_C = esmpif90 -c
+#-Q- eshpux     #-D- MD    F_D =
+#-Q- eshpux     #-D- MN    F_D =
+#-Q- eshpux     #-P- I4R4  F_P = -dW
+#-Q- eshpux     #-P- I4R8  F_P = -dW -Wf\"-A idbl4\"
+#-Q- eshpux     #-P- I8R8  F_P = -ew
+#-Q- eshpux     #-P- ??    F_P = -dW -Wf\"-A idbl4\"
+#-Q- eshpux     F_O = $(F_D) $(F_P) $(FTRACE) -I $(MODDIR)
+#-Q- eshpux     F_L = esmpif90
+#-Q- eshpux     L_O = $(F_P) $(FTRACE)
+#-Q- eshpux     A_C = ar -rv
+#-Q- eshpux     A_G = ar -x
+#-Q- eshpux     A_X = esar -rv
+#-Q- eshpux     C_C = esmpicc -c
+#-Q- eshpux     C_O =
+#-Q- eshpux     C_L = esmpicc
+#-Q- eshpux     FC_C = cc -c
+#-Q- eshpux     FC_O =
+#-Q- eshpux     FC_L = cc
+#-Q- eshpux     #-
+#-Q- eshpux     NETCDFROOT = /S/home010/c0010/ES
+#-Q- eshpux     NCDF_INC = $(NETCDFROOT)/include
+#-Q- eshpux     NCDF_LIB = -L$(NETCDFROOT)/lib -lnetcdf
+#-Q- eshpux     #-
+#-Q- linux    #- Global definitions for LINUX
+#-Q- linux    M_K = make
+#-Q- linux    P_C = /lib/cpp
+#-Q- linux    P_O = -P -C -traditional $(P_P)
+#-Q- linux    F_C = pgf90 -c
+#-Q- linux    #-D- MD    F_D =
+#-Q- linux    #-D- MN    F_D =
+#-Q- linux    #-P- I4R4  F_P = -i4
+#-Q- linux    #-P- I4R8  F_P = -i4 -r8
+#-Q- linux    #-P- I8R8  F_P = -i8 -r8
+#-Q- linux    #-P- ??    F_P = -i4 -r4
+#-Q- linux    F_O = $(F_D) $(F_P) -Mfree -module $(MODDIR)
+#-Q- linux    F_L = pgf90
+#-Q- linux    L_O = -Wl,-Bstatic -Mbounds
+#-Q- linux    A_C = ar -r
+#-Q- linux    A_G = ar -x
+#-Q- linux    C_C = gcc -c
+#-Q- linux    C_O = -Wall
+#-Q- linux    C_L = gcc
+#-Q- linux    #-
+#-Q- linux    NCDF_INC = /distrib/local/netcdf/pgf/include/
+#-Q- linux    NCDF_LIB = -L/distrib/local/netcdf/pgf/lib/ -lnetcdf
+#-Q- linux    #-
+#-Q- lxiv7    #- Global definitions for Linux Compiler Intel V7
+#-Q- lxiv7    M_K = gmake
+#-Q- lxiv7    P_C = cpp
+#-Q- lxiv7    P_O = -P -C $(P_P)
+#-Q- lxiv7    F_C = ifc -c
+#-Q- lxiv7    #-D- MD    F_D = -g
+#-Q- lxiv7    #-D- MN    F_D =
+#-Q- lxiv7    #-P- I4R4  F_P = -i4
+#-Q- lxiv7    #-P- I4R8  F_P = -i4 -r8
+#-Q- lxiv7    #-P- I8R8  F_P = -i8 -r8
+#-Q- lxiv7    #-P- ??    F_P =
+#-Q- lxiv7    F_O = -O $(F_D) $(F_P) -I$(MODDIR) -module $(MODDIR)
+#-Q- lxiv7    F_L = ifc
+#-Q- lxiv7    L_O = -Vaxlib
+#-Q- lxiv7    A_C = ar -r
+#-Q- lxiv7    A_G = ar -x
+#-Q- lxiv7    C_C = cc -c
+#-Q- lxiv7    C_O =
+#-Q- lxiv7    C_L = cc
+#-Q- lxiv7    #-
+#-Q- lxiv7    NCDF_INC = /usr/local/include
+#-Q- lxiv7    NCDF_LIB = -L/usr/local/lib -lnetcdf
+#-Q- lxiv7    #-
+#-Q- lxiv8    #- Global definitions for Linux Compiler Intel v8
+#-Q- lxiv8    M_K = gmake
+#-Q- lxiv8    P_C = cpp
+#-Q- lxiv8    P_O = -P -C $(P_P)
+#-Q- lxiv8    NCDF_INC = /share/apps/netcdf362_intel101/include
+#-Q- lxiv8    NCDF_LIB = -L/share/apps/netcdf362_intel101/lib -lnetcdf
+#-Q- lxiv8    NCDF_FC = -I$(NCDF_INC) $(NCDF_LIB)
+#-Q- lxiv8    F_C = /share/apps/mpich2_105_intel101/bin/mpif90 -c -cpp -CB  -L/share/apps/netcdf362_intel101/lib -lnetcdf  -I/share/apps/netcdf362_intel101/include
+#-Q- lxiv8    #-D- MD    F_D = -g
+#-Q- lxiv8    #-D- MN    F_D =
+#-Q- lxiv8    #-P- I4R4  F_P = -i4
+#-Q- lxiv8    #-P- I4R8  F_P = -i4 -r8
+#-Q- lxiv8    #-P- I8R8  F_P = -i8 -r8
+#-Q- lxiv8    #-P- ??    F_P =
+#-Q- lxiv8    F_O =  -O3 -i_dynamic $(F_D) $(F_P) -I$(MODDIR) -module $(MODDIR)
+#-Q- lxiv8    F_L = /share/apps/mpich2_105_intel101/bin/mpif90 -O3 -i_dynamic
+#-Q- lxiv8    L_O = -Vaxlib
+#-Q- lxiv8    A_C = ar -r
+#-Q- lxiv8    A_G = ar -x
+#-Q- lxiv8    C_C = cc -c
+#-Q- lxiv8    C_O =
+#-Q- lxiv8    C_L = cc
+#-Q- lxiv8    #-
+#-Q- lxiv8    #-
+#-Q- newsys   #- Global definitions for System Test
+#-Q- newsys   M_K = make
+#-Q- newsys   P_C = cpp
+#-Q- newsys   P_O = -P -C $(P_P)
+#-Q- newsys   F_C = f90 -c
+#-Q- newsys   #-D- MD    F_D =
+#-Q- newsys   #-D- MN    F_D =
+#-Q- newsys   #-P- I4R4  F_P =
+#-Q- newsys   #-P- I4R8  F_P =
+#-Q- newsys   #-P- I8R8  F_P =
+#-Q- newsys   #-P- ??    F_P =
+#-Q- newsys   F_O = $(F_D) $(F_P) -M$(MODDIR) -fast
+#-Q- newsys   F_L = f90
+#-Q- newsys   L_O =
+#-Q- newsys   A_C = ar -r
+#-Q- newsys   A_G = ar -x
+#-Q- newsys   C_C = cc -c
+#-Q- newsys   C_O =
+#-Q- newsys   C_L = cc
+#-Q- newsys   #-
+#-Q- newsys   NCDF_INC = /distrib/local/include
+#-Q- newsys   NCDF_LIB = -L/distrib/local/lib -lnetcdf
+#-Q- newsys   #-
+#-Q- osf1     #- Global definitions for DEC OSF1
+#-Q- osf1     M_K = gmake
+#-Q- osf1     P_C = cpp
+#-Q- osf1     P_O = -P -C $(P_P)
+#-Q- osf1     F_C = f90 -c
+#-Q- osf1     #-D- MD    F_D = -g
+#-Q- osf1     #-D- MN    F_D =
+#-Q- osf1     #-P- I4R4  F_P =
+#-Q- osf1     #-P- I4R8  F_P = -r8
+#-Q- osf1     #-P- I8R8  F_P = -i8 -r8
+#-Q- osf1     #-P- ??    F_P =
+#-Q- osf1     F_O = -O $(F_D) $(F_P) -I$(MODDIR) -module $(MODDIR)
+#-Q- osf1     F_L = f90
+#-Q- osf1     L_O =
+#-Q- osf1     A_C = ar -r
+#-Q- osf1     A_G = ar -x
+#-Q- osf1     C_C = cc -c
+#-Q- osf1     C_O =
+#-Q- osf1     C_L = cc
+#-Q- osf1     #-
+#-Q- osf1     NCDF_INC = /usr/local/include
+#-Q- osf1     NCDF_LIB = -L/usr/local/lib -lnetcdf
+#-Q- osf1     #-
+#-Q- osxxlf   #- Global definitions for Mac OS X and IBM xlf compiler
+#-Q- osxxlf   M_K = make
+#-Q- osxxlf   P_C = /usr/bin/cpp
+#-Q- osxxlf   P_O = -P -C $(P_P:-WF,-D%=-D%)
+#-Q- osxxlf   F_C = xlf90 -c
+#-Q- osxxlf   #-D- MD    F_D = -g -C
+#-Q- osxxlf   #-D- MN    F_D =
+#-Q- osxxlf   #-P- I4R4  F_P = -qintsize=4 -qrealsize=4
+#-Q- osxxlf   #-P- I4R8  F_P = -qintsize=4 -qrealsize=8
+#-Q- osxxlf   #-P- I8R8  F_P = -qintsize=8 -qrealsize=8
+#-Q- osxxlf   #-P- ??    F_P =
+#-Q- osxxlf   w_w = $(F_P) -O2 $(F_D) -qsuffix=f=f90
+#-Q- osxxlf   F_O = $(w_w) -I$(MODDIR) -qmoddir=$(MODDIR)
+#-Q- osxxlf   F_L = xlf90
+#-Q- osxxlf   L_O = $(F_P) -O2
+#-Q- osxxlf   A_C = ar -rs
+#-Q- osxxlf   A_G = ar -x
+#-Q- osxxlf   C_C = cc -c
+#-Q- osxxlf   C_O =
+#-Q- osxxlf   C_L = cc
+#-Q- osxxlf   #-
+#-Q- osxxlf   NCDF_INC = /usr/local/install/netcdf-3.6.0-p1/include
+#-Q- osxxlf   NCDF_LIB = -L/usr/local/install/netcdf-3.6.0-p1/lib -lnetcdf
+#-Q- osxxlf   #-
+#-Q- sgi6     #- Global definitions for IRIX64 (sgi6)
+#-Q- sgi6     M_K = gmake
+#-Q- sgi6     P_C = cpp
+#-Q- sgi6     P_O = -P -C $(P_P)
+#-Q- sgi6     F_C = f90 -c
+#-Q- sgi6     #-D- MD    F_D =
+#-Q- sgi6     #-D- MN    F_D =
+#-Q- sgi6     #-P- I4R4  F_P = -i4 -r4
+#-Q- sgi6     #-P- I4R8  F_P = -i4 -r8
+#-Q- sgi6     #-P- I8R8  F_P = -i8 -r8
+#-Q- sgi6     #-P- ??    F_P = -i4 -r8
+#-Q- sgi6     F_O = $(F_D) $(F_P) -I $(MODDIR)
+#-Q- sgi6     F_L = f90
+#-Q- sgi6     L_O =
+#-Q- sgi6     A_C = ar -r
+#-Q- sgi6     A_G = ar -x
+#-Q- sgi6     C_C = cc -c
+#-Q- sgi6     C_O =
+#-Q- sgi6     C_L = cc
+#-Q- sgi6     #-
+#-Q- sgi6     NCDF_INC = /usr/local/pub/include
+#-Q- sgi6     NCDF_LIB = -L/usr/local/pub/lib64 -lnetcdf
+#-Q- sgi6     #-
+#-Q- solaris  #- Global definitions for SOLARIS
+#-Q- solaris  M_K = make
+#-Q- solaris  P_C = cpp
+#-Q- solaris  P_O = -P -C $(P_P)
+#-Q- solaris  F_C = f90 -c
+#-Q- solaris  #-D- MD    F_D =
+#-Q- solaris  #-D- MN    F_D =
+#-Q- solaris  #-P- I4R4  F_P =
+#-Q- solaris  #-P- I4R8  F_P = -r8const
+#-Q- solaris  #-P- I8R8  F_P = -i8const -r8const
+#-Q- solaris  #-P- ??    F_P =
+#-Q- solaris  F_O = $(F_D) $(F_P) -M$(MODDIR) -fast
+#-Q- solaris  F_L = f90
+#-Q- solaris  L_O =
+#-Q- solaris  A_C = ar -r
+#-Q- solaris  A_G = ar -x
+#-Q- solaris  C_C = cc -c
+#-Q- solaris  C_O =
+#-Q- solaris  C_L = cc
+#-Q- solaris  #-
+#-Q- solaris  NCDF_INC = /distrib/local/include
+#-Q- solaris  NCDF_LIB = -L/distrib/local/lib -lnetcdf
+#-Q- solaris  #-
+#-Q- sxdkrz   #- Global definitions for sx6nec (DKRZ)
+#-Q- sxdkrz   LIB_MPI = MPI2
+#-Q- sxdkrz   LIB_MPI_BIS =
+#-Q- sxdkrz   PRISM_ARCH = SX
+#-Q- sxdkrz   PRISM_NAME = ds
+#-Q- sxdkrz   M_K = gmake
+#-Q- sxdkrz   P_C = cpp
+#-Q- sxdkrz   P_O = -P -C $(P_P)
+#-Q- sxdkrz   F_C = sxmpif90 -c
+#-Q- sxdkrz   #-D- MD    F_D =
+#-Q- sxdkrz   #-D- MN    F_D =
+#-Q- sxdkrz   #-P- I4R4  F_P = -dw
+#-Q- sxdkrz   #-P- I4R8  F_P = -dw -Wf\"-A idbl4\"
+#-Q- sxdkrz   #-P- I8R8  F_P = -ew
+#-Q- sxdkrz   #-P- ??    F_P = -dw -Wf\"-A idbl4\"
+#-Q- sxdkrz   F_O = $(F_D) $(F_P) -I $(MODDIR)
+#-Q- sxdkrz   F_L = sxmpif90
+#-Q- sxdkrz   L_O = $(F_P)
+#-Q- sxdkrz   A_C = ar -rv
+#-Q- sxdkrz   A_G = ar -x
+#-Q- sxdkrz   A_X = sxar -rv
+#-Q- sxdkrz   C_C = sxcc -c
+#-Q- sxdkrz   C_O =
+#-Q- sxdkrz   C_L = sxcc
+#-Q- sxdkrz   FC_C = cc -c
+#-Q- sxdkrz   FC_O =
+#-Q- sxdkrz   FC_L = cc
+#-Q- sxdkrz   #-
+#-Q- sxdkrz   NCDF_INC = /pool/SX-6/netcdf/netcdf-3.5.0/include
+#-Q- sxdkrz   NCDF_LIB = -L/pool/SX-6/netcdf/netcdf-3.5.0/lib -lnetcdf_A_idbl4
+#-Q- sxdkrz   #-
+#-Q- sxnec    #- Global definitions for SXNEC :
+#-Q- sxnec    #- compilation on rhodes for NEC SX-5
+#-Q- sxnec    LIB_MPI = MPI2
+#-Q- sxnec    LIB_MPI_BIS =
+#-Q- sxnec    PRISM_ARCH = SX
+#-Q- sxnec    PRISM_NAME = rhodes
+#-Q- sxnec    M_K = gmake
+#-Q- sxnec    P_C = sxcpp
+#-Q- sxnec    P_O = -P -C $(P_P)
+#-Q- sxnec    F_C = sxmpif90 -c
+#-Q- sxnec    #-D- MD    F_D =
+#-Q- sxnec    #-D- MN    F_D =
+#-Q- sxnec    #-P- I4R4  F_P = -dW
+#-Q- sxnec    #-P- I4R8  F_P = -dW -Wf\"-A idbl4\"
+#-Q- sxnec    #-P- I8R8  F_P = -ew
+#-Q- sxnec    #-P- ??    F_P = -dW -Wf\"-A idbl4\"
+#-Q- sxnec    F_O = $(F_D) $(F_P) -I $(MODDIR)
+#-Q- sxnec    F_L = sxmpif90
+#-Q- sxnec    L_O = $(F_P)
+#-Q- sxnec    A_C = ar -rv
+#-Q- sxnec    A_G = ar -x
+#-Q- sxnec    A_X = sxar -rv
+#-Q- sxnec    C_C = sxcc -c
+#-Q- sxnec    C_O =
+#-Q- sxnec    C_L = sxcc
+#-Q- sxnec    FC_C = cc -c
+#-Q- sxnec    FC_O =
+#-Q- sxnec    FC_L = cc
+#-Q- sxnec    #-
+#-Q- sxnec    NCDF_INC = /SX/usr/local/pub/netcdf-3.5.0_opt/include
+#-Q- sxnec    NCDF_LIB = -L/SX/usr/local/pub/netcdf-3.5.0_opt/lib -lnetcdf
+#-Q- sxnec    #-
+#-Q- sx6nec   #- Global definitions for SX6NEC :
+#-Q- sx6nec   #- compilation on mercure for NEC SX-6
+#-Q- sx6nec   LIB_MPI = MPI2
+#-Q- sx6nec   LIB_MPI_BIS =
+#-Q- sx6nec   PRISM_ARCH = SX
+#-Q- sx6nec   PRISM_NAME = mercure
+#-Q- sx6nec   M_K = gmake
+#-Q- sx6nec   P_C = cpp
+#-Q- sx6nec   P_O = -P -C $(P_P)
+#-Q- sx6nec   F_C = sxmpif90 -c
+#-Q- sx6nec   #-D- MD    F_D =
+#-Q- sx6nec   #-D- MN    F_D =
+#-Q- sx6nec   #-P- I4R4  F_P = -dW
+#-Q- sx6nec   #-P- I4R8  F_P = -dW -Wf\"-A idbl4\"
+#-Q- sx6nec   #-P- I8R8  F_P = -ew
+#-Q- sx6nec   #-P- ??    F_P = -dW -Wf\"-A idbl4\"
+#-Q- sx6nec   F_O = $(F_D) $(F_P) -size_t64 -I $(MODDIR)
+#-Q- sx6nec   F_L = sxmpif90
+#-Q- sx6nec   L_O = -size_t64 $(F_P)
+#-Q- sx6nec   A_C = ar -rv
+#-Q- sx6nec   A_G = ar -x
+#-Q- sx6nec   A_X = sxar -rv
+#-Q- sx6nec   C_C = sxcc -size_t64 -c
+#-Q- sx6nec   C_O =
+#-Q- sx6nec   C_L = sxcc -size_t64
+#-Q- sx6nec   FC_C = gcc -c
+#-Q- sx6nec   FC_O =
+#-Q- sx6nec   FC_L = gcc
+#-Q- sx6nec   #-
+#-Q- sx6nec   NCDF_INC = /usr/local/SX6/soft/netcdf/include
+#-Q- sx6nec   NCDF_LIB = -L/usr/local/SX6/soft/netcdf/lib -lnetcdf
+#-Q- sx6nec   #-
+#-Q- t3e      #- Global definitions for T3E
+#-Q- t3e      M_K = gmake
+#-Q- t3e      P_C = cpp
+#-Q- t3e      P_O = -P -C $(P_P)
+#-Q- t3e      F_C = f90 -c
+#-Q- t3e      #-D- MD    F_D =
+#-Q- t3e      #-D- MN    F_D =
+#-Q- t3e      #-P- I4R4  F_P =
+#-Q- t3e      #-P- I4R8  F_P =
+#-Q- t3e      #-P- I8R8  F_P =
+#-Q- t3e      #-P- ??    F_P =
+#-Q- t3e      w_w = $(F_D) $(F_P) -rm -O2 -Ounroll2 -Osplit2 -dp
+#-Q- t3e      F_O = $(w_w) -p $(MODEL_LIB)
+#-Q- t3e      F_L = f90
+#-Q- t3e      L_O = -X 4
+#-Q- t3e      A_C = ar -r
+#-Q- t3e      A_G = ar -x
+#-Q- t3e      C_C = cc -c
+#-Q- t3e      C_O = -Wall
+#-Q- t3e      C_L = cc
+#-Q- t3e      #-
+#-Q- t3e      NCDF_INC = /usr/local/pub/include
+#-Q- t3e      NCDF_LIB = -L/usr/local/pub/lib -lnetcdf
+#-Q- t3e      #-
+#-Q- tx7      #- Global definitions for Linux Compiler Intel efc
+#-Q- tx7      M_K = gmake
+#-Q- tx7      P_C = cpp
+#-Q- tx7      P_O = -P -C $(P_P)
+#-Q- tx7      F_C = efc -c
+#-Q- tx7      #-D- MD    F_D = -g
+#-Q- tx7      #-D- MN    F_D =
+#-Q- tx7      #-P- I4R4  F_P = -i4
+#-Q- tx7      #-P- I4R8  F_P = -i4 -r8
+#-Q- tx7      #-P- I8R8  F_P = -i8 -r8
+#-Q- tx7      #-P- ??    F_P = -i4 -r8
+#-Q- tx7      F_O = -O $(F_D) $(F_P) -I$(MODDIR) -module $(MODDIR)
+#-Q- tx7      F_L = efc
+#-Q- tx7      L_O = -Vaxlib
+#-Q- tx7      A_C = ar -r
+#-Q- tx7      A_G = ar -x
+#-Q- tx7      C_C = cc -c
+#-Q- tx7      C_O =
+#-Q- tx7      C_L = cc
+#-Q- tx7      #-
+#-Q- tx7      NCDF_INC = /usr/local/TX7/soft/netcdf/include
+#-Q- tx7      NCDF_LIB = -L/usr/local/TX7/soft/netcdf/lib -lnetcdf
+#-Q- tx7      #-
+#-Q- unix     #- Global definitions for UNIX
+#-Q- unix     M_K = make
+#-Q- unix     P_C = cpp
+#-Q- unix     P_O = -P -C $(P_P)
+#-Q- unix     F_C = f90 -c
+#-Q- unix     #-D- MD    F_D =
+#-Q- unix     #-D- MN    F_D =
+#-Q- unix     #-P- I4R4  F_P =
+#-Q- unix     #-P- I4R8  F_P =
+#-Q- unix     #-P- I8R8  F_P =
+#-Q- unix     #-P- ??    F_P =
+#-Q- unix     F_O = $(F_D) $(F_P) -M$(MODDIR) -fast
+#-Q- unix     F_L = f90
+#-Q- unix     L_O =
+#-Q- unix     A_C = ar -r
+#-Q- unix     A_G = ar -x
+#-Q- unix     C_C = cc -c
+#-Q- unix     C_O =
+#-Q- unix     C_L = cc
+#-Q- unix     #-
+#-Q- unix     NCDF_INC = /distrib/local/include
+#-Q- unix     NCDF_LIB = -L/distrib/local/lib -lnetcdf
+#-Q- unix     #-
+RM      = rm -f
+STRIP   = strip
+SIZE    = size

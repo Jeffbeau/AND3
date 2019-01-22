@@ -1,0 +1,29 @@
+#-
+#- $Id: AA_make.ldef,v 2.6 2006/01/18 06:17:31 adm Exp $
+#-
+#---------------------------------------------------------------------
+#- Local parameters for "libioipsl"
+#---------------------------------------------------------------------
+SHELL = /bin/sh
+#---------------------------------------------------------------------
+LIBDIR = ../../../lib
+BINDIR = ../../../bin
+MODDIR = $(LIBDIR)
+#---------------------------------------------------------------------
+#-P- I4R4     D_P = I4R4
+#-P- I4R8     D_P = I4R8
+#-P- I8R8     D_P = I8R8
+#-P- ??       D_P = I4R4
+#-Q- fjvpp    #-P- ??   D_P = I4R8
+#-Q- sxnec    #-P- ??   D_P = I4R8
+#-Q- sx6nec   #-P- ??   D_P = I4R8
+#-Q- sxdkrz   #-P- ??   D_P = I4R8
+#-Q- aix      #-P- ??   D_P = I4R8
+#-Q- eshpux   #-P- ??   D_P = I4R8
+P_P =
+MODEL_LIB = $(LIBDIR)/libioipsl.a
+SXMODEL_LIB = $(MODEL_LIB)
+#-Q- sxnec  SXMODEL_LIB = $(LIBDIR)/libsxioipsl.a
+#-Q- sx6nec SXMODEL_LIB = $(LIBDIR)/libsxioipsl.a
+#-Q- sxdkrz SXMODEL_LIB = $(LIBDIR)/libsxioipsl.a
+#-Q- eshpux SXMODEL_LIB = $(LIBDIR)/libsxioipsl.a

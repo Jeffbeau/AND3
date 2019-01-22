@@ -1,0 +1,211 @@
+MODULE exampl
+   !!======================================================================
+   !!                       ***  MODULE  example  ***
+   !! Ocean physics:  brief description of the purpose of the module
+   !!                 (please no more than 2 lines)
+   !!=====================================================================
+#if defined key_example
+   !!----------------------------------------------------------------------
+   !!   'key_example'  :                brief description of the key option
+   !!----------------------------------------------------------------------
+   !!   exa_mpl      : liste of module subroutine (caution, never use the
+   !!   exa_mpl_init : name of the module for a routine)
+   !!   exa_mpl_stp  : Please try to use 3 letter block for routine names
+   !!----------------------------------------------------------------------
+   !! * Modules used
+   USE module_name1            ! brief description of the used module
+   USE module_name2            ! ....
+
+   IMPLICIT NONE
+   PRIVATE
+
+   !! *  Routine accessibility
+   PUBLIC exa_mpl    ! routine called in xxx.F90 module
+
+   !! * Share Module variables
+   REAL(wp), PUBLIC, DIMENSION(jpi,jpj,jpk) ::   &  !:
+      var1    ,   &  !: var1 description (CAUTION always use !: to describe a 
+      !              !  PUBLIC variable simplify the search of where it is declared
+      var2           !: var2 description
+
+   !! * Module variables
+   INTEGER ::                 & !!! ** toto namelist (namtoto) **
+      nflag  =  1                ! default value of nflag 
+   REAL(wp) ::                & !!! ** toto namlist (namtoto) **
+      var3  = 2._wp / 9._wp      ! default value of var3
+   REAL(wp) ::   &  
+      var4          ! var4 description (local permanent variable)
+   REAL(wp), DIMENSION(jpi,jpj,jpk) ::   &
+      tab1          ! coefficient used for horizontal smoothing
+
+   !! * Substitutions
+#  include "exampl_substitute.h90"
+   !!----------------------------------------------------------------------
+   !!  OPA 9.0 , LOCEAN-IPSL (2005) 
+   !! or LIM 2.0 , UCL-LOCEAN-IPSL (2005)
+   !! or  TOP 1.0 , LOCEAN-IPSL (2005)
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/OFF_SRC/module_example,v 1.1.1.1 2005/11/14 10:41:07 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt
+   !!----------------------------------------------------------------------
+
+CONTAINS
+
+# if defined key_autotasking
+   !!----------------------------------------------------------------------
+   !!   'key_autotasking'                              autotasking (j-slab)
+   !!----------------------------------------------------------------------
+#  include "exampl_autotsk.h90"
+
+# else
+   !!----------------------------------------------------------------------
+   !!   Default option :                           vector opt. (k-j-i loop)
+   !!----------------------------------------------------------------------
+
+   SUBROUTINE exa_mpl( kt )
+      !!----------------------------------------------------------------------
+      !!                    ***  ROUTINE exa_mpl  ***
+      !!
+      !! ** Purpose :   Brief description of the routine
+      !!
+      !! ** Method  :   description of the methodoloy used to achieve the
+      !!      objectives of the routine. Be as clear as possible!
+      !!
+      !! ** Action  : - first action (share memory array/varible modified
+      !!                in this routine
+      !!              - second action .....
+      !!              - .....
+      !!
+      !! References :
+      !!   Give references if exist otherwise suppress these lines
+      !!
+      !! History :
+      !!   9.0  !  03-08  (Autor Names)  Original code
+      !!        !  02-08  (Author names)  brief description of modifications
+      !!----------------------------------------------------------------------
+      !! * Modules used
+      USE toto_module                ! description od the module
+
+      !! * arguments
+      INTEGER, INTENT( in  ) ::   &  
+         kt                          ! describe it!!!
+
+      !! * local declarations
+      INTEGER ::   ji, jj, jk        ! dummy loop arguments
+      INTEGER ::   &
+         itoto, itata,            &  ! temporary integers
+         ititi                       ! please do not forget the DOCTOR rule:
+         !                           ! local integer: name start with i
+      REAL(wp) ::   &
+         zmlmin, zbbrau,          &  ! temporary scalars
+         zfact1, zfact2, zfact3,  &  !    "         "
+         zbn2, zesurf,            &  ! local scalar: name start with z
+         zemxl                       !
+      REAL(wp), DIMENSION(jpi,jpk) ::   &
+         ztoto                       ! temporary workspace
+      !!--------------------------------------------------------------------
+
+
+
+      IF( kt == nit000  )   CALL exa_mpl_init    ! Initialization (first time-step only)
+
+      ! Local constant initialization
+      zmlmin = 1.e-8
+      zbbrau =  .5 * ebb / rau0
+      zfact1 = -.5 * rdt * efave
+      zfact2 = 1.5 * rdt * ediss
+      zfact3 = 0.5 * rdt * ediss
+
+
+      SELECT CASE ( npdl )
+
+      CASE ( 0 )           ! describe case 1
+         DO jk = 2, jpkm1
+            DO jj = 2, jpjm1
+               DO ji = fs_2, fs_jpim1   ! vector opt.
+                  avmv(ji,jj,jk) = ....
+               END DO
+            END DO
+         END DO
+
+      CASE ( 1 )           ! describe case 2
+         DO jk = 2, jpkm1
+            DO jj = 2, jpjm1
+               DO ji = fs_2, fs_jpim1   ! vector opt.
+                  avmv(ji,jj,jk) = ...
+               END DO
+            END DO
+         END DO
+
+      END SELECT
+
+      ! Lateral boundary conditions (avmu)   (unchanged sign)
+      CALL mpplnk2( avmu, 'U', 1. )
+
+   END SUBROUTINE exa_mpl
+
+# endif
+
+   SUBROUTINE exa_mpl_init
+      !!----------------------------------------------------------------------
+      !!                  ***  ROUTINE exa_mpl_init  ***
+      !!                   
+      !! ** Purpose :   initialization of ....
+      !!
+      !! ** Method  :   blah blah blah ...
+      !!
+      !! ** input   :   Namlist namexa
+      !!
+      !! ** Action  :   ...  
+      !!
+      !! history :
+      !!   9.0  !  03-08  (Autor Names)  Original code
+      !!----------------------------------------------------------------------
+      !! * local declarations
+      INTEGER ::   ji, jj, jk, jit   ! dummy loop indices
+
+      NAMELIST/namexa/ exa_v1, exa_v2, nexa_0  
+      !!----------------------------------------------------------------------
+
+      ! Read Namelist namexa : example parameters
+      REWIND ( numnam )
+      READ   ( numnam, namexa )
+
+
+      ! Control print
+      IF(lwp) THEN
+         WRITE(numout,*)
+         WRITE(numout,*) 'exa_mpl_init : example '
+         WRITE(numout,*) '~~~~~~~~~~~~'
+         WRITE(numout,*) '          Namelist namexa : set example parameters'
+         WRITE(numout,*) '             brief desciption               exa_v1  = ', exa_v1
+         WRITE(numout,*) '             brief desciption               exa_v1  = ', exa_v1
+         WRITE(numout,*) '             brief desciption               nexa_0  = ', nexa_0
+      ENDIF
+
+      ! Parameter control
+#if defined key_toto
+      IF(lwp) WRITE(numout,cform_err)
+      IF(lwp) WRITE(numout,*) '          this part and key_toto are incompatible'
+      nstop = nstop + 1
+#endif
+
+      ! Check nexa_0 values
+      IF( nexa_0 < 0 ) THEN
+         IF(lwp) WRITE(numout,cform_err)
+         IF(lwp) WRITE(numout,*) '          bad flag: nmxl is < 0 or > 3 '
+         nstop = nstop + 1
+      ENDIF
+
+   END SUBROUTINE exa_mpl_init
+
+#else
+   !!----------------------------------------------------------------------
+   !!   Default option :                                       Empty module
+   !!----------------------------------------------------------------------
+CONTAINS
+   SUBROUTINE exa_mpl              ! Empty routine
+   END SUBROUTINE exa_mpl
+#endif
+
+   !!======================================================================
+END MODULE exampl

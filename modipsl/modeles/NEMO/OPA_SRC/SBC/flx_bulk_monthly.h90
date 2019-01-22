@@ -1,0 +1,323 @@
+   !!----------------------------------------------------------------------
+   !!                    ***  flx_blulk_monthly.h90  ***
+   !!----------------------------------------------------------------------
+   !!   flx     : update surface thermohaline fluxes using bulk formulae
+   !!             and fields read in a NetCDF file
+   !!----------------------------------------------------------------------
+   !! * Modules used     C A U T I O N  already defined in flxmod.F90
+
+   !! * Module variables
+   
+   INTEGER ::          &
+      ji, jj,          &  ! loop indices
+      numflx,          &  ! logical unit for surface fluxes data
+      nflx1, nflx2,    &  !  first and second record used
+      nflx11, nflx12      ! ???
+
+   REAL(wp), DIMENSION(jpi,jpj,2,7) ::   &
+      flxdta              ! 2 consecutive set of CLIO monthly fluxes
+   !!----------------------------------------------------------------------
+   !!   OPA 9.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/OPA_SRC/SBC/flx_bulk_monthly.h90,v 1.7 2006/03/10 10:55:42 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+   !!----------------------------------------------------------------------
+
+CONTAINS
+
+   SUBROUTINE flx( kt )
+      !!---------------------------------------------------------------------
+      !!                     ***  ROUTINE flx  ***
+      !!                   
+      !! ** Purpose :   provide the thermohaline fluxes (heat and freshwater) 
+      !!      to the ocean at each time step.
+      !!
+      !! ** Method  :   Read monthly climatological fluxes in a NetCDF file
+      !!          the net downward radiative flux qsr      1 (watt/m2)
+      !!          the net downward heat flux      q        2 (watt/m2)
+      !!          the net upward water            emp      3 (mm/month)
+      !!              (evaporation - precipitation)
+      !!          the climatological ice cover    rclice   4 (0 or 1)
+      !!
+      !!     Qsr and q is obtained from Esbensen-Kushnir data (opal file) with
+      !!   some corrections :
+      !!          - Data are extended over the polar area and for the net heat
+      !!            flux, values are put at 200 w/m2 on the ice regions
+      !!          - Red sea and Mediterranean values are imposed.
+      !! 
+      !!     emp is the Oberhuber climatology with a function of Levitus 
+      !!   salinity
+      !! 
+      !!     rclice is an handmade climalological ice cover on the polar 
+      !!   regions.
+      !! 
+      !!     runoff is an handmade climalological runoff.
+      !!
+      !! caution : now, in the opa global model, the net upward water flux is
+      !! -------   with mm/day unit.
+      !!
+      !! History :
+      !!        !  91-03  (O. Marti and Ph Dandin)  Original code
+      !!        !  92-07  (M. Imbard)
+      !!        !  96-11  (E. Guilyardi)  Daily AGCM input files
+      !!        !  99-11  (M. Imbard)  NetCDF FORMAT with ioipsl
+      !!        !  00-10  (J.-P. Boulanger)  adjusted for reading any
+      !!                         daily wind stress data including a climatology
+      !!        !  01-09  (A. Lazar and C. Levy)  Daily NetCDF by default
+      !!   8.5  !  02-09  (G. Madec)  F90: Free form and module
+      !!----------------------------------------------------------------------
+      !! * modules used
+      USE ioipsl
+      USE blk_oce         ! bulk variable
+      USE bulk            ! bulk module
+
+      !! * arguments
+      INTEGER, INTENT( in  ) ::   kt   ! ocean time step
+
+      !! * Local declarations
+      INTEGER, PARAMETER ::   &
+         jpmois = 12,               &  ! number of months
+         jpf    =  7                   ! ??? !bug ?
+      INTEGER ::   jm, jt      ! dummy loop indices
+      INTEGER ::   &
+         imois, imois2, itime,      &  ! temporary integers
+         i15  , iman  ,             &  !    "          "
+         ipi  , ipj   , ipk            !    "          "
+      INTEGER, DIMENSION(jpmois) ::   &
+         istep                         ! ???
+      REAL(wp) ::   &
+         zsecond, zdate0,           &  ! temporary scalars
+         zxy    , zdtt  ,           &  !    "         "
+         zdatet , zttbt ,           &  !    "         "
+         zttat  , zdtts6               !    "         "
+      REAL(wp), DIMENSION(jpk) ::   &
+         zlev                          ! ???
+      REAL(wp), DIMENSION(jpi,jpj) ::   &
+         zlon   , zlat                 ! ???
+      CHARACTER (len=32) ::   &
+         clname            ! flux filename
+      !!---------------------------------------------------------------------
+         clname = 'flx.nc'
+
+
+      ! Initialization
+      ! --------------
+
+      i15 = INT( 2 * FLOAT( nday ) / ( FLOAT( nobis(nmonth) ) + 0.5 ) )
+      iman  = 12
+      imois = nmonth + i15 - 1
+      IF( imois == 0 ) imois = iman
+      imois2 = nmonth
+
+      itime = jpmois 
+      
+      ipi = jpiglo
+      ipj = jpjglo
+      ipk = jpk
+
+
+      ! 1. first call kt=nit000
+      ! -----------------------
+
+      IF( kt == nit000 ) THEN
+         nflx1  = 0
+         nflx11 = 0
+         IF(lwp) THEN
+            WRITE(numout,*)
+            WRITE(numout,*) ' global CLIO flx monthly fields in NetCDF format'
+            WRITE(numout,*) ' ------------------------------'
+            WRITE(numout,*)
+         ENDIF
+         
+         ! Read first records
+
+         ! title, dimensions and tests
+#if defined key_agrif
+      if ( .NOT. Agrif_Root() ) then
+         clname = TRIM(Agrif_CFixed())//'_'//TRIM(clname)
+      endif
+#endif 	 
+         CALL flinopen( clname, mig(1), nlci, mjg(1), nlcj,   &
+            &          .FALSE., ipi, ipj, ipk, zlon, zlat, zlev,   &
+            &          itime, istep, zdate0, zsecond, numflx )
+         
+         ! temperature
+         ! Utilisation d'un spline, on lit le champ a mois=1
+         CALL flinget( numflx, 'socliot1', jpidta, jpjdta, jpk,   &
+            &          jpmois, 1, 1, mig(1), nlci,   &
+            &          mjg(1), nlcj, flxdta(1:nlci,1:nlcj,1,5) )
+
+         ! Extra-halo initialization in MPP
+         IF( lk_mpp ) THEN
+            DO ji = nlci+1, jpi
+               flxdta(ji,:,1,5) = flxdta(1,:,1,5)   ;   flxdta(ji,:,2,5) = flxdta(1,:,2,5)
+            ENDDO
+            DO jj = nlcj+1, jpj
+               flxdta(:,jj,1,5) = flxdta(:,1,1,5)   ;   flxdta(:,jj,2,5) = flxdta(:,1,2,5)
+            ENDDO
+         ENDIF
+      ENDIF
+
+
+      ! Read monthly file
+      ! ----------------
+
+      IF( kt == nit000 .OR. imois /= nflx1 ) THEN
+
+         ! Calendar computation
+
+         ! nflx1 number of the first file record used in the simulation
+         ! nflx2 number of the last  file record
+
+         nflx1 = imois
+         nflx2 = nflx1+1
+         nflx1 = MOD( nflx1, iman )
+         nflx2 = MOD( nflx2, iman )
+         IF( nflx1 == 0 )   nflx1 = iman
+         IF( nflx2 == 0 )   nflx2 = iman
+         IF(lwp) WRITE(numout,*) 'first record file used nflx1 ',nflx1
+         IF(lwp) WRITE(numout,*) 'last  record file used nflx2 ',nflx2
+         
+         ! Read monthly fluxes data
+
+         ! humidity
+         CALL flinget(numflx,'socliohu',jpidta,jpjdta,jpk,jpmois,nflx1,   &
+            nflx1,mig(1),nlci,mjg(1),nlcj,flxdta(1:nlci,1:nlcj,1,1))
+         CALL flinget(numflx,'socliohu',jpidta,jpjdta,jpk,jpmois,nflx2,   &
+            nflx2,mig(1),nlci,mjg(1),nlcj,flxdta(1:nlci,1:nlcj,2,1))
+         ! 10m wind module
+         CALL flinget(numflx,'socliowi',jpidta,jpjdta,jpk,jpmois,nflx1,   &
+            nflx1,mig(1),nlci,mjg(1),nlcj,flxdta(1:nlci,1:nlcj,1,2))
+         CALL flinget(numflx,'socliowi',jpidta,jpjdta,jpk,jpmois,nflx2,   &
+            nflx2,mig(1),nlci,mjg(1),nlcj,flxdta(1:nlci,1:nlcj,2,2))
+         ! cloud cover
+         CALL flinget(numflx,'socliocl',jpidta,jpjdta,jpk,jpmois,nflx1,   &
+            nflx1,mig(1),nlci,mjg(1),nlcj,flxdta(1:nlci,1:nlcj,1,3))
+         CALL flinget(numflx,'socliocl',jpidta,jpjdta,jpk,jpmois,nflx2,   &
+            nflx2,mig(1),nlci,mjg(1),nlcj,flxdta(1:nlci,1:nlcj,2,3))
+         ! precipitations
+         CALL flinget(numflx,'socliopl',jpidta,jpjdta,jpk,jpmois,nflx1,   &
+            nflx1,mig(1),nlci,mjg(1),nlcj,flxdta(1:nlci,1:nlcj,1,4))
+         CALL flinget(numflx,'socliopl',jpidta,jpjdta,jpk,jpmois,nflx2,   &
+            nflx2,mig(1),nlci,mjg(1),nlcj,flxdta(1:nlci,1:nlcj,2,4))
+         
+         IF(lwp .AND. nitend-nit000 <= 100 ) THEN
+            WRITE(numout,*)
+            WRITE(numout,*) ' read clio flx ok'
+            WRITE(numout,*)
+            DO jm = 1, 4
+               WRITE(numout,*)
+               WRITE(numout,*) 'Clio mounth: ',nflx1,'  field: ',jm,' multiply by ',0.1
+               CALL prihre(flxdta(:,:,1,jm),jpi,jpj,1,jpi,20,1,jpj,10,.1,numout)
+            END DO
+         ENDIF
+
+         ! Extra-halo initialization in MPP
+         IF( lk_mpp ) THEN
+            DO ji = nlci+1, jpi
+               flxdta(ji,:,1,1) = flxdta(1,:,1,1)   ;   flxdta(ji,:,2,1) = flxdta(1,:,2,1)
+               flxdta(ji,:,1,2) = flxdta(1,:,1,2)   ;   flxdta(ji,:,2,2) = flxdta(1,:,2,2)
+               flxdta(ji,:,1,3) = flxdta(1,:,1,3)   ;   flxdta(ji,:,2,3) = flxdta(1,:,2,3)
+               flxdta(ji,:,1,4) = flxdta(1,:,1,4)   ;   flxdta(ji,:,2,4) = flxdta(1,:,2,4)
+            ENDDO
+            DO jj = nlcj+1, jpj
+               flxdta(:,jj,1,1) = flxdta(:,1,1,1)   ;   flxdta(:,jj,2,1) = flxdta(:,1,2,1)
+               flxdta(:,jj,1,2) = flxdta(:,1,1,2)   ;   flxdta(:,jj,2,2) = flxdta(:,1,2,2)
+               flxdta(:,jj,1,3) = flxdta(:,1,1,3)   ;   flxdta(:,jj,2,3) = flxdta(:,1,2,3)
+               flxdta(:,jj,1,4) = flxdta(:,1,1,4)   ;   flxdta(:,jj,2,4) = flxdta(:,1,2,4)
+            ENDDO
+         ENDIF
+
+      ENDIF
+
+      ! ------------------- !
+      ! Last call kt=nitend !
+      ! ------------------- !
+
+      ! Closing of the numflx file (required in mpp)
+      IF( kt == nitend ) CALL flinclo(numflx)
+
+
+      IF( kt == nit000 .OR. imois2 /= nflx11 ) THEN
+
+         ! calendar computation
+         
+         ! nflx1 number of the first file record used in the simulation
+         ! nflx2 number of the last  file record
+         
+         nflx11 = imois2
+         nflx12 = nflx11 + 1
+         nflx11 = MOD( nflx11, iman )
+         nflx12 = MOD( nflx12, iman )
+         IF( nflx11 == 0 )   nflx11 = iman
+         IF( nflx12 == 0 )   nflx12 = iman
+         IF(lwp) WRITE(numout,*) 'first record file used nflx11 ',nflx11
+         IF(lwp) WRITE(numout,*) 'last  record file used nflx12 ',nflx12
+         
+         ! Read monthly fluxes data Esbensen Kushnir 
+         
+         ! air temperature
+         ! Utilisation d'un spline, on lit le champ a mois=nflx1 et nflx2
+         CALL flinget(numflx,'socliot1',jpidta,jpjdta,jpk,jpmois,nflx11,   &
+            nflx11,mig(1),nlci,mjg(1),nlcj,flxdta(1:nlci,1:nlcj,1,6))
+         CALL flinget(numflx,'socliot1',jpidta,jpjdta,jpk,jpmois,nflx12,   &
+            nflx12,mig(1),nlci,mjg(1),nlcj,flxdta(1:nlci,1:nlcj,2,6))
+         ! air temperature derivative (to reconstruct a daily field)
+         CALL flinget(numflx,'socliot2',jpidta,jpjdta,jpk,jpmois,nflx11,   &
+            nflx11,mig(1),nlci,mjg(1),nlcj,flxdta(1:nlci,1:nlcj,1,7))
+         CALL flinget(numflx,'socliot2',jpidta,jpjdta,jpk,jpmois,nflx12,   &
+            nflx12,mig(1),nlci,mjg(1),nlcj,flxdta(1:nlci,1:nlcj,2,7))
+         
+         IF(lwp) THEN
+            WRITE(numout,*)
+            WRITE(numout,*) ' read CLIO flx ok'
+            WRITE(numout,*)
+            DO jm = 6, jpf
+               WRITE(numout,*) 'jpf =  ', jpf !C a u t i o n : information need for SX5NEC compilo bug
+               WRITE(numout,*) 'Clio mounth: ',nflx11,'  field: ',jm,' multiply by ',0.1
+               CALL prihre(flxdta(:,:,1,jm),jpi,jpj,1,jpi,20,1,jpj,10,.1,numout)
+               WRITE(numout,*)
+            END DO
+         ENDIF
+
+         ! Extra-halo initialization in MPP
+         IF( lk_mpp ) THEN
+            DO ji = nlci+1, jpi
+               flxdta(ji,:,1,6) = flxdta(1,:,1,6)   ;   flxdta(ji,:,2,6) = flxdta(1,:,2,6)
+               flxdta(ji,:,1,7) = flxdta(1,:,1,7)   ;   flxdta(ji,:,2,7) = flxdta(1,:,2,7)
+            ENDDO
+            DO jj = nlcj+1, jpj
+               flxdta(:,jj,1,6) = flxdta(:,1,1,6)   ;   flxdta(:,jj,2,6) = flxdta(:,1,2,6)
+               flxdta(:,jj,1,7) = flxdta(:,1,1,7)   ;   flxdta(:,jj,2,7) = flxdta(:,1,2,7)
+            ENDDO
+         ENDIF
+         
+      ENDIF
+
+
+      ! 3. at every time step interpolation of fluxes
+      ! ---------------------------------------------
+
+      zxy = FLOAT( nday ) / FLOAT( nobis(nflx1) ) + 0.5 - i15
+
+      zdtt = raajj / raamo
+      zdatet = 0.
+      DO jt = 1, nmonth-1
+         zdatet = zdatet + nobis(jt)
+      END DO 
+      zdatet = ( zdatet + FLOAT(nday) -1. )/zdtt
+      zttbt = zdatet - INT(zdatet)
+      zttat = 1. - zttbt
+      zdtts6 = zdtt/6.
+
+      hatm(:,:) = ( (1.-zxy) * flxdta(:,:,1,1) + zxy * flxdta(:,:,2,1) )
+      vatm(:,:) = ( (1.-zxy) * flxdta(:,:,1,2) + zxy * flxdta(:,:,2,2) )
+      catm(:,:) = ( (1.-zxy )* flxdta(:,:,1,3) + zxy * flxdta(:,:,2,3) )
+      watm(:,:) = ( (1.-zxy) * flxdta(:,:,1,4) + zxy * flxdta(:,:,2,4) )
+      tatm(:,:) = ( flxdta(:,:,2,6) - flxdta(:,:,1,6) )/zdtt   &
+                - ((3. * zttat * zttat - 1.) * flxdta(:,:,1,7)   &
+                - ( 3. * zttbt * zttbt - 1.) * flxdta(:,:,2,7) ) * zdtts6   &
+                + flxdta(:,:,1,5)
+ 
+      CALL blk( kt )                ! bulk formulea fluxes 
+
+   END SUBROUTINE flx

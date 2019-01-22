@@ -1,0 +1,30 @@
+   !!----------------------------------------------------------------------
+   !!                 ***  obc_vectopt_loop_substitute.h90  ***
+   !!----------------------------------------------------------------------
+   !! ** purpose :   substitute the inner loop starting and inding indices 
+   !!      to allow unrolling of do-loop using CPP macro.
+   !!----------------------------------------------------------------------
+   !!----------------------------------------------------------------------
+   !!  OPA 9.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/OPA_SRC/OBC/obc_vectopt_loop_substitute.h90,v 1.3 2005/12/12 14:20:26 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+   !!----------------------------------------------------------------------
+#if defined key_vectopt_loop && defined key_obc && ! defined key_mpp_mpi && ! defined key_mpp_shmem
+#  define fs_niw0  jpiwob 
+#  define fs_niw1  jpiwob
+#  define fs_nie0  jpieob 
+#  define fs_nie1  jpieob
+#  define fs_njn0  jpjnob
+#  define fs_njn1  jpjnob
+#  define fs_njs0  jpjsob
+#  define fs_njs1  jpjsob
+#else
+#  define fs_niw0  niw0 
+#  define fs_niw1  niw1
+#  define fs_nie0  nie0 
+#  define fs_nie1  nie1
+#  define fs_njn0  njn0
+#  define fs_njn1  njn1
+#  define fs_njs0  njs0
+#  define fs_njs1  njs1
+#endif

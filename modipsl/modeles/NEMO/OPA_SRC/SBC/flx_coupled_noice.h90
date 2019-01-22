@@ -1,0 +1,187 @@
+   !!----------------------------------------------------------------------
+   !!                   ***  flx_coupled.h90  ***
+   !!----------------------------------------------------------------------
+   !!   flx          : define the thermohaline fluxes for the ocean in
+   !!                  coupled ocean/atmosphere case without sea-ice
+   !!----------------------------------------------------------------------
+   !!   OPA 9.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/OPA_SRC/SBC/flx_coupled_noice.h90,v 1.3 2005/03/27 18:35:13 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+   !!----------------------------------------------------------------------
+
+CONTAINS
+
+   SUBROUTINE flx ( kt )
+      !!---------------------------------------------------------------------
+      !!                    ***  ROUTINE flx  ***
+      !!            
+      !! ** Purpose :   provide the thermohaline fluxes (heat and freshwater)
+      !!      to the ocean at each time step.
+      !!
+      !! ** Method  :   Read fluxes from a coupled Atmospheric model 
+      !!
+      !! References : The OASIS User Guide, Version 2.0, CERFACS/TR 95/46
+      !!
+      !! History :
+      !!        !  92-06  (L.Terray)  Original code
+      !!   8.0  !  96-11  (E.Guilyardi)
+      !!        !  98-04  (M.A Foujols, S. Valcke, M. Imbard)  OASIS2.2
+      !!   8.5  !  02-09  (G. Madec)  F90: Free form and module
+      !!----------------------------------------------------------------------
+      !! CAUTION : not checked for MPP  : J.M.M
+      !!----------------------------------------------------------------------
+      !! * Modules used
+      USE ioipsl                ! NetCDF IPSL library
+      USE cpl_oce               ! coupled ocean-atmosphere variables
+      USE flxrnf                ! ocean runoffs 
+
+      !! * arguments
+      INTEGER, INTENT( in  ) ::   kt ! ocean time step
+
+      !! * Local declarations
+      INTEGER  ::   ji, jj, jf
+      INTEGER  ::   itm1, isize, iflag
+!      INTEGER  ::   icpliter
+      INTEGER  ::   info, inuread, index
+
+      REAL(wp) ::   zfacflx,zfacwat
+      REAL(wp), DIMENSION(jpidta,jpjdta) ::   &
+         znsolc  , zqsrc   ,   &  ! ???
+         zrunoff , zec     ,   &  !
+         zqsrice , zqsrwat ,   &  !
+         znsolice, znsolwat,   &  !
+         znsicedt, zevice  ,   &  !
+         zevwat  , zpliq   ,   &  !
+         zpsol   , zruncot ,   &  !
+         zrunriv 
+
+      ! Addition for SIPC CASE
+!      CHARACTER (len=3) ::   clmodinf       ! Header or not
+!      CHARACTER (len=3) ::   cljobnam_r    ! Experiment name in the field brick, if any 
+      INTEGER infos(3)          ! infos in the field brick, if any
+      !!---------------------------------------------------------------------
+
+
+      ! Initialization
+      ! --------------
+
+      isize = jpiglo * jpjglo
+      itm1 = ( kt - nit000 + 1 ) - 1
+
+      ! caution, I presume that you have good UNIT system from coupler to OPA
+      ! that is :
+      ! watt/m2 for znsolc and zqsrc
+      ! kg/m2/s for evaporation, precipitation and runoff
+
+      zfacflx = 1.
+      zfacwat = 1.
+
+
+      ! Test if we couple at the current timestep
+      ! -----------------------------------------
+
+      IF( MOD( kt, nexco ) == 1 ) THEN
+
+         ! Test what kind of message passing we are using
+
+         IF(lwp) WRITE(numout,*)
+         IF(lwp) WRITE(numout,*)'FLX: Read fields from CPL, itm1=',itm1
+         IF(lwp) WRITE(numout,*)
+         CALL FLUSH (numout)
+         
+         IF( cchan == 'PIPE' ) THEN
+            ! pipe mode 
+
+            ! UNIT number for fields
+
+            inuread = 99
+
+            ! exchanges from to atmosphere=CPL to ocean
+
+            DO jf = 1, nflxc2o
+               ! CALL PIPE_Model_Recv(cpl_readflx(jf), icpliter, numout)
+               OPEN (inuread, FILE=cpl_f_readflx(jf), FORM='UNFORMATTED')
+               IF(jf == 1) CALL locread(cpl_readflx(jf),znsolc ,isize,inuread,iflag,numout)
+               IF(jf == 2) CALL locread(cpl_readflx(jf),zqsrc  ,isize,inuread,iflag,numout)
+               IF(jf == 3) CALL locread(cpl_readflx(jf),zec    ,isize,inuread,iflag,numout)
+               IF(jf == 4) CALL locread(cpl_readflx(jf),zrunoff,isize,inuread,iflag,numout)
+               CLOSE (inuread)
+            END DO
+
+         ELSE IF( cchan == 'SIPC' ) THEN
+            ! SIPC mode
+
+            ! Define IF a header must be encapsulated within the field brick :
+            clmodinf = 'NOT'   ! as $MODINFO in namcouple  
+
+            ! reading of input field non solar flux SONSHLDO
+            index = 1
+            ! CALL SIPC_Read_Model(index, isize, clmodinf, cljobnam_r, infos, znsolc )
+
+            ! reading of input field solar heat flux SOSHFLDO
+            index = 2
+            ! CALL SIPC_Read_Model(index, isize, clmodinf, cljobnam_r, infos, zqsrc  )
+            
+            ! reading of input field water flux SOWAFLDO
+            index = 3
+            ! CALL SIPC_Read_Model(index, isize, clmodinf, cljobnam_r, infos, zec    )
+            
+            ! reading of input field runoff SORUNOFF
+            index = 4
+            ! CALL SIPC_Read_Model(index, isize, clmodinf, cljobnam_r, infos, zrunoff)
+            
+         ELSE IF( cchan == 'CLIM' ) THEN
+            ! CLIM mode
+            IF(lwp) WRITE (numout,*) 'Reading flux from coupler '
+            ! exchanges from atmosphere=CPL to ocean
+            DO jf = 1, nflxc2o
+               IF(jf ==  1) CALL CLIM_Import (cpl_readflx(jf),itm1,zqsrice ,info)
+               IF(jf ==  2) CALL CLIM_Import (cpl_readflx(jf),itm1,zqsrwat ,info)
+               IF(jf ==  3) CALL CLIM_Import (cpl_readflx(jf),itm1,znsolice,info)
+               IF(jf ==  4) CALL CLIM_Import (cpl_readflx(jf),itm1,znsolwat,info)
+               IF(jf ==  5) CALL CLIM_Import (cpl_readflx(jf),itm1,znsicedt,info)
+               IF(jf ==  6) CALL CLIM_Import (cpl_readflx(jf),itm1,zevice  ,info)
+               IF(jf ==  7) CALL CLIM_Import (cpl_readflx(jf),itm1,zevwat  ,info)
+               IF(jf ==  8) CALL CLIM_Import (cpl_readflx(jf),itm1,zpliq   ,info)
+               IF(jf ==  9) CALL CLIM_Import (cpl_readflx(jf),itm1,zpsol   ,info)
+               IF(jf == 10) CALL CLIM_Import (cpl_readflx(jf),itm1,zruncot ,info)
+               IF(jf == 11) CALL CLIM_Import (cpl_readflx(jf),itm1,zrunriv ,info)
+               IF( info /= CLIM_Ok ) THEN
+                  IF(lwp) WRITE(numout,*)'Pb in reading ', cpl_readflx(jf), jf
+                  IF(lwp) WRITE(numout,*)'Couplage itm1 is = ',itm1
+                  IF(lwp) WRITE(numout,*)'CLIM error code is = ', info
+                  IF(lwp) WRITE(numout,*)'STOP in Flx'
+                  CALL abort('flx.coupled.h')
+               ENDIF
+            END DO
+         ENDIF
+         
+         ! copy in the subdomain
+
+         DO jj = 1, nlcj
+            DO ji = 1, nlci
+
+               !  qc = total flux add znsolc and zqsrc
+               
+               ! water fluxes input : P-E
+               
+               ! caution, I presume that you have the good UNIT system for OPA
+               ! that is :
+               ! watt/m2 for znsolc and zqsrc
+               ! mm/sec for evaporation, precipitation and runoff 
+               ! to give ec and runoff in mm/day
+
+              qc    (ji,jj) = zfacflx * tmask(ji,jj,1) * (        znsolwat( mig(ji), mjg(jj) )   &
+                 &                                              + zqsrwat ( mig(ji), mjg(jj) )   )
+              qsrc  (ji,jj) = zfacflx * tmask(ji,jj,1) *          zqsrwat ( mig(ji), mjg(jj) )
+              ec    (ji,jj) = zfacwat * tmask(ji,jj,1) * ( - ABS( zevwat  ( mig(ji), mjg(jj) ) )   &
+                 &                                         + ABS( zpliq   ( mig(ji), mjg(jj) ) )   &
+                 &                                         + ABS( zpsol   ( mig(ji), mjg(jj) ) )   )
+              runoff(ji,jj) = zfacwat * tmask(ji,jj,1) *     ABS( zruncot ( mig(ji), mjg(jj) )   &
+                 &                                              + zrunriv ( mig(ji), mjg(jj) ) )
+           END DO
+        END DO
+
+      ENDIF
+
+   END SUBROUTINE flx

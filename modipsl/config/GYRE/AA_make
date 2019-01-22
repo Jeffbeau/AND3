@@ -1,0 +1,13 @@
+# $Header: /home/opalod/NEMOCVSROOT/CONFIG/GYRE/AA_make,v 1.4 2005/03/23 10:07:37 opalod Exp $
+all: ioipsl opa
+
+ioipsl:
+	(cd ../../modeles/IOIPSL/src; gmake;)
+
+
+opa:
+	(cd ../../modeles/NEMO/WORK;  gmake ;)
+
+
+clean:
+	(cd ../../modeles/NEMO/WORK;  gmake clean ;)

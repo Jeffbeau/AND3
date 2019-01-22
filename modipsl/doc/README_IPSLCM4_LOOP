@@ -1,0 +1,35 @@
+###############################################################
+#           Little "IPSLCM4_LOOP Quick Start"                 #
+###############################################################
+ 
+In order to extract and install modipsl software
+As well as to extract, install the IPSLCM4_LOOP model and create the appropriate executables
+Type the following commands :
+
+--> mkdir "DIRECTORY_NAME"
+--> cd "DIRECTORY_NAME"
+--> cvs_ano co modipsl
+--> cd modipsl/util
+--> ./model IPSLCM4_LOOP
+--> patch -p1 ins_script < patch_ins_script
+--> patch -p1 ins_post < patch_ins_post
+--> ins_script -n "EXPERIENCE_NAME"
+--> cd ../config/IPSLCM4_LOOP
+--> patch -p1 AA_make < patch_AA_make
+--> cd -
+--> patch -p1 ins_make < patch_ins_make
+--> ins_make
+--> cd ../config/IPSLCM4_LOOP
+--> gmake ORCA2_TRCxLMD9671
+
+Note that the -n ins_script option enables to name your experience.
+You must take care to set 8 characters at maximum, in upper case.
+The experience name must not contain the special character '_'.
+
+For your information :
+
+DIRECTORY_NAME  = Is the name of the directory in which you wish to put in place your experience.
+EXPERIENCE_NAME = Is the name of your experience. 
+
+For more information, please contact Patricia CADULE
+patricia.cadule@ipsl.jussieu.fr

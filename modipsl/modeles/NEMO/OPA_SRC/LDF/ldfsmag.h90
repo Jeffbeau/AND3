@@ -1,0 +1,218 @@
+!!DB 2008.04.11
+!!Combine ldfdyn_smag and ldftra_smag into 1 routine as much of the code is identical
+!!This forces 1 call to _smag_ to handle dyn & tra cases
+
+   !!----------------------------------------------------------------------
+   !!                        ***  ldf_smag.h90  ***
+   !!----------------------------------------------------------------------
+
+   !!----------------------------------------------------------------------
+   !!  OPA 9.0 , BIO (2005) 
+   !!----------------------------------------------------------------------
+
+   !!----------------------------------------------------------------------
+   !!   'key_dynldf_smag || key_traldf_smag'      2D lateral eddy viscosity coefficients
+   !!----------------------------------------------------------------------
+
+   SUBROUTINE ldf_smag( kstp )
+      !!----------------------------------------------------------------------
+      !!                  ***  ROUTINE ldf_dyn_smag  ***
+      !!                   
+      !! ** Purpose :   initializations of the horizontal ocean physics
+      !!
+      !! ** Method  :   3D eddy viscosity coef. ( longitude, latitude, depth )
+      !!       laplacian operator   : ahm1, ahm2 defined at T- and F-points
+      !!                              ahm3, ahm4 never used
+      !!       bilaplacian operator : ahm1, ahm2 never used
+      !!                           :  ahm3, ahm4 defined at U- and V-points
+      !!       ??? explanation of the default is missing
+      !!       History: 
+      !!              1.0 ! 07-05 Zeliang Wang ! Original Codes 
+      !!----------------------------------------------------------------------
+      !! * Modules used
+#ifdef key_traldf_smag 
+     USE ldftra_oce
+#endif
+      !! * Arguments
+!DB: NB -- not used
+     INTEGER, INTENT(in) :: kstp  
+
+      !! * local variables
+      INTEGER  ::   ji, jj, jk      ! dummy loop indices
+      REAL(wp) ::   &
+         alfa, bgvalue,dh_max,dh_min  ! SMAG coeff. 
+      REAL(wp) ::   &
+         dudx,dvdy,dvdx,dudy   ! SMAG coeff. 
+      REAL(wp) ::   &
+         dvdx1,dvdx2,dudy1,dudy2  ! SMAG coeff. 
+      REAL(wp), DIMENSION(jpk) ::   zcoef       ! temporary workspace
+      REAL(wp), DIMENSION(jpi,jpj,jpk) :: tmph  ! temporary workspace
+#ifdef key_traldf_smag 
+!DB: Prandtl number
+      REAL(wp) ::   Pr, &
+         dt_max,dt_min! SMAG coeff. 
+
+
+!DB: take Pr = diffusivity(tracer/momentum) which may be wrong 
+!    Note that this value was suggested by ZW
+      Pr = 1.0/10.0
+#endif
+
+!!NB: using same alfa for tracers as momentum
+      alfa=0.1
+      !!----------------------------------------------------------------------
+      
+      ! Set ahm1 and ahm2  ( T- and F- points) (used for laplacian operators
+      ! =================                       whatever its orientation is)
+      DO ji=2,jpi-1
+         DO jj=2,jpj-1
+            DO jk=1,jpk
+               
+               dudx = (ub(ji,jj,jk)-ub(ji-1,jj,jk)) / e1t(ji,jj)*tmask(ji,jj,jk)
+               
+               dvdy = (vb(ji,jj,jk)-vb(ji,jj-1,jk)) / e2t(ji,jj)*tmask(ji,jj,jk)
+               
+               dudy1 = 0.5*((ub(ji,jj+1,jk)-ub(ji,jj,jk)) /  e2f(ji,jj) *fmask(ji,jj,jk)& 
+                    &    + (ub(ji,jj,jk)-ub(ji,jj-1,jk)) / e2f(ji,jj-1)*fmask(ji,jj-1,jk))
+               
+               dudy2 = 0.5*((ub(ji-1,jj+1,jk)-ub(ji-1,jj,jk)) / e2f(ji-1,jj)*fmask(ji-1,jj,jk) &
+                    &    + (ub(ji-1,jj,jk)-ub(ji-1,jj-1,jk)) / e2f(ji-1,jj-1)*fmask(ji-1,jj-1,jk))
+               
+               dvdx1 = 0.5*((vb(ji+1,jj,jk)-vb(ji,jj,jk)) / e1f(ji,jj)*fmask(ji,jj,jk) &
+                    &    + (vb(ji,jj,jk)-vb(ji-1,jj,jk)) / e1f(ji-1,jj)*fmask(ji-1,jj,jk))
+               
+               dvdx2 = 0.5*((vb(ji+1,jj-1,jk)-vb(ji,jj-1,jk)) / e1f(ji,jj-1)*fmask(ji,jj-1,jk) &
+                    &    + (vb(ji,jj-1,jk)-vb(ji-1,jj-1,jk)) / e1f(ji-1,jj-1)*fmask(ji-1,jj-1,jk))
+               
+               dudy=0.5*(dudy1+dudy2)
+               dvdx=0.5*(dvdx1+dvdx2)
+               
+               
+               tmph(ji,jj,jk) = alfa*e1t(ji,jj)*e2t(ji,jj)*SQRT(dudx**2+dvdy**2+0.5*(dvdx+dudy)**2)  
+               
+            END DO
+         END DO
+      END DO
+      
+      CALL lbc_lnk(tmph,'T',1.)
+      
+      IF( ln_dynldf_lap ) THEN
+         ! define ahm1 and ahm2 at the right grid point position
+         ! (USER: modify ahm1 and ahm2 following your desiderata)
+         
+         ahm1=ahm0+tmph
+         CALL lbc_lnk(ahm1,'T',1.)
+         DO ji=1,jpi-1
+            DO jj=1,jpj-1
+               
+               DO jk=1,jpk
+                  ahm2(ji,jj,jk)=(ahm1(ji,jj,jk)*tmask(ji,jj,jk)+ahm1(ji+1,jj,jk)*tmask(ji+1,jj,jk)+      &
+                       &             ahm1(ji+1,jj+1,jk)*tmask(ji+1,jj+1,jk)+ahm1(ji,jj+1,jk)*tmask(ji,jj+1,jk))/   &
+                       &             max(tmask(ji,jj,jk)+tmask(ji+1,jj,jk)+tmask(ji+1,jj+1,jk)+tmask(ji,jj+1,jk),1.0)
+               END DO
+               
+            END DO
+         END DO
+         CALL lbc_lnk(ahm2,'F',1.)
+         
+!!DB: 2009.10.02 -- move to below and get rid of minval as it is always zero
+!!                  Also, report once-per-day         
+!         dh_max=MAXVAL(ahm1(:,:,:))     
+!         IF(lk_mpp) CALL mpp_max(dh_max)
+!         dh_min=MINVAL(ahm1(:,:,:))
+!         IF(lk_mpp) CALL mpp_min(dh_min)
+!         IF(lwp) WRITE(numout,*) 'laplacian operator: ahm calculated by SMAG'
+!         IF(lwp) WRITE(numout,*) ' MAX_DH',dh_max,'MIN_DH',dh_min
+         
+         
+      ENDIF
+      
+      
+      
+      ! ahm3 and ahm4 at U- and V-points (used for bilaplacian operator
+      ! ================================  whatever its orientation is)
+      ! (USER: modify ahm3 and ahm4 following your desiderata)
+      ! Here: ahm is proportional to the cube of the maximum of the gridspacing
+      !       in the to horizontal direction
+      !  Warning SHOUlD BE PUT AT U,V POINT!!!!!!!!
+      IF( ln_dynldf_bilap ) THEN
+         
+         
+         DO ji=1,jpi-1
+            DO jj=1,jpj-1
+               DO jk=1,jpk 
+                  ahm3(ji,jj,jk) =ahm0-(tmph(ji,jj,jk)*tmask(ji,jj,jk)+tmph(ji+1,jj,jk)*tmask(ji+1,jj,jk))* &
+                       &             min(e1u(ji,jj),e2u(ji,jj))**2/8. &
+                       &             /max(tmask(ji,jj,jk)+tmask(ji+1,jj,jk),1.0) 
+                  ahm4(ji,jj,jk) =ahm0-(tmph(ji,jj,jk)*tmask(ji,jj,jk)+tmph(ji,jj+1,jk)*tmask(ji,jj+1,jk))* &
+                       &             min(e1v(ji,jj),e2v(ji,jj))**2/8. &
+                       &             /max(tmask(ji,jj,jk)+tmask(ji,jj+1,jk),1.0) 
+               END DO
+            END DO
+         END DO
+         
+         
+         CALL lbc_lnk(ahm3,'U',1.)
+         CALL lbc_lnk(ahm4,'V',1.)
+
+      END IF
+!!END of ZW momentum SMAG
+
+
+#ifdef key_traldf_smag
+      tmph(:,:,:) = Pr*tmph(:,:,:)       !DB
+      ahtw(:,:,:) = tmph(:,:,:)+aht0
+      CALL lbc_lnk(ahtw,'W',1.)
+      
+      IF( ln_traldf_lap ) THEN
+         
+         DO ji=1,jpi-1
+            DO jj=1,jpj          
+               DO jk=1,jpk
+                  ahtu(ji,jj,jk)=(tmph(ji,jj,jk)*tmask(ji,jj,jk)+tmph(ji+1,jj,jk)*tmask(ji+1,jj,jk)+aht0)/  &
+                       &         max(tmask(ji,jj,jk)+tmask(ji+1,jj,jk),1.0)
+               END DO
+            END DO
+         END DO
+         
+         DO ji=1,jpi
+            DO jj=1,jpj-1          
+               DO jk=1,jpk
+                  ahtv(ji,jj,jk)=(tmph(ji,jj,jk)*tmask(ji,jj,jk)+tmph(ji,jj+1,jk)*tmask(ji,jj+1,jk)+aht0)/  &
+                       &         max(tmask(ji,jj,jk)+tmask(ji,jj+1,jk),1.0)
+               END DO
+            END DO
+         END DO
+
+         CALL lbc_lnk(ahtu,'U',1.)
+         CALL lbc_lnk(ahtv,'V',1.)
+         
+         
+      ENDIF
+        
+      
+      IF( ln_traldf_bilap ) THEN
+         
+         DO jk=1,jpk
+            ahtt(:,:,jk)=aht0-tmph(:,:,jk)*e1t(:,:)*e2t(:,:)/8.0
+         END DO
+         
+         
+      END IF
+
+
+!!DB: 2009.10.02 -- report values 4x-per-day         
+!! Just do tracer 
+      if(mod(kstp-nit000,int(0.25*rday/rdt)) == 0) then
+         call mpp_maxloc(ahtw,tmask,dt_max,ji,jj,jk)
+         IF(lwp) then
+            write(numout2,'(a30,i10,2x,f10.0,2x,3(i4,1x))') 'kt; SMAG max Ah(i,j,k): ',kstp, dt_max,ji,jj,jk
+         endif
+      endif
+
+#endif   !!End of tracer smag
+
+
+      
+    END SUBROUTINE ldf_smag
+    

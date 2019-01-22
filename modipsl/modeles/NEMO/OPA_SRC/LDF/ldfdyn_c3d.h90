@@ -1,0 +1,173 @@
+   !!----------------------------------------------------------------------
+   !!                        ***  ldfdyn_c3d.h90  ***
+   !!----------------------------------------------------------------------
+
+   !!----------------------------------------------------------------------
+   !!  OPA 9.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/OPA_SRC/LDF/ldfdyn_c3d.h90,v 1.5 2005/03/27 18:35:06 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+   !!----------------------------------------------------------------------
+
+   !!----------------------------------------------------------------------
+   !!   'key_dynldf_c3d'             3D lateral eddy viscosity coefficients
+   !!----------------------------------------------------------------------
+
+   SUBROUTINE ldf_dyn_c3d( ld_print )
+      !!----------------------------------------------------------------------
+      !!                  ***  ROUTINE ldf_dyn_c3d  ***
+      !!                   
+      !! ** Purpose :   initializations of the horizontal ocean physics
+      !!
+      !! ** Method  :   3D eddy viscosity coef. ( longitude, latitude, depth )
+      !!       laplacian operator   : ahm1, ahm2 defined at T- and F-points
+      !!                              ahm2, ahm4 never used
+      !!       bilaplacian operator : ahm1, ahm2 never used
+      !!                           :  ahm3, ahm4 defined at U- and V-points
+      !!       ??? explanation of the default is missing
+      !!----------------------------------------------------------------------
+      !! * Modules used
+      USE ldftra_oce, ONLY : aht0
+
+      !! * Arguments
+      LOGICAL, INTENT (in) :: ld_print   ! If true, output arrays on numout
+
+      !! * local variables
+      INTEGER  ::   ji, jj, jk      ! dummy loop indices
+      REAL(wp) ::   &
+         zr = 0.2 ,   &  ! maximum of the reduction factor at the bottom ocean
+         !               ! ( 0 < zr < 1 )
+         zh = 500.,   &  ! depth of at which start the reduction ( > dept(1) )
+         zdx_max  ,   &  ! maximum grid spacing over the global domain
+         za00, zc, zd    ! temporary scalars
+      REAL(wp), DIMENSION(jpk) ::   zcoef   ! temporary workspace
+      !!----------------------------------------------------------------------
+
+      IF(lwp) WRITE(numout,*)
+      IF(lwp) WRITE(numout,*) 'ldf_dyn_c3d : 3D lateral eddy viscosity coefficient'
+      IF(lwp) WRITE(numout,*) '~~~~~~~~~~~'
+
+      
+      ! Set ahm1 and ahm2  ( T- and F- points) (used for laplacian operators
+      ! =================                       whatever its orientation is)
+      IF( ln_dynldf_lap ) THEN
+         ! define ahm1 and ahm2 at the right grid point position
+         ! (USER: modify ahm1 and ahm2 following your desiderata)
+
+         zdx_max = MAXVAL( e1t(:,:) )
+         IF( lk_mpp )   CALL mpp_max( zdx_max )   ! max over the global domain
+
+         IF(lwp) WRITE(numout,*) '              laplacian operator: ahm proportional to e1'
+         IF(lwp) WRITE(numout,*) '              Caution, here we assume your mesh is isotropic ...'
+         IF(lwp) WRITE(numout,*) '              maximum grid-spacing = ', zdx_max, ' maximum value for ahm = ', ahm0
+
+
+         za00 = ahm0 / zdx_max
+
+         IF( ln_dynldf_iso ) THEN
+            IF(lwp) WRITE(numout,*) '              Caution, as implemented now, the isopycnal part of momentum'
+            IF(lwp) WRITE(numout,*) '                 mixing use aht0 as eddy viscosity coefficient. Thus, it is'
+            IF(lwp) WRITE(numout,*) '                 uniform and you must be sure that your ahm is greater than'
+            IF(lwp) WRITE(numout,*) '                 aht0 everywhere in the model domain.'
+         ENDIF
+
+         CALL ldf_zpf( .TRUE. , 1000., 500., 0.25, fsdept(:,:,:), ahm1 )   ! vertical profile
+         CALL ldf_zpf( .TRUE. , 1000., 500., 0.25, fsdept(:,:,:), ahm2 )   ! vertical profile
+         DO jk = 1,jpk
+            ahm1(:,:,jk) = za00 * e1t(:,:) * ahm1(:,:,jk)
+            ahm2(:,:,jk) = za00 * e1f(:,:) * ahm2(:,:,jk)
+         END DO
+
+
+
+      ENDIF
+      
+      ! Control print
+      IF(lwp .AND. ld_print ) THEN
+         WRITE(numout,*)
+         WRITE(numout,*) '         3D ahm1 array (k=1)'
+         CALL prihre( ahm1(:,:,1), jpi, jpj, 1, jpi, 20, 1, jpj, 20, 1.e-3, numout )
+         WRITE(numout,*)
+         WRITE(numout,*) '         3D ahm2 array (k=1)'
+         CALL prihre( ahm2(:,:,1), jpi, jpj, 1, jpi, 20, 1, jpj, 20, 1.e-3, numout )
+      ENDIF
+
+
+      ! ahm3 and ahm4 at U- and V-points (used for bilaplacian operator
+      ! ================================  whatever its orientation is)
+      ! (USER: modify ahm3 and ahm4 following your desiderata)
+      ! Here: ahm is proportional to the cube of the maximum of the gridspacing
+      !       in the to horizontal direction
+
+      IF( ln_dynldf_bilap ) THEN
+
+         zdx_max = MAXVAL( e1u(:,:) )
+         IF( lk_mpp )   CALL mpp_max( zdx_max )   ! max over the global domain
+
+         IF(lwp) WRITE(numout,*) '              bi-laplacian operator: ahm proportional to e1**3 '
+         IF(lwp) WRITE(numout,*) '              Caution, here we assume your mesh is isotropic ...'
+         IF(lwp) WRITE(numout,*) '              maximum grid-spacing = ', zdx_max, ' maximum value for ahm = ', ahm0
+
+         za00 = ahm0 / ( zdx_max * zdx_max * zdx_max )
+         ahm3(:,:,1) = za00 * e1u(:,:) * e1u(:,:) * e1u(:,:)
+         ahm4(:,:,1) = za00 * e1v(:,:) * e1v(:,:) * e1v(:,:)
+
+         zh = MAX( zh, fsdept(1,1,1) )   ! at least the first reach ahm0
+         IF( lk_zco ) THEN               ! z-coordinate, same profile everywhere
+            IF(lwp) WRITE(numout,'(36x," ahm ", 7x)')
+            DO jk = 1, jpk
+               IF( fsdept(1,1,jk) <= zh ) THEN
+                  zcoef(jk) = 1.e0
+               ELSE
+                  zcoef(jk) = 1.e0 + ( zr - 1.e0 )   &
+                     &               * (  1. - EXP( ( fsdept(1,1,jk   ) - zh ) / zh )  )   &
+                     &               / (  1. - EXP( ( fsdept(1,1,jpkm1) - zh ) / zh )  )
+               ENDIF
+               ahm3(:,:,jk) = ahm3(:,:,1) * zcoef(jk)
+               ahm4(:,:,jk) = ahm4(:,:,1) * zcoef(jk)
+               IF(lwp) WRITE(numout,'(34x,E7.2,8x,i3)') zcoef(jk) * ahm0, jk
+            END DO
+         ELSE                            ! partial steps or s-ccordinate
+# if defined key_partial_steps || defined key_s_coord
+            zc = MAXVAL( fsdept(:,:,jpkm1) )
+# else
+            zc = fsdept(:,:,jpkm1)
+# endif
+            IF( lk_mpp )   CALL mpp_max( zc )   ! max over the global domain
+
+            zc = 1. / (  1. - EXP( ( zc - zh ) / zh )  )
+            DO jk = 2, jpkm1
+               DO jj = 1, jpj
+                  DO ji = 1, jpi
+                     IF( fsdept(ji,jj,jk) <= zh ) THEN
+                        ahm3(ji,jj,jk) = ahm3(ji,jj,1)
+                        ahm4(ji,jj,jk) = ahm4(ji,jj,1)
+                     ELSE
+                        zd = 1.e0 + ( zr - 1.e0 ) * (  1. - EXP( ( fsdept(ji,jj,jk) - zh ) / zh )  ) * zc
+                        ahm3(ji,jj,jk) = ahm3(ji,jj,1) * zd
+                        ahm4(ji,jj,jk) = ahm4(ji,jj,1) * zd
+                     ENDIF
+                  END DO
+               END DO
+            END DO
+            ahm3(:,:,jpk) = ahm3(:,:,jpkm1)
+            ahm4(:,:,jpk) = ahm4(:,:,jpkm1)
+            IF(lwp) WRITE(numout,'(36x," ahm ", 7x)')
+            DO jk = 1, jpk
+               IF(lwp) WRITE(numout,'(30x,E10.2,8x,i3)') ahm3(1,1,jk), jk
+            END DO
+         ENDIF
+
+         ! Control print
+         IF( lwp .AND. ld_print ) THEN
+            WRITE(numout,*)
+            WRITE(numout,*) 'inildf: ahm3 array at level 1'
+            CALL prihre(ahm3(:,:,1  ),jpi,jpj,1,jpi,1,1,jpj,1,1.e-3,numout)
+            WRITE(numout,*)
+            WRITE(numout,*) 'inildf: ahm4 array at level 1'
+            CALL prihre(ahm4(:,:,jpk),jpi,jpj,1,jpi,1,1,jpj,1,1.e-3,numout)
+         ENDIF
+      ENDIF
+
+   END SUBROUTINE ldf_dyn_c3d
+
+

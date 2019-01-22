@@ -1,0 +1,64 @@
+!!DB
+!!Example of: Include file of pointer assignments 
+!!NB: DB tried to do this more elegantly, via a USE module
+!!    structure, but was unable to do so. This does not mean
+!!    that this is impossible, only that DB could not do it.
+
+     real(wp), dimension(:,:,:), pointer :: &
+     v1, &       !!the now variables
+     v2, &
+     v3, &
+     v4, &
+     v5, &
+     v6, &
+     v7, &
+     v8, &
+     v9, &
+     v10, &
+     v11, &
+     v12, &
+     v13, &
+!
+     v1b, &     !!the before variables
+     v2b, &
+     v3b, &
+     v4b, &
+     v5b, &
+     v6b, &
+     v7b, &
+     v8b, &
+     v9b, &
+     v10b, &
+     v11b, &
+     v12b, &
+     v13b
+
+!!DB -- assign pointers to default trn, trb arrays
+     v1 => trn(:,:,:,1)
+     v2 => trn(:,:,:,2)
+     v3 => trn(:,:,:,3)
+     v4 => trn(:,:,:,4)
+     v5 => trn(:,:,:,5)
+     v6 => trn(:,:,:,6)
+     v7 => trn(:,:,:,7)
+     v8 => trn(:,:,:,8)
+     v9 => trn(:,:,:,9)
+     v10 => trn(:,:,:,10)
+     v11 => trn(:,:,:,11)
+     v12 => trn(:,:,:,12)
+     v13 => trn(:,:,:,13)
+
+     v1b => trb(:,:,:,1)
+     v2b => trb(:,:,:,2)
+     v3b => trb(:,:,:,3)
+     v4b => trb(:,:,:,4)
+     v5b => trb(:,:,:,5)
+     v6b => trb(:,:,:,6)
+     v7b => trb(:,:,:,7)
+     v8b => trb(:,:,:,8)
+     v9b => trb(:,:,:,9)
+     v10b => trb(:,:,:,10)
+     v11b => trb(:,:,:,11)
+     v12b => trb(:,:,:,12)
+     v13b => trb(:,:,:,13)
+

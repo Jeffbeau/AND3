@@ -1,0 +1,394 @@
+   SUBROUTINE dom_rea
+      !!----------------------------------------------------------------------
+      !!                  ***  ROUTINE dom_rea  ***   'key_mpp'
+      !!
+      !! ** Purpose :   READ the direct access files which contains all the
+      !!      ocean domain informations (mesh and mask arrays). These
+      !!      files are used for visualisation (SAXO software) and
+      !!      diagnostic computation.
+      !!
+      !! ** Method  :   READ in a file all the arrays generated in routines
+      !!      domhgr, domzgr, and dommsk. Note: the file contain depends on
+      !!      the vertical coord. used (z-coord, partial steps, s-coord)
+      !!    For mpp output direct access files are used and each processor
+      !!    uses a record range. Off line program (build_nc_meshmask) can be used
+      !!    to reconstruct the Netcdf files
+      !!                    nmsh = 1  :   'mesh_mask.nc' file
+      !!                         = 2  :   'mesh.nc' and mask.nc' files
+      !!                         = 3  :   'mesh_hgr.nc', 'mesh_zgr.nc' and
+      !!                                  'mask.nc' files
+      !!      For huge size domain, use option 2 or 3 depending on your
+      !!      vertical coordinate.
+      !!
+      !! ** output file :
+      !!      meshmask.nc  : domain size, horizontal grid-point position,
+      !!                     masks, depth and vertical scale factors
+      !!
+      !! History :
+      !!        !  97-02  (G. Madec)  Original code
+      !!        !  99-11  (M. Imbard)  NetCDF FORMAT with IOIPSL
+      !!   9.0  !  02-08  (G. Madec)  F90 and several file
+      !!        !  04-01  (J.M. Molines) MPP i/o
+      !!----------------------------------------------------------------------
+      !!   OPA 9.0 , LOCEAN-IPSL  (2005)
+      !!   $Header: /home/opalod/NEMOCVSROOT/NEMO/OFF_SRC/DOM/domrea_dimg.h90,v 1.2 2005/11/16 16:12:12 opalod Exp $
+      !!   This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt
+      !!----------------------------------------------------------------------
+      !! * Modules used
+      USE lib_mpp
+      USE daymod
+
+      !! * Local declarations
+      !! * Local declarations
+      INTEGER  ::                & !!! * temprary units for :
+         inum0 ,                 &  ! 'mesh_mask.nc' file
+         inum1 ,                 &  ! 'mesh.nc'      file
+         inum2 ,                 &  ! 'mask.nc'      file
+         inum3 ,                 &  ! 'mesh_hgr.nc'  file
+         inum4                      ! 'mesh_zgr.nc'  file
+      INTEGER  ::   itime           !  output from restini ???
+      INTEGER  ::   irecl8, irec    ! Record length (bytes) for output file 
+      INTEGER  ::   jk              ! loop index
+      INTEGER  ::   ios1, ios2
+      INTEGER, DIMENSION(11:15)  :: irecv ! index of this array will be inumxxx
+      REAL(wp) ::   zdate0
+      REAL(wp), DIMENSION(jpi,jpj) ::   &
+         zprt                       ! temporary array for bathymetry
+
+      CHARACTER (len=21) ::      &
+         clnam0 = 'mesh_mask',   &  ! filename (mesh and mask informations)
+         clnam1 = 'mesh'     ,   &  ! filename (mesh informations)
+         clnam2 = 'mask'     ,   &  ! filename (mask informations)
+         clnam3 = 'mesh_hgr' ,   &  ! filename (horizontal mesh informations)
+         clnam4 = 'mesh_zgr'        ! filename (vertical   mesh informations)
+      !!----------------------------------------------------------------------
+
+       IF(lwp) WRITE(numout,*)
+       IF(lwp) WRITE(numout,*) 'dom_rea : read direct access  mesh and mask information files'
+       IF(lwp) WRITE(numout,*) '~~~~~~~'
+
+       inum0 = 11
+       irecl8 = jpi*jpj*wp
+       ios1 = 0 ; ios2 = 0
+       IF (lk_zps ) ios1= 1 
+       IF (lk_sco ) ios2= 1
+   
+       SELECT CASE (nmsh )
+          !                                    !==============================
+          CASE ( 1 )                           !  read 'mesh_mask' file
+             !                                 !==============================
+             IF (lwp) WRITE(numout,*) '          one file in "mesh_mask.dimgproc '
+             OPEN(inum0,FILE=trim(clnam0)//'.mpp', &
+                & FORM='UNFORMATTED', ACCESS='DIRECT', RECL = irecl8 )
+             IF (lwp )READ(inum0,REC=1 ) irecl8, nmsh, ios1,ios2 , &
+            &  ndastp, adatrj, jpi,jpj,jpk,  &
+            &  jpni,jpnj,jpnij,jpiglo,jpjglo, &
+            &  nlcit,nlcjt, nldit, nldjt, nleit, nlejt, nimppt, njmppt
+
+             inum2 = inum0
+             inum3 = inum0
+             inum4 = inum0
+
+            !                                  ! ============================
+         CASE ( 2 )                            !  read 'mesh' and
+            !                                  !         'mask' files
+            !                                  ! ============================
+
+            IF(lwp) WRITE(numout,*) '          two files in "mesh" and "mask" '
+            inum1 = 12
+            inum2 = 13
+            OPEN(inum1,FILE=trim(clnam1)//'.mpp', &
+                & FORM='UNFORMATTED', ACCESS='DIRECT', RECL = irecl8 )
+             IF (lwp) READ(inum1,REC=1 ) irecl8, nmsh, ios1,ios2 , &
+            &  ndastp, adatrj, jpi,jpj,jpk,  &
+            &  jpni,jpnj,jpnij,jpiglo,jpjglo, &
+            &  nlcit,nlcjt, nldit, nldjt, nleit, nlejt, nimppt, njmppt
+
+             inum3 = inum1
+             inum4 = inum1
+            OPEN(inum2,FILE=trim(clnam2)//'.mpp', &
+                & FORM='UNFORMATTED', ACCESS='DIRECT', RECL = irecl8 )
+             IF (lwp) READ(inum2,REC=1 ) irecl8, nmsh, ios1,ios2 , &
+            &  ndastp, adatrj, jpi,jpj,jpk,  &
+            &  jpni,jpnj,jpnij,jpiglo,jpjglo, &
+            &  nlcit,nlcjt, nldit, nldjt, nleit, nlejt, nimppt, njmppt
+
+            !                                  ! ============================
+         CASE ( 3 )                            !  read 'mesh_hgr'
+            !                                  !         'mesh_zgr' and
+            !                                  !         'mask'     files
+            !                                  ! ============================
+
+            IF(lwp) WRITE(numout,*) '          three files in "mesh_hgr" , mesh_zgr" and "mask" '
+            inum3 = 14
+            inum2 = 13
+            inum4 = 15
+
+            OPEN(inum3,FILE=trim(clnam3)//'.mpp', &
+                & FORM='UNFORMATTED', ACCESS='DIRECT', RECL = irecl8 )
+             IF (lwp) READ(inum3,REC=1 ) irecl8, nmsh, ios1,ios2 , &
+            &  ndastp, adatrj, jpi,jpj,jpk,  &
+            &  jpni,jpnj,jpnij,jpiglo,jpjglo, &
+            &  nlcit,nlcjt, nldit, nldjt, nleit, nlejt, nimppt, njmppt
+
+            OPEN(inum2,FILE=trim(clnam2)//'.mpp', &
+                & FORM='UNFORMATTED', ACCESS='DIRECT', RECL = irecl8 )
+             IF (lwp) READ(inum2,REC=1 ) irecl8, nmsh, ios1,ios2 , &
+            &  ndastp, adatrj, jpi,jpj,jpk,  &
+            &  jpni,jpnj,jpnij,jpiglo,jpjglo, &
+            &  nlcit,nlcjt, nldit, nldjt, nleit, nlejt, nimppt, njmppt
+
+            OPEN(inum4,FILE=trim(clnam4)//'.mpp', &
+                & FORM='UNFORMATTED', ACCESS='DIRECT', RECL = irecl8 )
+             IF (lwp) READ(inum4,REC=1 ) irecl8, nmsh, ios1,ios2 , &
+            &  ndastp, adatrj, jpi,jpj,jpk,  &
+            &  jpni,jpnj,jpnij,jpiglo,jpjglo, &
+            &  nlcit,nlcjt, nldit, nldjt, nleit, nlejt, nimppt, njmppt
+         
+         END SELECT
+       
+         irecv(:) = 2
+         ! tmask
+         DO jk=1,jpk
+             irec=irecv(inum2) + (jk -1 ) + jpk * (narea - 1 )
+             READ(inum2,REC=irec) tmask(:,:,jk)
+         END DO
+         irecv(inum2) = irecv(inum2) + jpk * jpnij 
+         !
+         ! umask
+         DO jk=1,jpk
+             irec=irecv(inum2) + (jk -1 ) + jpk * (narea - 1 )
+             READ(inum2,REC=irec) umask(:,:,jk)
+         END DO
+         irecv(inum2) = irecv(inum2) + jpk * jpnij 
+         !
+         ! vmask
+         DO jk=1,jpk
+             irec=irecv(inum2) + (jk -1 ) + jpk * (narea - 1 )
+             READ(inum2,REC=irec) vmask(:,:,jk)
+         END DO
+         irecv(inum2) = irecv(inum2) + jpk * jpnij 
+         !
+         ! fmask
+         DO jk=1,jpk
+             irec=irecv(inum2) + (jk -1 ) + jpk * (narea - 1 )
+             READ(inum2,REC=irec) fmask(:,:,jk)
+         END DO
+         irecv(inum2) = irecv(inum2) + jpk * jpnij 
+         !
+         ! glam
+         irec = irecv(inum3) + (narea - 1 )
+         READ(inum3,REC=irec) glamt(:,:)
+         irecv(inum3) = irecv(inum3) + jpnij 
+       
+         irec = irecv(inum3) + (narea - 1 )
+         READ(inum3,REC=irec) glamu(:,:)
+         irecv(inum3) = irecv(inum3) + jpnij 
+
+         irec = irecv(inum3) + (narea - 1 )
+         READ(inum3,REC=irec) glamv(:,:)
+         irecv(inum3) = irecv(inum3) + jpnij 
+
+         irec = irecv(inum3) + (narea - 1 )
+         READ(inum3,REC=irec) glamf(:,:)
+         irecv(inum3) = irecv(inum3) + jpnij 
+         !
+         ! gphi
+         irec = irecv(inum3) + (narea - 1 )
+         READ(inum3,REC=irec) gphit(:,:)
+         irecv(inum3) = irecv(inum3) + jpnij 
+       
+         irec = irecv(inum3) + (narea - 1 )
+         READ(inum3,REC=irec) gphiu(:,:)
+         irecv(inum3) = irecv(inum3) + jpnij 
+
+         irec = irecv(inum3) + (narea - 1 )
+         READ(inum3,REC=irec) gphiv(:,:)
+         irecv(inum3) = irecv(inum3) + jpnij 
+
+         irec = irecv(inum3) + (narea - 1 )
+         READ(inum3,REC=irec) gphif(:,:)
+         irecv(inum3) = irecv(inum3) + jpnij 
+         !
+         ! e1
+         irec = irecv(inum3) + (narea - 1 )
+         READ(inum3,REC=irec) e1t(:,:)
+         irecv(inum3) = irecv(inum3) + jpnij 
+       
+         irec = irecv(inum3) + (narea - 1 )
+         READ(inum3,REC=irec) e1u(:,:)
+         irecv(inum3) = irecv(inum3) + jpnij 
+
+         irec = irecv(inum3) + (narea - 1 )
+         READ(inum3,REC=irec) e1v(:,:)
+         irecv(inum3) = irecv(inum3) + jpnij 
+
+         irec = irecv(inum3) + (narea - 1 )
+         READ(inum3,REC=irec) e1f(:,:)
+         irecv(inum3) = irecv(inum3) + jpnij 
+         !
+         ! e2
+         irec = irecv(inum3) + (narea - 1 )
+         READ(inum3,REC=irec) e2t(:,:)
+         irecv(inum3) = irecv(inum3) + jpnij 
+       
+         irec = irecv(inum3) + (narea - 1 )
+         READ(inum3,REC=irec) e2u(:,:)
+         irecv(inum3) = irecv(inum3) + jpnij 
+
+         irec = irecv(inum3) + (narea - 1 )
+         READ(inum3,REC=irec) e2v(:,:)
+         irecv(inum3) = irecv(inum3) + jpnij 
+
+         irec = irecv(inum3) + (narea - 1 )
+         READ(inum3,REC=irec) e2f(:,:)
+         irecv(inum3) = irecv(inum3) + jpnij 
+         !
+         ! ff
+         irec = irecv(inum3) + (narea - 1 )
+         READ(inum3,REC=irec) ff(:,:)
+         irecv(inum3) = irecv(inum3) + jpnij 
+         !
+         ! mbathy
+         !       note that mbathy has been modified in dommsk or in solver.
+         !       it is the number of non-zero "w" levels in the water, and the minimum
+         !       value (on land) is 2. We define zprt as the number of "T" points in the ocean
+         !       at any location, and zero on land.
+         !
+         irec = irecv(inum4) + (narea - 1 )
+         READ(inum4,REC=irec) zprt(:,:)
+         irecv(inum4) = irecv(inum4) + jpnij 
+
+          mbathy=zprt*tmask(:,:,1)+1
+
+#if defined key_s_coord
+         !
+         ! hbat
+         irec = irecv(inum4) + (narea - 1 )
+         READ(inum4,REC=irec) hbatt(:,:)
+         irecv(inum4) = irecv(inum4) + jpnij 
+       
+         irec = irecv(inum4) + (narea - 1 )
+         READ(inum4,REC=irec) hbatu(:,:)
+         irecv(inum4) = irecv(inum4) + jpnij 
+
+         irec = irecv(inum4) + (narea - 1 )
+         READ(inum4,REC=irec) hbatv(:,:)
+         irecv(inum4) = irecv(inum4) + jpnij 
+
+         irec = irecv(inum4) + (narea - 1 )
+         READ(inum4,REC=irec) hbatf(:,:)
+         irecv(inum4) = irecv(inum4) + jpnij 
+         !
+         ! gsig and esig ( as vectors of jpk per record )
+         irec =  irecv(inum4) + (narea - 1 )
+         READ(inum4,REC=irec) gsigt(:)
+         irecv(inum4) = irecv(inum4) + jpnij 
+
+         irec =  irecv(inum4) + (narea - 1 )
+         READ(inum4,REC=irec) gsigw(:)
+         irecv(inum4) = irecv(inum4) + jpnij 
+
+         irec =  irecv(inum4) + (narea - 1 )
+         READ(inum4,REC=irec) gsi3w(:)
+         irecv(inum4) = irecv(inum4) + jpnij 
+
+         irec =  irecv(inum4) + (narea - 1 )
+         READ(inum4,REC=irec) esigt(:)
+         irecv(inum4) = irecv(inum4) + jpnij 
+
+         irec =  irecv(inum4) + (narea - 1 )
+         READ(inum4,REC=irec) esigw(:)
+         irecv(inum4) = irecv(inum4) + jpnij 
+
+# elif defined key_partial_steps
+         !
+         ! hdep
+         irec = irecv(inum4) + (narea - 1 )
+         READ(inum4,REC=irec) hdept(:,:)
+         irecv(inum4) = irecv(inum4) + jpnij 
+       
+         irec = irecv(inum4) + (narea - 1 )
+         READ(inum4,REC=irec) hdepw(:,:)
+         irecv(inum4) = irecv(inum4) + jpnij 
+         !
+         ! e3t_ps (3D)
+         DO jk=1,jpk
+             irec=irecv(inum4) + (jk -1 ) + jpk * (narea - 1 )
+             READ(inum4,REC=irec) e3t_ps(:,:,jk)
+         END DO
+         irecv(inum4) = irecv(inum4) + jpk * jpnij 
+
+         ! e3u_ps e3v_ps e3w_ps (3D)
+         DO jk=1,jpk
+             irec=irecv(inum4) + (jk -1 ) + jpk * (narea - 1 )
+             READ(inum4,REC=irec) e3u_ps(:,:,jk)
+         END DO
+         irecv(inum4) = irecv(inum4) + jpk * jpnij 
+         
+         DO jk=1,jpk
+             irec=irecv(inum4) + (jk -1 ) + jpk * (narea - 1 )
+             READ(inum4,REC=irec) e3v_ps(:,:,jk)
+         END DO
+         irecv(inum4) = irecv(inum4) + jpk * jpnij 
+
+         DO jk=1,jpk
+             irec=irecv(inum4) + (jk -1 ) + jpk * (narea - 1 )
+             READ(inum4,REC=irec) e3w_ps(:,:,jk)
+         END DO
+         irecv(inum4) = irecv(inum4) + jpk * jpnij 
+         ! 
+         ! 
+         ! gdep
+         irec =  irecv(inum4) + (narea - 1 )
+         READ(inum4,REC=irec) gdept(:)
+         irecv(inum4) = irecv(inum4) + jpnij 
+
+         irec =  irecv(inum4) + (narea - 1 )
+         READ(inum4,REC=irec) gdepw(:)
+         irecv(inum4) = irecv(inum4) + jpnij 
+         !
+         ! e3
+         irec =  irecv(inum4) + (narea - 1 )
+         READ(inum4,REC=irec) e3t(:)
+         irecv(inum4) = irecv(inum4) + jpnij 
+
+         irec =  irecv(inum4) + (narea - 1 )
+         READ(inum4,REC=irec) e3w(:)
+#else
+         !
+         ! gdep
+         irec =  irecv(inum4) + (narea - 1 )
+         READ(inum4,REC=irec) gdept(:)
+         irecv(inum4) = irecv(inum4) + jpnij 
+
+         irec =  irecv(inum4) + (narea - 1 )
+         READ(inum4,REC=irec) gdepw(:)
+         irecv(inum4) = irecv(inum4) + jpnij 
+         !
+         ! e3
+         irec =  irecv(inum4) + (narea - 1 )
+         READ(inum4,REC=irec) e3t(:)
+         irecv(inum4) = irecv(inum4) + jpnij 
+
+         irec =  irecv(inum4) + (narea - 1 )
+         READ(inum4,REC=irec) e3w(:)
+         irecv(inum4) = irecv(inum4) + jpnij 
+         !
+#endif
+         !                                     ! ============================
+         !                                     !        close the files
+         !                                     ! ============================
+         SELECT CASE ( nmsh )
+            CASE ( 1 )
+               CLOSE ( inum0 )
+            CASE ( 2 )
+               CLOSE ( inum1 )
+               CLOSE ( inum2 )
+            CASE ( 3 )
+               CLOSE ( inum2 )
+               CLOSE ( inum3 )
+               CLOSE ( inum4 )
+         END SELECT
+
+   END SUBROUTINE dom_rea

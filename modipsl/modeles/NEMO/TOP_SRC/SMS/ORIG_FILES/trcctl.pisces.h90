@@ -1,0 +1,24 @@
+
+   !!----------------------------------------------------------------------
+   !!  TOP 1.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/TOP_SRC/SMS/trcctl.pisces.h90,v 1.4 2005/11/14 16:42:43 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+   !!----------------------------------------------------------------------
+#if defined key_trc_pisces
+      IF(lwp) WRITE(numout,*) ' use PISCES biological model '
+      IF(lwp) WRITE(numout,*) ' '
+
+   ! Check number of tracers
+   ! -----------------------
+
+      IF (jptra /= 24) THEN 
+          IF (lwp) THEN 
+              WRITE (numout,*) ' ===>>>> : w a r n i n g '
+              WRITE (numout,*) ' =======   ============= '
+              WRITE (numout,*)                               &
+              &   ' STOP, change jptra to 24',               & 
+              &   ' in parameter.passivetrc.pisces.h '  
+          END IF 
+          STOP 'TRC_CTL'
+      END IF 
+#endif

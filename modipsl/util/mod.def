@@ -1,0 +1,285 @@
+#- $Header: /home/ioipsl/CVSROOT/modipsl/util/mod.def,v 2.44 2006/04/28 13:48:26 adm Exp $
+#---------------------------------------------------------------------
+#- Pour chaque modele on definit
+#- ses composants (prefixe #-C-), leurs "tags" (prefixe #-T-),
+#- et l'index du serveur CVS correspondant (prefixe #-I-)
+#- dans la liste des serveurs (prefixe #-S-).
+#- Le tag "?" est utilise pour les composants sans tag particulier.
+#- Le tag "-?" est force avec l'option -H activee.
+#---------------------------------------------------------------------
+#- Adresses des serveurs CVS
+#-
+#-S- 1 anonymous@cvs.ipsl.jussieu.fr:/home/ioipsl/CVSROOT
+#-S- 2 sechiba@cvs.ipsl.jussieu.fr:/home/ssipsl/CVSREP
+#-S- 3 lmdzbrowse@cvs.lmd.jussieu.fr:/home/cvsroot
+#-S- 4 opa@cvs.ipsl.jussieu.fr:/home/opalod/CVSROOT
+#-S- 5 nemo@cvs.ipsl.jussieu.fr:/home/opalod/NEMOCVSROOT
+#-S- 6 inca@cvs.ipsl.jussieu.fr:/home/incaipsl/CVSROOT
+#---------------------------------------------------------------------
+#- Informations relatives aux modeles
+#- 
+#-H- IPSLCM4_v1  Modele couple IPSL en cours de finalisation
+#-H- IPSLCM4_v1  ORCA tag ipsl_cm4_v1_9
+#-H- IPSLCM4_v1  IOIPSL/src tag ipsl_cm4_v1_9_1
+#-H- IPSLCM4_v1  LMDZ tag IPSL-CM4_IPCC
+#-H- IPSLCM4_v1  ORCHIDEE tag orchidee_1_3
+#-H- IPSLCM4_v1  CPL Oasis tag IPSL : ipsl_cm4_v1_2
+#-H- IPSLCM4_v1  IPSLCM4_v1 configuration tag IPSL : ipsl_cm4_v1_5
+#-M- IPSLCM4_v1  patricia.cadule@ipsl.jussieu.fr
+#-C- IPSLCM4_v1  IOIPSL/src       CPL             ORCHIDEE      LMDZ.3.3      IPSLCM4_v1    OPA/SRC_ORCA   OPA/SRC_UCL    UTIL/fait_AA_make   
+#-T- IPSLCM4_v1  ipsl_cm4_v1_9_1  ipsl_cm4_v1_2   orchidee_1_3  IPSL-CM4_IPCC ipsl_cm4_v1_6 ipsl_cm4_v1_10 ipsl_cm4_v1_10 ipsl_cm4_v1_8 
+#-I- IPSLCM4_v1  1                1               2             3             1             4              4              4
+#-D- IPSLCM4_v1  .                .               .             .             .             .              .              .
+#-
+#-H- IPSLCM4_LOOP  IPSL coupled model with tracer model and carbon cycle
+#-H- IPSLCM4_LOOP  ORCA (OPA+TRC+LIM) : tag ipsl_cm4_loop_1
+#-H- IPSLCM4_LOOP  IOIPSL/src tag ioipsl-2-0 
+#-H- IPSLCM4_LOOP  LMDZ4 tag IPSL-CM4_LOOP
+#-H- IPSLCM4_LOOP  ORCHIDEE tag orchidee_1_4
+#-H- IPSLCM4_LOOP  CPL Oasis tag IPSL : HEAD
+#-H- IPSLCM4_LOOP  IPSLCM4_LOOP configuration tag IPSL :  ipsl_cm4_loop_v1
+#-H- IPSLCM4_LOOP  Message sent to Patricia CADULE (IPSL)
+#-M- IPSLCM4_LOOP  patricia.cadule@ipsl.jussieu.fr 
+#-C- IPSLCM4_LOOP  IOIPSL/src       CPL         ORCHIDEE      LMDZ4           IPSLCM4_LOOP       IPSLCM4_v1/Utilitaires   OPA/SRC_ORCA    OPA/SRC_UCL     OPA/SRC_TRC     UTIL/fait_AA_make   
+#-T- IPSLCM4_LOOP  ioipsl-2-0       ?           orchidee_1_4  IPSL-CM4_LOOP   ?                  ipsl_cm4_v1_6            ipsl_cm4_loop_1 ipsl_cm4_loop_1 ipsl_cm4_loop_1 ipsl_cm4_v1_8 
+#-I- IPSLCM4_LOOP  1                1           2             3               1                  1                        4               4               4               4
+#-D- IPSLCM4_LOOP  .                .           .             .               IPSLCM4_LOOP       post_util                .               .               .               .
+#-L- IPSLCM4_LOOP  modeles          modeles     modeles       modeles         config             .                        modeles         modeles         modeles         modeles
+#-
+#-H- IPSLCM4_v1_OASIS3  Modele couple IPSL en cours de finalisation
+#-H- IPSLCM4_v1_OASIS3  ORCA tag ipsl_cm4_v1_10
+#-H- IPSLCM4_v1_OASIS3  IOIPSL/src tag ipsl_cm4_v1_9_1
+#-H- IPSLCM4_v1_OASIS3  LMDZ4 tag IPSL-CM4_IPCC
+#-H- IPSLCM4_v1_OASIS3  ORCHIDEE tag orchidee_1_3
+#-H- IPSLCM4_v1_OASIS3  IPSLCM4_v1_OASIS3 configuration with OASIS3 coupler 23/03/05
+#-M- IPSLCM4_v1_OASIS3  arnaud.caubel@cea.fr
+#-C- IPSLCM4_v1_OASIS3  IOIPSL/src       ORCHIDEE      OASIS3        LMDZ4         IPSLCM4_v1_OASIS3    IPSLCM4_v1/Utilitaires OPA/SRC_ORCA   OPA/SRC_UCL    UTIL/fait_AA_make   
+#-T- IPSLCM4_v1_OASIS3  ioipsl-2-0       orchidee_1_3  ?             IPSL-CM4_IPCC_branch         ?            ipsl_cm4_v1_6          ipsl_cm4_v1_10 ipsl_cm4_v1_10 ipsl_cm4_v1_8 
+#-I- IPSLCM4_v1_OASIS3  1                2             1             3             1                    1                      4              4              4
+#-D- IPSLCM4_v1_OASIS3  .                .             prism         .             .                    post_util              .              .              . 
+#-L- IPSLCM4_v1_OASIS3  modeles          modeles       .             modeles       config               .                      modeles        modeles        modeles
+#-
+#-H- IOIPSL  IOIPSL source only
+#-H- IOIPSL  IOIPSL tag ioipsl-2-0
+#-M- IOIPSL  foujols@ipsl.jussieu.fr
+#-C- IOIPSL  IOIPSL/src
+#-T- IOIPSL  ioipsl-2-0
+#-I- IOIPSL  1
+#-D- IOIPSL  .
+#-
+#-H- IOIPSL_PLUS  IOIPSL source, tools, doc and samples
+#-H- IOIPSL_PLUS  IOIPSL (development version)
+#-M- IOIPSL_PLUS  foujols@ipsl.jussieu.fr
+#-C- IOIPSL_PLUS  IOIPSL
+#-T- IOIPSL_PLUS  ?
+#-I- IOIPSL_PLUS  1
+#-D- IOIPSL_PLUS  .
+#-
+#-H- ORCHIDEE  Modele ORCHIDEE seulement les sources
+#-H- ORCHIDEE  ORCHIDEE tag orchidee_1_3
+#-C- ORCHIDEE  ORCHIDEE
+#-M- ORCHIDEE  Martial.Mancip@ipsl.jussieu.fr
+#-T- ORCHIDEE  orchidee_1_3
+#-I- ORCHIDEE  2
+#-D- ORCHIDEE  .
+#-
+#-H- ORCHIDEE_OL  Modele ORCHIDEE pour utilisation OFFLINE
+#-H- ORCHIDEE_OL  ORCHIDEE tag orchidee_1_3
+#-H- ORCHIDEE_OL  ORCHIDEE_OL tag old_ioipsl
+#-M- ORCHIDEE_OL  Martial.Mancip@ipsl.jussieu.fr
+#-C- ORCHIDEE_OL  IOIPSL/src       ORCHIDEE       ORCHIDEE_OL
+#-T- ORCHIDEE_OL  ipsl_cm4_v1_9_1    orchidee_1_3   old_ioipsl
+#-I- ORCHIDEE_OL  1                2              2
+#-D- ORCHIDEE_OL  .                .              .
+#-
+#-H- ORCHIDEE_OL_IO2  Modele ORCHIDEE pour utilisation OFFLINE
+#-H- ORCHIDEE_OL_IO2  ORCHIDEE tag orchidee_1_3
+#-H- ORCHIDEE_OL_IO2  ORCHIDEE_OL Head version
+#-H- ORCHIDEE_OL_IO2  IOIPSL f90 version Head version
+#-M- ORCHIDEE_OL_IO2  Martial.Mancip@ipsl.jussieu.fr
+#-C- ORCHIDEE_OL_IO2  IOIPSL/src       ORCHIDEE       ORCHIDEE_OL
+#-T- ORCHIDEE_OL_IO2  ioipsl-2-0       orchidee_1_4   old_ioipsl
+#-I- ORCHIDEE_OL_IO2  1                2              2
+#-D- ORCHIDEE_OL_IO2  .                .              .
+#-
+#-H- ORCHIDEE_OL2  Modele ORCHIDEE pour utilisation OFFLINE
+#-H- ORCHIDEE_OL2  ORCHIDEE with no tag
+#-H- ORCHIDEE_OL2  ORCHIDEE_OL with no tag
+#-M- ORCHIDEE_OL2  Martial.Mancip@ipsl.jussieu.fr
+#-C- ORCHIDEE_OL2  IOIPSL/src ORCHIDEE       ORCHIDEE_OL
+#-T- ORCHIDEE_OL2  ?          ? 	     ?
+#-I- ORCHIDEE_OL2  1          2              2
+#-D- ORCHIDEE_OL2  .          .              .
+#-
+#-H- LMDZ  LMDZ main branch tagged in june 2001
+#-M- LMDZ  fairhead@lmd.jussieu.fr
+#-C- LMDZ  IOIPSL/src LMDZ.3.3
+#-T- LMDZ  ipsl_cm4_v1_9_1   rel-1-0-patch 
+#-I- LMDZ  1               3
+#-D- LMDZ  .               .
+#-
+#-H- LMDZOR  LMDZ with ORCHIDEE :
+#-H- LMDZOR  closest version to the IPSL coupled model
+#-H- LMDZOR  LMDZ tag IPSL-CM4_LJ29_OPT
+#-H- LMDZOR  ORCHIDEE tag orchidee_1_3
+#-M- LMDZOR  fairhead@lmd.jussieu.fr
+#-C- LMDZOR  IOIPSL/src      ORCHIDEE      LMDZ.3.3            LMDZOR
+#-T- LMDZOR  ipsl_cm4_v1_9_1   orchidee_1_3  IPSL-CM4_LJ29_OPT   ?
+#-I- LMDZOR  1               2             3                   3
+#-D- LMDZOR  .               .             .                   .
+#-
+#-H- LMDZ4OR  LMDZ with ORCHIDEE :
+#-H- LMDZ4OR  closest version to the IPSL coupled model IPSLCM4_v1_OASIS3
+#-H- LMDZ4OR  LMDZ4 IPSL-CM4_IPCC_branch version
+#-H- LMDZ4OR  ORCHIDEE tag orchidee_1_3
+#-H- LMDZ4OR  IOIPSL tag ioipsl-2-0
+#-M- LMDZ4OR  fairhead@lmd.jussieu.fr
+#-C- LMDZ4OR  IOIPSL/src      ORCHIDEE      LMDZ4                 LMDZ4OR   IPSLCM4_v1/Utilitaires
+#-T- LMDZ4OR  ioipsl-2-0      orchidee_1_3  IPSL-CM4_IPCC_branch  ?         ipsl_cm4_v1_6
+#-I- LMDZ4OR  1               2             3                     1         1
+#-D- LMDZ4OR  .               .             .                     .         post_util
+#-L- LMDZ4OR  modeles         modeles       modeles               config    .
+#-
+#-H- LMDZ4INCA  LMDZ with INCA :
+#-H- LMDZ4INCA  closest version to the IPSL coupled model IPSLCM4_v1_OASIS3
+#-H- LMDZ4INCA  LMDZ4 reference version
+#-H- LMDZ4INCA  INCA.2 reference version
+#-H- LMDZ4INCA  IOIPSL tag ioipsl-2-0
+#-M- LMDZ4INCA  Anne.Cozic@cea.fr    
+#-C- LMDZ4INCA  IOIPSL/src      INCA.2        LMDZ4                 LMDZ4INCA
+#-T- LMDZ4INCA  ioipsl-2-0      ?             ?                     ?
+#-I- LMDZ4INCA  1               6             3                     1
+#-D- LMDZ4INCA  .               .             .                     .
+#-L- LMDZ4INCA  modeles         modeles       modeles               config
+#-
+#-H- LMDZOR_V1  LMDZ with ORCHIDEE. 
+#-H- LMDZOR_V1  ORCHIDEE no tag 
+#-H- LMDZOR_V1  LMDZ tag IPSL-CM4_v2x0
+#-M- LMDZOR_V1  fairhead@lmd.jussieu.fr
+#-C- LMDZOR_V1  IOIPSL/src ORCHIDEE      LMDZ.3.3   LMDZOR
+#-T- LMDZOR_V1  ipsl_cm4_v1_9_1  HEAD          rel-LF       ?
+#-I- LMDZOR_V1  1              2             3            3
+#-D- LMDZOR_V1  .              .             .            .
+#-
+#-H- ORCA2  ORCA 2 degrees - no ice model
+#-H- ORCA2  ORCA tag ipsl_cm4_v1_6
+#-H- ORCA2  IOIPSL/src tag ipsl_cm4_v1_9_1
+#-M- ORCA2  opatlod@lodyc.jussieu.fr
+#-C- ORCA2  IOIPSL/src     OPA/SRC_ORCA   UTIL/fait_AA_make CONFIG/ORCA2
+#-T- ORCA2  ipsl_cm4_v1_9_1  ipsl_cm4_v1_6  ipsl_cm4_v1_8     ?
+#-I- ORCA2  1              4              4                 4
+#-D- ORCA2  .              .              .                 ORCA2
+#-
+#-H- ORCA2_LIM  ORCA 2 degrees with Louvain Ice Model
+#-H- ORCA2_LIM  ORCA tag ipsl_cm4_v1_6
+#-H- ORCA2_LIM  LIM tag ipsl_cm4_v1_6
+#-H- ORCA2_LIM  IOIPSL/src tag ipsl_cm4_v1_9_1
+#-M- ORCA2_LIM  opatlod@lodyc.jussieu.fr
+#-C- ORCA2_LIM  IOIPSL/src     OPA/SRC_ORCA   OPA/SRC_UCL   UTIL/fait_AA_make CONFIG/ORCA2_LIM
+#-T- ORCA2_LIM  ipsl_cm4_v1_9_1  ipsl_cm4_v1_6  ipsl_cm4_v1_6 ipsl_cm4_v1_8     ?
+#-I- ORCA2_LIM  1              4              4             4                 4
+#-D- ORCA2_LIM  .              .              .             .                 ORCA2_LIM
+#-
+#-H- NEMO  NEMO
+#-H- NEMO  OPA 
+#-H- NEMO  LIM 
+#-H- NEMO  TOP 
+#-H- NEMO  IOIPSL/src tag ioipsl-2-0
+#-H- NEMO  NEMO sources and configurations
+#-M- NEMO  opatlod@lodyc.jussieu.fr
+#-C- NEMO  IOIPSL/src      AGRIF          NEMO          UTIL          CONFIG/GYRE          CONFIG/ORCA2_LIM
+#-T- NEMO  ioipsl-3-1      ?              nemo_v1_12    nemo_v1_12    nemo_v1_12           nemo_v1_12
+#-I- NEMO  1               5              5             5             5                    5 
+#-D- NEMO  .               .              .             .             GYRE                 ORCA2_LIM
+#-L- NEMO  modeles         modeles        modeles       modeles       config               config
+#-
+#-H- ORCA4_LIM  ORCA 4 degrees with Louvain Ice Model
+#-H- ORCA4_LIM  ORCA tag ipsl_cm4_v1_6
+#-H- ORCA4_LIM  LIM tag ipsl_cm4_v1_6
+#-H- ORCA4_LIM  IOIPSL/src tag ipsl_cm4_v1_9_1
+#-M- ORCA4_LIM  opatlod@lodyc.jussieu.fr
+#-C- ORCA4_LIM  IOIPSL/src      OPA/SRC_ORCA  OPA/SRC_UCL    UTIL/fait_AA_make CONFIG/ORCA4_LIM
+#-T- ORCA4_LIM  ipsl_cm4_v1_9_1  ipsl_cm4_v1_6  ipsl_cm4_v1_6  ipsl_cm4_v1_8     ?
+#-I- ORCA4_LIM  1              4              4              4                 4
+#-D- ORCA4_LIM  .              .              .              .                 ORCA4_LIM
+#-
+#-H- ORCA2_LIM_TRC  ORCA 2 degrees with Louvain Ice Model with tracers model
+#-H- ORCA2_LIM_TRC  ORCA tag ipsl_cm4_v1_6
+#-H- ORCA2_LIM_TRC  LIM tag ipsl_cm4_v1_6
+#-H- ORCA2_LIM_TRC  IOIPSL/src tag ipsl_cm4_v1_9_1
+#-M- ORCA2_LIM_TRC  opatlod@lodyc.jussieu.fr
+#-C- ORCA2_LIM_TRC  IOIPSL/src     OPA/SRC_ORCA   OPA/SRC_UCL   OPA/SRC_TRC     UTIL/fait_AA_make CONFIG/ORCA2_LIM_TRC
+#-T- ORCA2_LIM_TRC  ipsl_cm4_v1_9_1  ipsl_cm4_v1_6  ipsl_cm4_v1_6 ipsl_cm4_v1_6   ipsl_cm4_v1_8     ?
+#-I- ORCA2_LIM_TRC  1              4              4             4               4                 4
+#-D- ORCA2_LIM_TRC  .              .              .             .               .                 ORCA2_LIM_TRC
+#
+#-H- ORCA2_OFF_TRC  ORCA 2 degrees offline with tracers model
+#-H- ORCA2_OFF_TRC  ORCA tag ipsl_cm4_v1_6
+#-H- ORCA2_OFF_TRC  IOIPSL/src tag ipsl_cm4_v1_9_1
+#-M- ORCA2_OFF_TRC  opatlod@lodyc.jussieu.fr
+#-C- ORCA2_OFF_TRC  IOIPSL/src     OPA/SRC_OFFLINE_TRC OPA/SRC_TRC    UTIL/fait_AA_make CONFIG/ORCA2_OFF_TRC
+#-T- ORCA2_OFF_TRC  ipsl_cm4_v1_9_1  ipsl_cm4_v1_6       ipsl_cm4_v1_6  ipsl_cm4_v1_8     ?
+#-I- ORCA2_OFF_TRC  1              4                   4                 4              4
+#-D- ORCA2_OFF_TRC  .              .                   .                 .              ORCA2_OFF_TRC
+#-
+#-H- EEL2  EEL2 configuration - no ice model
+#-H- EEL2  ORCA tag ipsl_cm4_v1_6
+#-H- EEL2  IOIPSL/src tag ipsl_cm4_v1_9_1
+#-M- EEL2  opatlod@lodyc.jussieu.fr
+#-C- EEL2  IOIPSL/src     OPA/SRC_ORCA    UTIL/fait_AA_make CONFIG/EEL2
+#-T- EEL2  ipsl_cm4_v1_9_1  ipsl_cm4_v1_6   ipsl_cm4_v1_8     ?
+#-I- EEL2  1              4               4                 4
+#-D- EEL2  .              .               .                 EEL2
+#-
+#-H- EEL2_LOBSTER1  EEL2_LOBSTER1 configuration, EEL2+tracers - no ice model
+#-H- EEL2_LOBSTER1  ORCA tag ipsl_cm4_v1_6
+#-H- EEL2_LOBSTER1  IOIPSL/src tag ipsl_cm4_v1_9_1
+#-M- EEL2_LOBSTER1  opatlod@lodyc.jussieu.fr
+#-C- EEL2_LOBSTER1  IOIPSL/src     OPA/SRC_ORCA   OPA/SRC_TRC     UTIL/fait_AA_make CONFIG/EEL2_LOBSTER1
+#-T- EEL2_LOBSTER1  ipsl_cm4_v1_9_1  ipsl_cm4_v1_6  ipsl_cm4_v1_6   ipsl_cm4_v1_8     ?
+#-I- EEL2_LOBSTER1  1              4              4               4                 4
+#-D- EEL2_LOBSTER1  .              .              .               .                 EEL2_LOBSTER1
+#-
+#-H- EEL6  EEL6 configuration - no ice model
+#-H- EEL6  ORCA tag ipsl_cm4_v1_6
+#-H- EEL6  IOIPSL/src tag ipsl_cm4_v1_9_1
+#-M- EEL6  opatlod@lodyc.jussieu.fr
+#-C- EEL6  IOIPSL/src     OPA/SRC_ORCA   UTIL/fait_AA_make CONFIG/EEL6
+#-T- EEL6  ipsl_cm4_v1_9_1  ipsl_cm4_v1_6  ipsl_cm4_v1_8     ?
+#-I- EEL6  1              4              4                 4
+#-D- EEL6  .              .              .                 EEL6
+#-
+#-H- EEL6_LOBSTER1  EEL6_LOBSTER1 configuration, EEL6+tracers - no ice model
+#-H- EEL6_LOBSTER1  ORCA tag ipsl_cm4_v1_6
+#-H- EEL6_LOBSTER1  IOIPSL/src tag ipsl_cm4_v1_9_1
+#-M- EEL6_LOBSTER1  opatlod@lodyc.jussieu.fr
+#-C- EEL6_LOBSTER1  IOIPSL/src     OPA/SRC_ORCA    OPA/SRC_TRC     UTIL/fait_AA_make CONFIG/EEL6_LOBSTER1
+#-T- EEL6_LOBSTER1  ipsl_cm4_v1_9_1  ipsl_cm4_v1_6   ipsl_cm4_v1_6   ipsl_cm4_v1_8     ?
+#-I- EEL6_LOBSTER1  1              4               4               4                 4
+#-D- EEL6_LOBSTER1  .              .               .               .                 EEL6_LOBSTER1
+#-
+#-M- TOY  foujols@ipsl.jussieu.fr
+#-C- TOY  TOY  CPL
+#-T- TOY  ?    ?
+#-I- TOY  1    1
+#-D- TOY  .    .
+#-
+#-H- ORCA_TOYATM  Modele couple ORCA4 - TOYATM
+#-H- ORCA_TOYATM  ORCA tag ipsl_cm4_v1_10
+#-H- ORCA_TOYATM  IOIPSL/src tag Head
+#-H- ORCA_TOYATM  ORCA_TOYATM configuration with OASIS3 coupler 06/2005
+#-M- ORCA_TOYATM  arnaud.caubel@cea.fr
+#-C- ORCA_TOYATM  IOIPSL/src       OASIS3        TOY/ATM      ORCA_TOYATM    OPA/SRC_ORCA   OPA/SRC_UCL    UTIL/fait_AA_make   
+#-T- ORCA_TOYATM  ?                ?             ?            ?              ipsl_cm4_v1_10 ipsl_cm4_v1_10 ipsl_cm4_v1_8 
+#-I- ORCA_TOYATM  1                1             1            1              4              4              4
+#-D- ORCA_TOYATM  .                prism         TOYATM       .              .              .              . 
+#-L- ORCA_TOYATM  modeles          .             modeles      config         modeles        modeles        modeles
+
+
+
+
+
+
+
+
+

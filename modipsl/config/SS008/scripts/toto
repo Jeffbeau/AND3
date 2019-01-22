@@ -1,0 +1,20 @@
+77,80c77
+< #P_P = key_ADJ_TRANSPORT key_dynldf_smag key_ss_bio key_dynspg_ts  key_zdftke key_dtatem key_dtasal key_tau_cmc key_obc key_tradmp key_traldf_smag key_ldfslp key_mpp_mpi  key_ice_lim key_lim_fdd key_flx_bulk_daily key_flx_bulk_cmc key_RIVER_INPUT
+< 
+< ##DL: JC + key_passivetrc and key_BGCM_02
+< P_P = key_ADJ_TRANSPORT key_dynldf_smag key_ss_bio key_dynspg_ts key_zdftke key_dtatem key_dtasal key_tau_cmc key_obc key_tradmp key_traldf_smag key_ldfslp key_mpp_mpi key_ice_lim key_lim_fdd key_flx_bulk_daily key_flx_bulk_cmc key_RIVER_INPUT key_passivetrc key_BGCM_02 VARIA_LIGHT_SENSI OXYGEN
+---
+> ##P_P = key_ADJ_TRANSPORT key_dynldf_smag key_ss_bio key_dynspg_ts  key_zdftke key_dtatem key_dtasal key_tau_cmc key_obc key_tradmp key_traldf_smag key_ldfslp key_mpp_mpi  key_ice_lim key_lim_fdd key_flx_bulk_daily key_flx_bulk_cmc key_RIVER_INPUT
+89c86,92
+< #P_P = key_ADJ_TRANSPORT key_dynldf_smag key_ss_bio key_dynspg_ts  key_zdftke key_dtatem key_dtasal key_tau_cmc key_obc key_tradmp key_traldf_smag key_ldfslp key_mpp_mpi key_floats key_ice_lim key_lim_fdd key_flx_bulk_daily   key_flx_bulk_cmc key_passivetrc key_BGCM_01 
+---
+> #P_P = key_ADJ_TRANSPORT key_dynldf_smag key_ss_bio key_dynspg_ts  key_zdftke key_dtatem key_dtasal key_tau_cmc key_obc key_tradmp key_traldf_smag key_ldfslp key_mpp_mpi key_floats key_ice_lim key_lim_fdd key_flx_bulk_daily   key_flx_bulk_cmc key_passivetrc key_BGCM_01
+>  
+> ##DL: JC + key_passivetrc and key_BGCM_02
+> P_P = key_ADJ_TRANSPORT key_dynldf_smag key_ss_bio key_dynspg_ts key_zdftke key_dtatem key_dtasal key_tau_cmc key_obc key_tradmp key_traldf_smag key_ldfslp key_mpp_mpi key_ice_lim key_lim_fdd key_flx_bulk_daily key_flx_bulk_cmc key_RIVER_INPUT key_passivetrc key_BGCM_02 VARIA_LIGHT_SENSI NPZD_INT_PROD OXYGEN 
+> 
+> ##DL: DL minus biochem
+> #P_P = key_ADJ_TRANSPORT key_dynldf_smag key_ss_bio key_dynspg_ts key_zdftke key_dtatem key_dtasal key_tau_cmc key_obc key_tradmp key_traldf_smag key_ldfslp key_mpp_mpi key_ice_lim key_lim_fdd key_flx_bulk_daily key_flx_bulk_cmc key_RIVER_INPUT
+90a94,95
+> ##NL: Only physic
+> #P_P = key_ADJ_TRANSPORT key_dynldf_smag key_ss_bio key_dynspg_ts key_zdftke key_dtatem key_dtasal key_tau_cmc key_obc key_tradmp key_traldf_smag key_ldfslp key_mpp_mpi key_ice_lim key_lim_fdd key_flx_bulk_daily key_flx_bulk_cmc key_RIVER_INPUT

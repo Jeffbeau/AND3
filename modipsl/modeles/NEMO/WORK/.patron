@@ -1,0 +1,18 @@
+CVS
+SRC_PARAM
+SRC_FILE_LIST
+tmplist
+AA_make
+KEY_CPP
+Makefile
+*?.o
+ i.?*
+*?.L
+.patron
+bloc.com
+para.com
+defcst.f
+fontbc.f
+icdyna.f
+thersf.f
+OPAFILES

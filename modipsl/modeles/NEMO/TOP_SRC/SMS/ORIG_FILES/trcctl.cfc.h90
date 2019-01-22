@@ -1,0 +1,77 @@
+! $Id: trcctl.cfc.h90,v 1.3 2005/12/08 10:42:00 opalod Exp $
+!!!
+!!! Modifications:
+!!! --------------
+!!!    05-10 (C. Ethe): 
+!!!           assign a parameter to name individual tracers
+!!!
+
+      IF(lwp) THEN
+          WRITE(numout,*) ' CFC Model '
+          WRITE(numout,*) ' '
+      ENDIF
+
+! Check number of tracers
+! -----------------------
+     
+      IF (jptra .GT. 2) THEN 
+          IF (lwp) THEN 
+              WRITE (numout,*) ' ===>>>> : w a r n i n g '
+              WRITE (numout,*) ' =======   ============= '
+              WRITE (numout,*)                             &
+              &   ' STOP, change jptra to 1 or 2 in par_sms_cfc.h90 '  
+          END IF 
+          STOP 'TRC_CTL'
+      END IF 
+
+! Check tracer names
+! ------------------
+      IF ( jptra == 1 ) THEN
+         IF ( jp11 == 1 ) THEN
+            IF ( ctrcnm(jp11) /= 'CFC11') THEN
+               ctrcnm(jp11)='CFC11'
+               ctrcnl(jp11)='Carbonate 11 concentration'
+            ENDIF
+         ENDIF
+         IF ( jp12 == 1 ) THEN
+            IF ( ctrcnm(jp12) /= 'CFC12') THEN
+               ctrcnm(jp12)='CFC12'
+               ctrcnl(jp12)='Carbonate 12 concentration'
+            ENDIF
+         ENDIF
+      ENDIF
+
+      IF ( jptra == 2 ) THEN
+         IF ( ctrcnm(jp11) /= 'CFC11' .OR. ctrcnm(jp12) /= 'CFC12' ) THEN 
+            ctrcnm(jp11)='CFC11'
+            ctrcnl(jp11)='Carbonate 11 concentration'
+            ctrcnm(jp12)='CFC12'
+            ctrcnl(jp12)='Carbonate 12 concentration' 
+         ENDIF
+      ENDIF
+
+      IF (lwp) THEN
+         WRITE (numout,*) ' ===>>>> : w a r n i n g '
+         WRITE (numout,*) ' =======   ============= '
+         WRITE (numout,*) ' we force tracer names'
+         DO jn=1,jptra
+            WRITE(numout,*) ' tracer nb: ',jn,' name = ',ctrcnm(jn), ctrcnl(jn)
+         END DO
+         WRITE(numout,*) ' '
+      ENDIF 
+
+
+! Check tracer units
+
+      DO jn=1,jptra
+        IF (ctrcun(jn) /= 'mole/m3') THEN
+            ctrcun(jn)='mole/m3'
+            IF (lwp) THEN
+                WRITE (numout,*) ' ===>>>> : w a r n i n g '
+                WRITE (numout,*) ' =======   ============= '
+                WRITE (numout,*) ' we force tracer unit'
+                WRITE(numout,*) ' tracer  ',ctrcnm(jn), 'UNIT= ',ctrcun(jn)
+                WRITE(numout,*) ' '
+            ENDIF 
+        ENDIF 
+      END DO              

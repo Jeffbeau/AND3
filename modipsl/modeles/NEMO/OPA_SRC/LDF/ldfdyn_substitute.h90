@@ -1,0 +1,42 @@
+   !!----------------------------------------------------------------------
+   !!                    ***  ldfdyn_substitute.h90  ***
+   !!----------------------------------------------------------------------
+   !! ** purpose :   substitute fsahm., the lateral eddy viscosity coeff. 
+   !!      with a constant, or 1D, or 2D or 3D array, using CPP macro.
+   !!----------------------------------------------------------------------
+   !!----------------------------------------------------------------------
+   !!  OPA 9.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/OPA_SRC/LDF/ldfdyn_substitute.h90,v 1.3 2005/03/27 18:35:07 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+   !!----------------------------------------------------------------------
+#if defined key_dynldf_c3d
+!   ' key_dynldf_c3d' :                  3D coefficient
+#    define   fsahmt(i,j,k)    ahm1(i,j,k)
+#    define   fsahmf(i,j,k)    ahm2(i,j,k)
+#    define   fsahmu(i,j,k)    ahm3(i,j,k)
+#    define   fsahmv(i,j,k)    ahm4(i,j,k)
+#elif defined key_dynldf_smag
+!   ' key_dynldf_c3d' :                  3D coefficient
+#    define   fsahmt(i,j,k)    ahm1(i,j,k)
+#    define   fsahmf(i,j,k)    ahm2(i,j,k)
+#    define   fsahmu(i,j,k)    ahm3(i,j,k)
+#    define   fsahmv(i,j,k)    ahm4(i,j,k)
+#elif defined key_dynldf_c2d
+!   ' key_dynldf_c2d' :                 2D coefficient
+#  define   fsahmt(i,j,k)    ahm1(i,j)
+#  define   fsahmf(i,j,k)    ahm2(i,j)
+#  define   fsahmu(i,j,k)    ahm3(i,j)
+#  define   fsahmv(i,j,k)    ahm4(i,j)
+#elif defined key_dynldf_c1d
+!   'key_dynldf_c1d' :                  1D coefficient
+#  define   fsahmt(i,j,k)    ahm1(k)
+#  define   fsahmf(i,j,k)    ahm1(k)
+#  define   fsahmu(i,j,k)    ahm1(k)
+#  define   fsahmv(i,j,k)    ahm1(k)
+#else
+!   default option :               Constant coefficient
+#  define   fsahmt(i,j,k)   ahm0
+#  define   fsahmf(i,j,k)   ahm0
+#  define   fsahmu(i,j,k)   ahm0
+#  define   fsahmv(i,j,k)   ahm0
+#endif

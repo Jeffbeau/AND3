@@ -1,0 +1,46 @@
+!!---------------------------------------------------------------------
+!!
+!!                         PARAMETER passivetrc.lobster1
+!!                       ********************************
+!!
+!!  purpose :
+!!  ---------
+!!     INCLUDE PARAMETER FILE for passive tracer LOBSTER1 model
+!!
+!!  modifications:  
+!!  --------------
+!!     00-12 (E. Kestenare): 
+!!            assign a parameter to name individual tracers
+!!
+!! productive layer depth
+!! ----------------------
+!!       jpkb   : first vertical layers where biology is active
+!!       jpkbm1 : jpkb - 1
+!!
+!!----------------------------------------------------------------------
+!!  TOP 1.0,  LOCEAN-IPSL (2005)
+!! $Header: /home/opalod/NEMOCVSROOT/NEMO/TOP_SRC/SMS/par_sms_lobster1.h90,v 1.4 2005/09/12 09:04:58 opalod Exp $
+!! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt
+!!----------------------------------------------------------------------
+
+      INTEGER jpkb,jpkbm1
+      PARAMETER (jpkb = 12,jpkbm1 = 11)
+!!
+!! number of biological trends
+!! ---------------------------
+!!
+      INTEGER jpdiabio
+      PARAMETER (jpdiabio = 15)
+!!
+!!    NOW ASSIGN A PARAMETER TO NAME INDIVIDUAL TRACERS
+!!
+!!    JPDET : detritus (mmoleN/m3)
+!!    JPZOO : zooplancton concentration (mmoleN/m3)
+!!    JPPHY : phytoplancton concentration (mmoleN/m3)
+!!    JPNO3 : nitrate concentration (mmoleN/m3)
+!!    JPNH4 : ammonium concentration (mmoleN/m3)
+!!    JPDOM : dissolved organic matter (mmoleN/m3)
+!!
+      INTEGER jpdet,jpzoo,jpphy,jpno3,jpnh4,jpdom
+      PARAMETER (jpdet=1,jpzoo=2,jpphy=3,jpno3=4,jpnh4=5,jpdom=6)
+

@@ -1,0 +1,318 @@
+#!/bin/ksh
+#- $Id: model,v 2.8 2005/06/17 11:43:38 adm Exp $
+#---------------------------------------------------------------------
+# @(#)Actions relatives aux modeles IPSL
+#---------------------------------------------------------------------
+#-
+#set -xv
+MAIL_ADDRESS=patricia.cadule@ipsl.jussieu.fr
+MAIL_COM=mail
+#MAIL_COM=Mail
+#------------------------------------------------------------
+#- Decomposition du nom d'appel de la procedure (d_n/b_n) ---
+#------------------------------------------------------------
+d_n=$(dirname $0); b_n=$(basename $0);
+#--------------------------------------
+#- Saisie et validation des options ---
+#--------------------------------------
+m_n=""; m_a=""; m_v='silencious'; no_tag='false'; 
+while getopts :heudrvH V
+  do
+    case $V in
+      (h)  m_a='help';;
+      (e)  m_a='checkout';;
+      (u)  m_a='update';;
+      (d)  m_a='diff';;
+      (r)  m_a='remove';;
+      (v)  m_v='verbose';;
+      (H)  no_tag='true';;
+      (:)  echo ${b_n}" : option $OPTARG : missing value" 1>&2;
+           exit 2;;
+      (\?) echo ${b_n}" : option $OPTARG : not supported" 1>&2;
+           exit 2;;
+    esac
+  done
+shift $(($OPTIND-1));
+case ${m_a} in
+  ( checkout | update | diff | remove ) ;;
+  ("") m_a='checkout';;
+esac
+#-----------------------------
+#- Saisie du nom du modele ---
+#-----------------------------
+if   [ ${#} -gt 1 ]; then
+  echo 'Only one model can be specified' 1>&2;
+  exit 3;
+elif [ ${#} -eq 1 ]; then
+  m_n="${1}";
+elif [ ${m_a} != 'help' ]; then
+  echo 'Model not specified' 1>&2;
+  echo 'Try "'${b_n}' -h [model-name]"' 1>&2;
+  exit 3;
+fi
+#-----------------------------------------------
+#- Test d'existence du fichier de definition ---
+#-----------------------------------------------
+F_DEF=${d_n}'/mod.def'
+[ ! -f "${F_DEF}" ] && { echo "${F_DEF} unreachable ..."; exit 3; }
+#-----------------------------------------------
+#- Extraction des noms des modeles supportes ---
+#-----------------------------------------------
+QQQ=$(sed -n -e "s/^#-C-  *\([^ ]*\).*$/\1/p" ${F_DEF});
+qi=0; for i in ${QQQ}; do ((qi=qi+1)); m_x[qi]=${i}; done
+#-------------------------------------------------------------
+#- Validation du nom du modele et saisie des informations  ---
+#-------------------------------------------------------------
+[ '\?'"${m_n}" != '\?' ] && \
+  {
+    i_m=-1;
+    qi=0; while (( ${qi} < ${#m_x[@]} ))
+      do
+        ((qi=qi+1));
+        [ ${m_n} = ${m_x[qi]} ] && { i_m=${qi}; break; };
+      done
+    (( ${i_m} < 0 )) && \
+     { echo 'Model '"${m_n}"' unknown' 1>&2;
+       echo 'Try "'${b_n}' -h"' 1>&2;
+       exit 3; }
+    #- Recherche de l'adresse email a qui envoyer les infos
+    QQQ=$(sed -n -e "s/^#-M-  *${m_n}  *//p" ${F_DEF});
+    [ '\?'"${QQQ}" = '\?' ] && \
+      { echo 'Address mail not found for '${m_n}; exit 3; }
+    m_m=${QQQ}
+    #- Recherche des composants
+    QQQ=$(sed -n -e "s/^#-C-  *${m_n}  *//p" ${F_DEF});
+    [ '\?'"${QQQ}" = '\?' ] && \
+      { echo 'Components not found for '${m_n}; exit 3; }
+    qi=0; for i in ${QQQ}; do ((qi=qi+1)); m_c[qi]=${i}; done
+    #- Recherche des tags
+    QQQ=$(sed -n -e "s/^#-T-  *${m_n}  *//p" ${F_DEF});
+    [ '\?'"${QQQ}" = '\?' ] && \
+      { echo 'Tags not found for '${m_n}; exit 3; }
+    qi=0; for i in ${QQQ}
+      do 
+        ((qi=qi+1)); 
+         if [ ${no_tag} = 'false' ]; then
+           m_t[qi]=${i}; 
+         else
+           m_t[qi]='?'
+         fi
+      done
+    #- Recherche des serveurs CVS
+    QQQ=$(sed -n -e "s/^#-I-  *${m_n}  *//p" ${F_DEF});
+    [ '\?'"${QQQ}" = '\?' ] && \
+      { echo 'Indexes not found for '${m_n}; exit 3; }
+    qi=0; for i in ${QQQ}
+      do
+        ((qi=qi+1));
+        QQS=$(sed -n -e "s/^#-S-  *${i}  *//p" ${F_DEF});
+        [ '\?'"${QQS}" = '\?' ] && \
+          { echo 'Server number '${i}' not found'; exit 3; }
+        m_s[qi]=${QQS};
+      done
+    #- Recherche des directories
+    QQQ=$(sed -n -e "s/^#-D-  *${m_n}  *//p" ${F_DEF});
+    [ '\?'"${QQQ}" = '\?' ] && \
+      { echo 'Target Directories not found for '${m_n}; exit 3; }
+    qi=0; for i in ${QQQ}; do ((qi=qi+1)); m_d[qi]=${i}; m_l[qi]="modeles"; done     
+    #- Recherche des local directories
+    QQQ=$(sed -n -e "s/^#-L-  *${m_n}  *//p" ${F_DEF});
+    [ '\?'"${QQQ}" = '\?' ] || \
+    qi=0; for i in ${QQQ}; do ((qi=qi+1)); m_l[qi]=${i}; done     
+  }
+#----------------------------------------------------------------
+# envoi d'un mail si c'est la premiere fois qu on utilise modipsl
+#      ie directory ~/.modipsl do not exist
+#----------------------------------------------------------------
+D_LOG=${HOME}/.modipsl
+[ -d "${D_LOG}" ] || { mkdir "${D_LOG}" ; echo `date +"%D %T"` `whoami` `uname -m` first usage of model | ${MAIL_COM} -s "first usage of modipsl" ${MAIL_ADDRESS} >/dev/null 2>&1 ; echo `date +"%D %T"` creation >"${D_LOG}"/first ; }
+#--------------------------
+#- Traitement du "help" ---
+#--------------------------
+if [ ${m_a} = 'help' ]; then
+  echo ' ';
+  if [ '\?'"${m_n}" = '\?' ]; then
+    echo 'Usage    :';
+    echo ${b_n} '[-h]';
+    echo ${b_n} '[-h] model_name';
+    echo ${b_n} '[-e/u/d/r] [-H] [-v] model_name';
+    echo 'h            : this help';
+    echo 'h model-name : help on model';
+    echo 'e/u/d/r      : extract/update/diff/remove model';
+    echo 'H            : suppreses the tags and takes the HEAD version';
+    echo 'v            : verbose mode';
+    echo 'Defaults     : -e';
+    echo ' ';
+    echo 'model_name in :';
+    qi=0; while (( ${qi} < ${#m_x[@]} ));
+      do ((qi=qi+1)); echo ${m_x[qi]}; done
+  else
+    echo 'Modele      : '${m_n};
+    echo ' ';
+    sed -n -e "s/^#-H-  *${m_n}  *//p" ${F_DEF};
+    echo ' ';
+    qi=0; while (( ${qi} < ${#m_c[@]} ))
+      do
+        ((qi=qi+1));
+        echo 'Component '${qi}' : '${m_c[qi]};
+        echo 'Tag       '${qi}' : '${m_t[qi]};
+        echo 'Server    '${qi}' : '${m_s[qi]};
+        echo 'Directory '${qi}' : '${m_d[qi]};
+        echo 'Local Dir '${qi}' : '${m_l[qi]};
+      done
+  fi
+  echo ' ';
+  exit 0;
+fi
+#----------------------------------------------------------
+# enregistrement de la commande dans une log
+#----------------------------------------------------------
+F_LOG=${d_n}'/log'
+echo "${F_LOG}"
+echo `date +"%D %T"` $0 $* >>"${F_LOG}"
+#-------------
+#- VERBOSE ---
+#-------------
+[ ${m_v} = 'verbose' ] && \
+ { echo '--- Model        : '${m_n};
+   echo '--- Action       : '${m_a};
+   echo '--- Mode         : '${m_v}; }
+#---------------------------------------------
+#- record in F_LOG file model information  ---
+#---------------------------------------------
+{ echo '--- Model        : '${m_n};
+  echo '--- Action       : '${m_a};
+  echo '--- Mode         : '${m_v}; 
+  echo '--- Mail address : '${m_m}; } >>"${F_LOG}"
+#-----------------------------------------
+#- Repertoire d'accueil des composants ---
+#-----------------------------------------
+###d_m=${d_n}'/../modeles';
+d_m=${d_n}'/../';
+#--------------------------------------------------------------------
+#- Envoi d'un mail la premiere fois  qu on appelle model de ce modele
+#-    ie file ~/.modipsl/log.${m_n}
+#--------------------------------------------------------------------
+M_LOG=${D_LOG}/log.${m_n}
+[ -f "${M_LOG}" ] || { echo `date +"%D %T"` `whoami` `uname -m` first usage of model ${m_n} | ${MAIL_COM} -s "first usage of model ${m_n}" ${m_m} >/dev/null 2>&1 ; echo `date +"%D %T"` model ${m_n} >"${M_LOG}" ; }
+#-------------------------------
+#- Extraction des composants ---
+#-------------------------------
+qi=0; while (( ${qi} < ${#m_c[@]} ))
+  do
+    ((qi=qi+1)); zc=${m_c[qi]}; zt=${m_t[qi]}; zs=${m_s[qi]}; zd=${m_d[qi]}; zl=${m_l[qi]};
+    [ ${m_v} = 'verbose' ] && \
+     { echo '---';
+       echo '--- Component  : '${zc};
+       echo '--- Tag        : '${zt};
+       echo '--- CVS Server : '${zs}; 
+       echo '--- Directory  : '${zd}; 
+       echo '--- Local Dir  : '${zl}; }
+#---------------------------------------------
+#- record in F_LOG file model information  ---
+#---------------------------------------------
+     { echo '---';
+       echo '--- Component  : '${zc};
+       echo '--- Tag        : '${zt};
+       echo '--- CVS Server : '${zs}; 
+       echo '--- Directory  : '${zd}; 
+       echo '--- Local Dir  : '${zl}; } >>"${F_LOG}"
+    case ${m_a} in
+      ( checkout | update | diff )
+        c_c='(cd '${d_m}/${zl}'; cvs -d :pserver:'${zs}' '${m_a};
+        [ ${m_a} = 'checkout' -a ${zt} != '?' ] && \
+         { c_c=${c_c}' -r '${zt}; }
+        [ ${m_a} = 'checkout' -a ${zd} != '.' ] && \
+         { c_c=${c_c}' -d '${zd}; }  
+        c_c=${c_c}' '${zc}')';;
+      ( remove )
+        c_c='(cd '${d_m}/${zl}'; rm -rf '${zc}')';;
+      (*)
+        echo 'Action '"${m_a}"' not supported' 1>&2;
+        exit 4;;
+    esac
+    grep "${zs%%/*}"'.*/'"${zs#*/}" ~/.cvspass > /dev/null;
+    if [ ${?} != 0 ]; then
+      c_z='cvs -d :pserver:'${zs}' login';
+      [ ${m_v} = 'verbose' ] && { echo ${c_z}; }
+      eval ${c_z};
+    fi
+    [ ${m_v} = 'verbose' ] && { echo '--- Command    : '${c_c}; }
+    eval ${c_c};
+  done
+#--------------------------------------------------------
+#- Traitement du repertoire WORK pour les modeles OPA ---
+#--------------------------------------------------------
+case ${m_n} in
+  ( EEL* |  ORCA* | OFF_TRC | IPSLCM* | ORCA_TOYATM | NEMO_ORCA2_LIM | GYRE )
+    d_m1=${d_m}/modeles/OPA  ;
+    [ ${m_a} = 'checkout' -o ${m_a} = 'remove' ] &&
+      { [ -d ${d_m1}/WORK ] && \rm -rf ${d_m1}/WORK; };
+    [ ${m_a} = 'checkout' -o ${m_a} = 'update' ] &&
+   {
+     [ -d ${d_m1}/WORK ] || mkdir ${d_m1}/WORK;
+     cd ${d_m1}/WORK; 
+# Getting the configuration files to build the Makefile
+     ln -sf ../../../*/${m_n}/scripts/BB_make AA_make ; 
+     ln -sf ../../../*/${m_n}/scripts/BB_make.ldef AA_make.ldef ;
+     case ${m_n} in
+       ( ORCA2_LMDZ96x71 )
+         echo " Creation du catalogue OPA/WORK = ORCA + LIM"
+         ln -sf ../SRC_ORCA/*.[Ffh] .
+         ln -sf ../SRC_UCL/[a-z]* .
+         ln -sf ../../${m_n}/scripts/prep.sed.coupled .;;
+       ( ORCA2 | ORCA4 | ORCA05 | EEL2 | EEL6 )
+         echo " Creation du catalogue OPA/WORK = ORCA"
+         ln -sf ../SRC_ORCA/*.[Ffh] .;;
+       ( ORCA*LIM | IPSLCM* | ORCA_TOYATM | ORCA*LMD* )
+         [ "${m_n}" = "IPSLCM4_LOOP" ] && echo " Creation du catalogue OPA/WORK = ORCA + LIM + TRC" || echo " Creation du catalogue OPA/WORK = ORCA + LIM"
+         ln -sf ../SRC_ORCA/*.[Ffh] .
+         [ "${m_n}" = "IPSLCM4_LOOP" ] && \rm *.passivetrc.h
+         [ "${m_n}" = "IPSLCM4_LOOP" ] && ln -sf ../SRC_TRC/*.[Ffh] ../SRC_TRC/trc_sms/*.[Ffh] .
+         ln -sf ../SRC_UCL/[a-z]* .;;
+       ( ORCA*_LIM_TRC )
+         echo " Creation du catalogue OPA/WORK = ORCA + LIM + TRC"
+         ln -sf ../SRC_ORCA/*.[Ffh] .
+         \rm *.passivetrc.h
+         ln -sf ../SRC_TRC/*.[Ffh] ../SRC_TRC/trc_sms/*.[Ffh] .
+         ln -sf ../SRC_UCL/[a-z]* .;;
+       ( *LOBSTER1 )
+         echo " Creation du catalogue OPA/WORK = ORCA + TRC"
+         ln -sf ../SRC_ORCA/*.[Ffh] .
+         \rm *.passivetrc.h
+         ln -sf ../SRC_TRC/*.[Ffh] ../SRC_TRC/trc_sms/*.[Ffh] .;;
+       ( ORCA*_OFF_TRC )
+         echo " Creation du catalogue OPA/WORK = TRC + OFFLINE"
+         ln -sf ../SRC_TRC/*.[Ffh] ../SRC_TRC/trc_sms/*.[Ffh] .
+         ln -sf ../SRC_OFFLINE_TRC/*.[Ffh] .;;
+     esac
+# Building the standard list of source files
+     cat >.patron <<"EOF" 
+CVS
+SRC_PARAM
+SRC_FILE_LIST
+tmplist
+AA_make
+KEY_CPP
+Makefile
+*?.o
+ i.?*
+*?.L
+.patron
+bloc.com
+para.com
+defcst.f
+fontbc.f
+icdyna.f
+thersf.f
+EOF
+     ls -1 | fgrep -v -f .patron  >SRC_FILE_LIST ; cp SRC_FILE_LIST SRC_FILE_LIST.temp ;
+#
+     KEY=$(grep P_P AA_make.ldef);
+     [ -f "KEY_CPP" ] || echo $KEY > KEY_CPP;
+    };;
+esac
+#-------------
+#- [EN]FIN ---
+#-------------
+exit 0;

@@ -1,0 +1,98 @@
+   !!----------------------------------------------------------------------
+   !!                     ***  domrea_fdir.h90  ***
+   !!----------------------------------------------------------------------
+   !!   OPA 9.0 , LOCEAN-IPSL  (2005)
+   !!   $Header: /home/opalod/NEMOCVSROOT/NEMO/OFF_SRC/DOM/domrea_fdir.h90,v 1.2 2005/11/16 16:12:12 opalod Exp $
+   !!   This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt
+   !!----------------------------------------------------------------------
+
+   SUBROUTINE dom_rea
+      !!---------------------------------------------------------------------
+      !!                  ***  ROUTINE dom_rea  ***
+      !!                   
+      !! ** Purpose :   Read a direct access file named meshmask
+      !!        This file contains all ocean domain informations (mesh and
+      !!      mask arrays). It is used for visualisation (SAXO software)
+      !!      and diagnostic computation.
+      !!        Caution, this file is not assigned so that diagnostics can
+      !!      be computed with a 64 bits precision.
+      !!
+      !! History :
+      !!   8.5  !  02-08  (G. Madec)  F90: Free form and module
+      !!----------------------------------------------------------------------
+      !! * Local declarations
+      CHARACTER (len=5) ::   clfield  ! field name
+      INTEGER ::   inum = 11          ! logical unit used for meshmask file
+      INTEGER :: iimlu,ijmlu,ikmlu
+      !!----------------------------------------------------------------------
+
+       IF(lwp) WRITE(numout,*)
+       IF(lwp) WRITE(numout,*) 'dom_rea : read a direct acces mesh_mask file'
+       IF(lwp) WRITE(numout,*) '~~~~~~~'
+
+       ! open meshmask file
+       CALL ctlopn( inum, 'mesh_mask','UNKNOWN', 'UNFORMATTED', 'SEQUENTIAL',   &
+                    1 , numout, lwp, 1 )
+
+
+      ! 0. Domain size
+      ! --------------
+      read(inum) iimlu, ijmlu, ikmlu
+
+
+      ! 1. Horzontal grid-point position
+      ! --------------------------------
+      clfield='GLAMT'   ;    READ(inum) clfield, glamt
+      clfield='GLAMU'   ;    READ(inum) clfield, glamu
+      clfield='GLAMV'   ;    READ(inum) clfield, glamv
+      clfield='GLAMF'   ;    READ(inum) clfield, glamf
+
+      clfield='GPHIT'   ;    READ(inum) clfield, gphit
+      clfield='GPHIU'   ;    READ(inum) clfield, gphiu
+      clfield='GPHIV'   ;    READ(inum) clfield, gphiv
+      clfield='GPHIF'   ;    READ(inum) clfield, gphif
+
+
+      ! 2. Horizontal scale factors
+      ! ---------------------------
+      clfield='E1T  '   ;    READ(inum) clfield, e1t
+      clfield='E1U  '   ;    READ(inum) clfield, e1u
+      clfield='E1V  '   ;    READ(inum) clfield, e1v
+      clfield='E1F  '   ;    READ(inum) clfield, e1f
+
+      clfield='E2T  '   ;    READ(inum) clfield, e2t
+      clfield='E2U  '   ;    READ(inum) clfield, e2u
+      clfield='E2V  '   ;    READ(inum) clfield, e2v
+      clfield='E2F  '   ;    READ(inum) clfield, e2f
+
+
+      ! 3. masks
+      ! --------
+      clfield='TMASK'   ;    READ(inum) clfield, tmask
+      clfield='UMASK'   ;    READ(inum) clfield, umask
+      clfield='VMASK'   ;    READ(inum) clfield, vmask
+      clfield='FMASK'   ;    READ(inum) clfield, fmask
+      clfield='FF   '   ;    READ(inum) clfield, ff
+
+      ! 4. depth and vertical scale factors
+      ! -----------------------------------
+#if defined key_s_coord
+      clfield='HBATT'   ;    READ(inum) clfield, hbatt
+      clfield='HBATU'   ;    READ(inum) clfield, hbatu
+      clfield='HBATV'   ;    READ(inum) clfield, hbatv
+      clfield='HBATF'   ;    READ(inum) clfield, hbatf
+      clfield='GSIGT'   ;    READ(inum) clfield, gsigt
+      clfield='GSIGW'   ;    READ(inum) clfield, gsigw
+      clfield='GSI3W'   ;    READ(inum) clfield, gsi3w
+      clfield='ESIGT'   ;    READ(inum) clfield, esigt
+      clfield='ESIGW'   ;    READ(inum) clfield, esigw
+#else
+      clfield='GDEPT'   ;    READ(inum) clfield, gdept
+      clfield='GDEPW'   ;    READ(inum) clfield, gdepw
+      clfield='E3T  '   ;    READ(inum) clfield, e3t
+      clfield='E3W  '   ;    READ(inum) clfield,  e3w
+#endif
+
+      CLOSE( inum )
+
+   END SUBROUTINE dom_read

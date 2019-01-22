@@ -1,0 +1,1337 @@
+   !!----------------------------------------------------------------------
+   !!                    ***  flxrnf_ORCA_R4.h90  ***
+   !!----------------------------------------------------------------------
+
+   !!----------------------------------------------------------------------
+   !!                  OLD ORCA R4 runoff specification
+   !!                      kept here for memory
+   !!                         ( 20/04/2000 )
+   !!----------------------------------------------------------------------
+
+      !!----------------------------------------------------------------------
+      !! * Local declarations
+      INTEGER  :: kt
+      INTEGER  :: jpmois
+      INTEGER  ::   &
+         jpriv,    & ! jpriv : maximum river number
+         jpcoef      ! jpcoef: maximum point number
+      INTEGER, PARAMETER ::   jpmois=12, jpriv=120, jpcoef=150
+
+      INTEGER  ::   ji, jj, jl, jm, jn, jr, jc
+      INTEGER  ::   i15, imois, iman
+      INTEGER  ::   inbp, idbd, idmeom
+      INTEGER  ::   iipt0, iipt1, ijpt0, ijpt1, ii, ij
+      INTEGER  ::   iirnf(jpcoef,jpriv),ijrnf(jpcoef,jpriv)
+      INTEGER  ::   inb(jpriv)
+
+      REAL(wp) ::   zconv, zxy
+      REAL(wp) ::   zrup1,zrup2,zrup3
+      REAL(wp) ::   zrnfm(jpmois, jpriv)
+      REAL(wp) ::   zcoefr(jpi, jpj, 5)
+      CHARACTER (len=20) ::   criver(jpriv)
+
+      REAL(wp) ::   zbilan , zero
+
+      COMMON/zzzrnf/ zrnfm, iirnf, ijrnf, inb
+
+   !!----------------------------------------------------------------------
+   !!   OPA 9.0 , LOCEAN-IPSL  (2005)
+   !!   $Header: /home/opalod/NEMOCVSROOT/NEMO/OFF_SRC/SBC/flxrnf_ORCA_R4.h90,v 1.2 2005/11/16 16:14:39 opalod Exp $
+   !!   This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt
+   !!----------------------------------------------------------------------
+
+      ! ====
+      ! DATA
+      ! ====
+
+      zero = 0.0e0
+      IF( kt == nit000 ) THEN 
+          criver = "                    "
+          inb = 0
+          iirnf = 0
+          ijrnf = 0
+          zrnfm  = zero
+          runoff = zero
+         
+          ! I NORTH AMERICA
+          ! ---------------
+          
+          ! 1-Saint Lawrence (Canada) 49N30 67W00           R2
+          ! Old=447 km3/year=14165m3/s; CLIPPER=12430m3/s; ratio=1.14
+          ! --> 13975.249m3/s
+          criver(1) = "Saint Lawrence      "
+          inb(1) = 1
+          iirnf(1:1,1) = 57
+          ijrnf(1:1,1) = 55
+          zrnfm(1:jpmois,1) = (/   &
+              11718.,  11971.,  12466.,  14980.,  19257.,  16913.,   &
+              14211.,  13119.,  13367.,  13644.,  13463.,  12594./)
+          ! 2-Hudson River (USA) 41N00 77W00                R1
+          ! Old=12 km3/year=380m3/s; UNESCO(64-83,p255)=408m3/s
+          ! --> 407.416687m3/s
+          criver(2) = "Hudson River        "
+          inb(2) = 1
+          iirnf(1:1,2) = 54
+          ijrnf(1:1,2) = 53
+          zrnfm(1:jpmois,2) = (/   &
+              364.,    404.,    648.,    873.,    593.,    301.,   &
+              205.,    171.,    205.,    290.,    379.,    456./)
+          ! 3-Missisipi and Atchafalaya (USA) 29N 90W       R1 
+          ! Old=580 km3/year=18380m3/s; CLIPPER=17599m3/s
+          ! --> 17599.334m3/s
+          criver(3) = "Missisipi           "
+          inb(3) = 1
+          iirnf(1:1,3) = 50
+          ijrnf(1:1,3) = 49
+          zrnfm(1:jpmois,3) = (/   &
+              19260.,  20813.,  23026.,  28160.,  26510.,  19650.,   &
+              14181.,  10676.,   9578.,  10167.,  11699.,  17472./)
+          ! 4-Brazos (USA) 29N58 95W53                      R1
+          ! Old=7 km3/year=222m3/s; UNESCO(65-84, p298)=200m3/s
+          ! --> 199.666656m3/s
+          criver(4) = "Brazos              "
+          inb(4) = 1
+          iirnf(1:1,4) = 48
+          ijrnf(1:1,4) = 49
+          zrnfm(1:jpmois,4) = (/   &
+              165.,    224.,    200.,    266.,    457.,    327.,   &
+              143.,     69.,    102.,    132.,    160.,    151. /)
+          ! 5-Colorado (Mexico) 31N54 114W57                R5
+          ! Old=20 km3/year=634m3/s
+          ! --> 634.m3/s
+          criver(5) = "Colorado            "
+          inb(5) = 1
+          iirnf(1:1,5) = 43
+          ijrnf(1:1,5) = 50
+          zrnfm(1:jpmois,5) = 634. 
+          ! 6-Columbia (USA) 45N60 121W17                   R1
+          ! Old=251 km3/year=7954m3/s; UNESCO(65-84, p312)=5368m3/s
+          ! --> 5368.41602m3/s
+          criver(6) = "Columbia            "
+          inb(6) = 1
+          iirnf(1:1,6) = 40
+          ijrnf(1:1,6) = 56
+          zrnfm(1:jpmois,6) = (/   &
+              4752.,    5077.,    5633.,    6075.,    8422.,    9822.,   &
+              6350.,    4112.,    3273.,    3251.,    3548.,    4106. /)
+          ! 7-Fraser (USA) 47N 124W                         R5
+          ! Old=112 km3/year=3550m3/s;not found in UNESCO
+          ! --> 3549.99976m3/s
+          criver(7) = "Fraser              "
+          inb(7) = 1
+          iirnf(1:1,7) = 40
+          ijrnf(1:1,7) = 57
+          zrnfm(1:jpmois,7) = 3550. 
+          ! 8-Yukon (USA) 63N00 165W00                      R3
+          ! Old=195 km3/year=6179m3/s; UNESCO(65-77+80-84, p321)=4245; ratio=1.46
+          ! --> 6017.24951m3/s
+          criver(8) = "Yukon               "
+          inb(8) = 1
+          iirnf(1:1,8) = 30
+          ijrnf(1:1,8) = 62
+          zrnfm(1:jpmois,8) = (/   &
+              1459.,    1213.,    1065.,    1100.,    9067.,   17675.,   &
+              10680.,   11271.,    8658.,    5453.,    2649.,    1917./)
+          ! 9-Copper (USA) 61N47 144W45                     R2
+          ! Old=39 km3/year=1236m3/s; UNESCO(65-84, p317)=1052m3/s; ratio=1.18
+          ! --> 1236.25m3/s
+          criver(9) = "Copper              "
+          inb(9) = 1
+          iirnf(1:1,9) = 35
+          ijrnf(1:1,9) = 60
+          zrnfm(1:jpmois,9) = (/   &
+              219.,    195.,    181.,    214.,    904.,   2532.,   &
+              4026.,   3627.,   1632.,    697.,    354.,    254. /) 
+          ! 10-Susitna (USA)   62N 150E                     R5
+          ! Old=40 km3/year=1268m3/s
+          ! --> 1268.m3/s
+          criver(10) = "Susitna             "
+          inb(10) = 1
+          iirnf(1:1,10) = 34
+          ijrnf(1:1,10) = 60
+          zrnfm(1:jpmois,10) = 1268. 
+          ! 11-McKenzie (Canada) 70N00 135W00               R3
+          ! Old=306 km3/year=9697m3/s; UNESCO(67+72+7479+82-84, p168)=8343m3/s;
+          ! ratio=1.16
+          ! --> 9606.66797m3/s
+          criver(11) = "McKenzie            "
+          inb(11) = 1
+          iirnf(1:1,11) = 35
+          ijrnf(1:1,11) = 66
+          zrnfm(1:jpmois,11) = (/   &
+              3644.,    3400.,    3258.,    3546.,   14188.,   21544.,   &
+              18954.,   15487.,   11284.,   10169.,    5901.,    3905./)
+          ! 12-Kuksokwim (USA) 60N00 ~162W30                R4
+          ! UNESCO(65-84, p318)=1112m3/s (61N87 158E10, Crooked Creek, inland)
+          ! --> 1111.99988m3/s
+          criver(12) = "Kuksokwim           "
+          inb(12) = 1
+          iirnf(1:1,12) = 30
+          ijrnf(1:1,12) = 60
+          zrnfm(1:jpmois,12) = (/   &
+              335.,     308.,     295.,     407.,    2415.,    2027.,   &
+              1917.,   2049.,    1585.,    1072.,     545.,     389./)
+          ! 13-Nelson
+          criver(13) = "Nelson              "
+          inb(13) = 1
+          iirnf(1:1,13) = 51
+          ijrnf(1:1,13) = 65
+          zrnfm(1:jpmois,13) = 0.
+
+          ! Total run-offs(I)=60974.2539m3/s
+
+          ! II SOUTH AMERICA
+          ! -----------------
+          ! 16-Chira (Peru) 4s54 81w08                      R2
+          ! Old=5 km3/year=158m3/s; UNESCO (65-68, p357)=80.9; ratio=1.95
+          ! --> 158.000015m3/s
+          criver(16) = "Chira               "
+          inb(16) = 1
+          iirnf(1:1,16) = 51
+          ijrnf(1:1,16) = 34
+          zrnfm(1:jpmois,16) = (/   &
+              70.,     105.,     564.,     582.,     230.,      94.,   &
+              87.,      47.,      35.,      32.,      29.,      21./)
+          ! 17-Magdalena (Colombia) 11N06 74W51             R2
+          ! Old=237 km3/year=7510m3/s; UNESCO(71-73+76-79, p348)=6973m3/s;
+          ! ratio=1.08
+          ! --> 7451.58301m3/s
+          criver(17) = "Magdelena           "
+          inb(17) = 1
+          iirnf(1:1,17) = 53
+          ijrnf(1:1,17) = 45
+          zrnfm(1:jpmois,17) = (/   &
+              6598.,    4441.,    4087.,    5445.,    7380.,    8067.,   &
+              8509.,    7428.,    7631.,    9296.,   10588.,    9949./)
+          ! 18-Orinoco (Venezuela) 8N37 62W15!              R1
+          ! Old=1100 km3/year=34857m3/s; UNESCO(73-75, p364)=28736m3/s;
+          ! HLA=26371m3/s
+          ! Data from HLA: 8.1N - 63.3W   1925/89
+          ! --> 26371.416
+          criver(18) = "Orinico             "
+          inb(18) = 1
+          iirnf(1:1,18) = 57
+          ijrnf(1:1,18) = 44
+          zrnfm(1:jpmois,18) = (/   &
+              10670.,    7513.,    6344.,    6887.,   13086.,   26699.,   &
+              43938.,   59957.,   57435.,   39951.,   27410.,   16567./)
+          ! 19-Amazon (Brazil) 0S05 50W00                   R1
+          ! Old=6300 km3/year=199634m3/s; CLIPPER=166192m3/s~UNESCO;
+          ! HLA=184806m3/s
+          ! UNESCO data are at Obidos which is far inland and therefore does not
+          ! fully represent the actual discharge
+          ! Data from HLA: 1.5N - 55.3W   1970/96
+          ! --> 184845.484m3/s
+          criver(19) = "Amazon              "
+          inb(19) = 3
+          iirnf(1:3,19) = (/ 60, 60, 60 /)
+          ijrnf(1:3,19) = (/ 39, 40, 41 /)
+          zrnfm(1:jpmois,19) = (/   &
+              152233., 176415., 199941., 225565., 244016., 244861.,   &
+              230711., 203128., 164531., 128486., 118214., 130045. /)
+          ! 20-Sao Francisco (Brazil) 10S30 36W24           R1
+          ! Old=97 km3/year=3074m3/s; UNESCO(77-79, p338)=2645m3/s
+          ! --> 2645.3335m3/s
+          criver(20) = "San Fransisco       "
+          inb(20) = 1
+          iirnf(1:1,20) = 63
+          ijrnf(1:1,20) = 31
+          zrnfm(1:jpmois,20) = (/   &
+              3244.,   4116.,   5139.,   4330.,   2323.,   1800.,     &
+              1587.,   1511.,   1593.,   1740.,   2190.,   2171. /)
+          ! 21-Parana+Uruguay(Arg./Uru.) 34S12 58W18        R1 
+          ! Old=470 km3/year=14893m3/s; UNESCO(p323/324)=22263m3/s
+          ! --> 22203.168m3/s 
+          criver(21) = "Parana              "
+          inb(21) = 1
+          iirnf(1:1,21) = 58
+          ijrnf(1:1,21) = 24
+          zrnfm(1:jpmois,21) = (/   &
+              24803.,   26836.,   24585.,   21358.,   20041.,   21689.,   &
+              22647.,   20403.,   19627.,   21400.,   21126.,   21923./)
+          ! 22-Negro (Argentina)  41S02  62W47              R2
+          ! Old=30 km3/year=951m3/s; UNESCO(65-79,p330)=765m3/s; ratio=1.24
+          ! --> 907.666687m3/s
+          criver(22) = "Rio Negro           "
+          inb(22) = 1
+          iirnf(1:1,22) = 56
+          ijrnf(1:1,22) = 22
+          zrnfm(1:jpmois,22) = (/   &
+              882.,     587.,     519.,     482.,     623.,     984.,   &
+              1120.,   1294.,    1092.,    1166.,    1105.,    1038./)
+          ! 23- Tocantins :  ~48W00 ~0.5S                   R4
+          ! UNESCO(76-77+80-81, p335)=12167m3/s (station far inland!)
+          ! --> 12173.082m3/s
+          criver(23) = "Tocantins           "
+          inb(23) = 1
+          iirnf(1:1,23) = 60
+          ijrnf(1:1,23) = 38
+          zrnfm(1:jpmois,23) = (/   &
+              15507.,  24855.,  27854.,  24257.,  15860.,   7861.,   &
+              4440.,   3082.,   2728.,   3417.,   5511.,  10705. /)
+
+          ! Total run-offs(II)=256755.75
+          ! Total run-offs(I+II)=317730
+
+          ! III EUROPE
+          ! ----------
+          ! 26-Rhone (France) 43N20 4E50                    R1 
+          ! Old=49 km3/year=1553m3/s; UNESCO(65-83, p512)=1229
+          ! --> 1217.16663m3/s
+          criver(26) = "Rhone               "
+          inb(26) = 1
+          iirnf(1:1,26) = 76
+          ijrnf(1:1,26) = 55
+          zrnfm(1:jpmois,26) = (/   &
+              1385.,    1848.,    1568.,    1311.,    1420.,    1191.,   &
+              937.,     796.,     794.,     962.,    1161.,    1233./)
+          ! 27-Po (Italy) 41N10 11E09                       R1 
+          ! Old=46 km3/year=1458m3/s; UNESCO(65-84, p527)=1550m3/s
+          ! --> 1550.08337m3/s
+          criver(27) = "Po                  "
+          inb(27) = 1
+          iirnf(1:1,27) = 79
+          ijrnf(1:1,27) = 54
+          zrnfm(1:jpmois,27) = (/   &
+              1304.,    1605.,    1856.,    1549.,    1958.,    1760.,   &
+              1040.,    1007.,    1615.,    1907.,    1772.,    1228./)
+          ! 28-Danube (Roumania) 45N20 29E40                R1 
+          ! Old=206 km3/year=6527m3/s; UNESCO(65-84, p544)=7011m3/s
+          ! --> 7011.8335m3/s
+          criver(28) = "Danube              "
+          inb(28) = 1
+          iirnf(1:1,28) = 87
+          ijrnf(1:1,28) = 53
+          zrnfm(1:jpmois,28) = (/   &
+              6625.,    7352.,    7986.,    9279.,    9482.,    8618.,   &
+              7586.,    6001.,    5210.,    4989.,    4921.,    6093./)
+
+          ! 29-Volga
+          criver(29) = "Volga               "
+          inb(29) = 1
+          iirnf(1:1,29) = 4
+          ijrnf(1:1,29) = 56
+          zrnfm(1:jpmois,29) = 0.
+          ! 30-Dniepr
+          criver(30) = "Dniepr+Don          "
+          inb(30)= 2
+          iirnf(1:2,30) = (/ 89, 90 /)
+          ijrnf(1:2,30) = (/ 56, 56 /)
+
+          ! Total run-offs(III)=9779.08301m3/s
+          ! Total run-offs(I+II+III)=327509.094m3/s
+
+          ! IV EURASIAN ARCTIC
+          ! ------------------
+          ! 31-Iana (Russia)      126E40 72N25              R1
+          ! Old=29 km3/year=919m3/s; UNESCO(65-72+74+76-84, p463)=936m3/s
+          ! --> 0m3/s
+          criver(31) = "Iana                "
+          inb(31) = 1
+          iirnf(1:1,31) = 20
+          ijrnf(1:1,31) = 68
+          zrnfm(1:jpmois,31) = (/   &
+              2.,       1.,       0.,       0.,     917.,    3514.,   &
+              2968.,    2329.,    1322.,   178.,      36.,       8./)
+          ! 32-Ob (Russia) 66N45 69E30                      R1 
+          ! Old=385 km3/year=12200m3/s; UNESCO(65-84, p478)=12862m3/s
+          ! --> 12861.5m3/s
+          criver(32) = "Ob                  "
+          inb(32) = 1
+          iirnf(1:1,32) = 78
+          ijrnf(1:1,32) = 72
+          zrnfm(1:jpmois,32) = (/   &
+              4977.,    4150.,    3611.,    3590.,   14723.,   33366.,   &
+              30773.,   22785.,   14701.,    9705.,    6078.,    5879./)
+          ! 33-Yenesei (Russia) 71N50 82E40                 R1 
+          ! Old=560 km3/year=17745m3/s; UNESCO(65-84, p472)=17462m3/s
+          ! --> 17461.666m3/s
+          criver(33) = "Yenesei             "
+          inb(33) = 1
+          iirnf(1:1,33) = 77
+          ijrnf(1:1,33) = 75
+          zrnfm(1:jpmois,33) = (/   &
+              6659.,    7007.,    6895.,    7089.,   24183.,   74965.,   &
+              25325.,   15940.,   16050.,   12678.,    6741.,    6008./)
+          ! 34-Severnaya Dvina(Russia)64N32 40E30           R5 
+          ! Old=106 km3/year=3359m3/s; not in UNESCO data base
+          ! --> 3359.00024m3/s
+          criver(34) = "Severnaya Dvina     "
+          inb(34) = 1
+          iirnf(1:1,34) = 78
+          ijrnf(1:1,34) = 68
+          zrnfm(1:jpmois,34) = 3359.
+          ! 35-Lena (Russia) 72N25 126E40                   R1 
+          ! --> 16192.333m3/s
+          criver(35) = "Lena                "
+          inb(35) = 1
+          iirnf(1:1,35) = 20
+          ijrnf(1:1,35) = 68
+          zrnfm(1:jpmois,35) = (/   &
+              2663.,    2095.,    1629.,    1324.,    7203.,   64230.,   &
+              40810.,   28310.,   25995.,   13299.,    3673.,    3077./)
+          ! 36-Kolyma (Russia) 69N30 161E00                 R1
+          ! Old=71 km3/year=2250m3/s; UNESCO(65-84)=2138m3/s
+          ! --> 2138.66675m3/s
+          criver(36) = "Kolyma              "
+          inb(36) = 1
+          iirnf(1:1,36) = 24
+          ijrnf(1:1,36) = 65
+          zrnfm(1:jpmois,36) = (/   &
+              131.,      92.,      76.,      65.,    2576.,    9143.,   &
+              4670.,    3727.,    3226.,    1119.,     630.,     209./)
+          ! 37-Indigirka (russia) 70N48 148E54              R1 
+          ! Old=55 km3/year=1743m3/s; UNESCO(65-68+70+72-84)=1622.
+          ! --> 1622.00012m3/s
+          criver(37) = "Indigirka           "
+          inb(37) = 1
+          iirnf(1:1,37) = 23
+          ijrnf(1:1,37) = 66
+          zrnfm(1:jpmois,37) = (/   &
+              32.,      17.,      11.,       7.,     354.,    5629.,   &
+              5210.,    4617.,    2823.,     559.,     142.,      63./)
+          ! 38-Khatanga
+          criver(38) = "Khatanga             "
+          inb(38) = 1
+          iirnf(1:1,38) = 20
+          ijrnf(1:1,38) = 72
+          zrnfm(1:jpmois,38) = 0.
+
+          ! Total run-offs(IV)=40773.6641m3/s
+          ! Total run-offs(I+II+III+IV)=368282.75m3/s
+
+          ! V ASIA
+          ! ------
+          ! 41-Amur (Russia) 52N56 141E10                   R2
+          ! Old=325 km3/year=10299m3/s; UNESCO(65-84, p451)=8792m3/s; ratio=1.17
+          ! --> 10299.332m3/s
+          criver(41) = "Amur                "
+          inb(41) = 1
+          iirnf(1:1,41) = 18
+          ijrnf(1:1,41) = 59
+          zrnfm(1:jpmois,41) = (/   &
+              2108.,    1543.,    1252.,    4088.,   15464.,   17336.,   &
+              16100.,   20801.,   21548.,   15658.,    5188.,    2506./)
+          ! 42-Liaohe (China) 40N40 122E09                  R5
+          ! Old=6 km3/year=190m3/s; not found in UNESCO data base
+          ! --> 189.999985m3/s
+          criver(42) = "Liaohe              "
+          inb(42) = 1
+          iirnf(1:1,42) = 15
+          ijrnf(1:1,42) = 54
+          zrnfm(1:jpmois,42) = 190.
+          ! 43-Daling (China) 40N56 121E43                  R5
+          ! Old=1 km3/year=32m3/s; not found in UNESCO data base
+          ! --> 31.9999962m3/s
+          criver(43) = "Daling              "
+          inb(43) = 1
+          iirnf(1:1,43) = 15
+          ijrnf(1:1,43) = 54
+          zrnfm(1:jpmois,43) = 32.
+          ! 44-Haiho (China) 6N17   1E23
+          ! Old=2 km3/year=64m3/s; not found in UNESCO data base
+          ! --> 63.9999924m3/s
+          criver(44) = "Haiho               "
+          inb(44) = 0
+          iirnf(1:1,44) = 0
+          ijrnf(1:1,44) = 0
+          zrnfm(1:jpmois,44) = 64.
+          ! 45-Yellow/Huangho (China) 37N32 118E19          R2 
+          ! Old=49 km3/year=1553m3/s; UNESCO(p371)=1210m3/s; ratio=1.28
+          ! --> 1552.5m3/s
+          criver(45) = "Yellow/Huangho      "
+          inb(45) = 1
+          iirnf(1:1,45) = 13
+          ijrnf(1:1,45) = 51
+          zrnfm(1:jpmois,45) = (/   &
+              697.,     674.,    1282.,    1206.,    1109.,     778.,   &
+              1964.,    3270.,    3668.,    2133.,     978.,     871./)
+          ! 46-Yangtze (China) 31N48 121E10=Changjiang      R2
+          ! Old=900 km3/year=28520m3/s; UNESCO(p372)=25032m3/s; ratio=1.14
+          ! --> 28519.584m3/s
+          criver(46) = "Yangtze             "
+          inb(46) = 1
+          iirnf(1:1,46) = 13
+          ijrnf(1:1,46) = 50
+          zrnfm(1:jpmois,46) = (/   &
+              10994.,   10548.,   13254.,   24097.,   36972.,   47197.,   &
+              53891.,   42070.,   37627.,   30762.,   22046.,   12777./)
+          ! 47-Pearl/Zhujiang (China) 23N36 106E34=Xijiang  R2 
+          ! Old=302 km3/year=9570m3/s; UNESCO(76,82, p373)=6987m3/s; ratio=1.37
+          ! --> 9570.75m3/s
+          criver(47) = "Pearl Zhujiang       "
+          inb(47) = 1
+          iirnf(1:1,47) = 12
+          ijrnf(1:1,47) = 48
+          zrnfm(1:jpmois,47) = (/   &
+              2357.,    2415.,    2634.,    6446.,   14246.,   18395.,   &
+              19213.,   17558.,   12312.,    7255.,    5864.,    6154./)
+          ! 48-Red/Hungho (Vietnam) 20N17 106E34            R5 
+          ! Old=123 km3/year=3897m3/s; not in UNESCO data base
+          ! --> 3897.m3/s
+          criver(48) = "Red Hungho          "
+          inb(48) = 1
+          iirnf(1:1,48) = 10
+          ijrnf(1:1,48) = 47
+          zrnfm(1:jpmois,48) = 3897.
+          ! 49-Mekong (Vietnam) 10N33 105E24                R5
+          ! Old=470 km3/year=14893m3/s; not in UNESCO data base
+          ! --> 14893.0029m3/s
+          criver(49) = "Mekong              "
+          inb(49) = 1
+          iirnf(1:1,49) =  8
+          ijrnf(1:1,49) = 44
+          zrnfm(1:jpmois,49) = 14893.
+          ! 50-Irrawady (Burma) 15N50  95E06                R5
+          ! Old=428 km3/year=13563m3/s; not in UNESCO data base
+          ! --> 13563.m3/s
+          criver(50) = "Irrawady            "
+          inb(50) = 1
+          iirnf(1:1,50) =  6
+          ijrnf(1:1,50) = 46
+          zrnfm(1:jpmois,50) = 13563.
+          ! 51-Ganges+Brahmaputra (Beng.) 22N00  91E00      R1
+          ! Old=971 km3/year=30769m3/s; UNESCO(69-70+73-75, p367)=31760m3/s
+          ! --> 32147.498m3/s
+          criver(51) = "Ganges              "
+          inb(51) = 2
+          iirnf(1:2,51) = (/  4,  5 /)
+          ijrnf(1:2,51) = (/ 47, 47 /)
+          zrnfm(1:jpmois,51) = (/   &
+              6623.,    6315.,    6432.,    9410.,   17263.,   38302.,   &
+              64688.,   80338.,   84802.,   43387.,   17888.,   10322./)
+          ! 52-Mehandi (India)                              R5
+          ! Old=67 km3/year=2123m3/s; not in UNESCO data base
+          ! --> 0m3/s
+          criver(52) = "Mehandi             "
+          inb(52) = 0
+          iirnf(1:1,52) = 0
+          ijrnf(1:1,52) = 0
+          zrnfm(1:jpmois,52) = 2123.
+          ! 53-Damodar (India)                              R2
+          ! Old=10 km3/year=320m3/s; UNESCO(p386)=173m3/s; ratio=1.85
+          ! --> 432.916656m3/s
+          criver(53) = "Damodar             "
+          inb(53) = 0
+          iirnf(1:1,53) = 0
+          ijrnf(1:1,53) = 0
+          zrnfm(1:jpmois,53) = (/   &
+              51.,      37.,      42.,      49.,      85.,     296.,   &
+              896.,    1390.,    1591.,     542.,     172.,      44./)  
+          ! 54-Godavari (India) 17N00  81E45                R2
+          ! Old=84 km3/year=2662m3/s; UNESCO(p379)=1916m3/s; ratio=1.39
+          ! --> 3670.5m3/s
+          criver(54) = "Godaravi            "
+          inb(54) = 1
+          iirnf(1:1,54) =  3
+          ijrnf(1:1,54) = 46
+          zrnfm(1:jpmois,54) = (/   &
+              988.,     737.,     280.,     219.,     196.,    1691.,   &
+              8063.,   14571.,   11428.,    3953.,    1221.,     699./)
+          ! 55-Indus (Pakistan) 24N20  67E47                R2
+          ! Old=238 km3/year=7542m3/s; UNESCO (76-79, p428)=2396m3/s; ratio=3.15
+          ! --> 7562.m3/s
+          criver(55) = "Indus               "
+          inb(55) = 1
+          iirnf(1:1,55) = 89
+          ijrnf(1:1,55) = 47
+          zrnfm(1:jpmois,55) = (/   &
+              988.,     737.,    1904.,    1968.,    3625.,    6143.,   &
+              15969.,    36656.,  17173.,    3215.,    1251.,    1115./)
+          ! 56-Tigris and Euphrates (Iraq) 31N00  47E25     R1
+          ! Old=46 km3/year=1458m3/s; UNESCO(76-79, p428)=2396m3/s
+          ! --> 2248.8335m3/s
+          criver(56) = "Tigris              "
+          inb(56) = 1
+          iirnf(1:1,56) = 88
+          ijrnf(1:1,56) = 47
+          zrnfm(1:jpmois,56) = (/   &
+              1872.,    2127.,    2962.,    4944.,    5036.,    3078.,   &
+              1362.,     900.,     786.,     993.,    1184.,    1742./)
+
+          ! Total run-offs (V)=128642.922m3/s
+          ! Total run-offs (I+II+III+IV+V)=496925.688m3/s
+
+          ! VI AFRICA
+          ! ----------
+          ! 61-Nile (Egypt) 30N10  31E06                    R1
+          ! Old=30 km3/year=951m3/s; UNESCO(73-84)=1251m3/s
+          ! --> 1251.33337m3/s
+          criver(61) = "Nile                "
+          inb(61) = 1
+          iirnf(1:1,61) = 90
+          ijrnf(1:1,61) = 50
+          zrnfm(1:jpmois,61) = (/   &
+              1239.,    1035.,    1126.,    1110.,    1170.,    1542.,   &
+              1742.,    1559.,    1191.,    1103.,    1075.,    1124./)
+          ! 62-Niger (Nigeria) 5N33   6E33                  R1
+          ! Old=192 km3/year=6084m3/s; HLA=5545m3/s;
+          ! Data from HLA: 4.5N -  6  E   1950/87
+          ! --> 5545.08301m3/s
+          criver(62) = "Niger               "
+          inb(62) = 1
+          iirnf(1:1,62) = 74
+          ijrnf(1:1,62) = 41
+          zrnfm(1:jpmois,62) = (/   &
+              2029.,    1804.,    1573.,    1418.,    1494.,    2561.,   &
+              5272.,    9629.,   14951.,   16227.,    6842.,    2741./)
+          ! 63-Zaire/Congo (Congo) 6S04  12E24              R1      
+          ! Old=1250 km3/year=39610m3/s; UNESCO(65-83, p149)=41941m3/s; HLA
+          ! =39720m3/s
+          ! Data from HLA: 6S - 12  E   1902/96
+          ! --> 39719.5m3/s
+          criver(63) = "Zaire Congo         "
+          inb(63) = 1
+          iirnf(1:1,63) = 75
+          ijrnf(1:1,63) = 33
+          zrnfm(1:jpmois,63) = (/   &
+              47200.,   37692.,   34374.,   36603.,   37862.,   35588.,   &
+              30966.,   30774.,   35981.,   42825.,   51455.,   55314./)
+          ! 64-Orange (Sth Africa) 28S41 16E28              R5
+          ! Old=11 km3/year=349m3/s
+          ! --> 349.000031m3/s
+          criver(64) = "Orange              "
+          inb(64) = 1
+          iirnf(1:1,64) = 76
+          ijrnf(1:1,64) = 26
+          zrnfm(1:jpmois,64) = 349.
+          ! 65-Zambesi (Mozambique) 18S55 36E04             R5
+          ! Old=223 km3/year=7066m3/s
+          ! --> 7066.00049m3/s
+          criver(65) = "Zambesi             "
+          inb(65) = 1
+          iirnf(1:1,65) = 81
+          ijrnf(1:1,65) = 29
+          zrnfm(1:jpmois,65) = 7066.
+          ! 66-Limpopo (mozambique) 25S15 33E30             R5
+          ! Old=5 km3/year=158m3/s
+          ! --> 158.m3/s
+          criver(66) = "Limpopo             "
+          inb(66) = 1
+          iirnf(1:1,66) = 81
+          ijrnf(1:1,66) = 28
+          zrnfm(1:jpmois,66) = 158.
+          ! 67-Rufiji (tanzania) 8S00 39E20                 R5
+          ! Old=9 km3/year=285m3/s
+          ! --> 285.m3/s
+          criver(67) = "Rufiji             "
+          inb(67) = 1
+          iirnf(1:1,67) = 82
+          ijrnf(1:1,67) = 33
+          zrnfm(1:jpmois,67) = 285.
+          ! Other rivers from the Gulf of Guinea
+          ! 68-Kouilou (Congo)  4.5S-11.5E (UNESCO=p51)     R1
+          ! Data from HLA:  4S - 11  E   1953/86 = 919m3/s
+          ! --> 924.25m3/s
+          criver(68) = "Kouilou            "
+          inb(68) = 1
+          iirnf(1:1,68) = 75
+          ijrnf(1:1,68) = 33
+          zrnfm(1:jpmois,68) = (/   &
+              1115.,    1166.,    1285.,    1462.,    1454.,     725.,   &
+              480.,     378.,     327.,     400.,    1018.,    1281./)
+          ! 69-Nyanga (Gabon)  3S-10E (UNESCO=p66)          R1
+          ! Data from HLA: 2.8N - 10  E   1952/82 = 264m3/s
+          ! --> 264.166687m3/s
+          criver(69) = "Nyanga              "
+          inb(69) = 1
+          iirnf(1:1,69) = 74
+          ijrnf(1:1,69) = 36
+          zrnfm(1:jpmois,69) = (/   &
+              126.,      99.,     143.,     253.,     316.,     300.,   &
+              156.,      93.,     231.,     557.,     592.,     304./)
+          ! 70-Ogoue (Gabon) 1S-9E (UNESCO, p69)            R1
+          ! Data from HLA: .75S -  9  E   1930/90 = 4512m3/s
+          ! --> 4511.83301m3/s
+          criver(70) = "Ogoue               "
+          inb(70) = 1
+          iirnf(1:1,70) = 74
+          ijrnf(1:1,70) = 37
+          zrnfm(1:jpmois,70) = (/   &
+              4514.,    3988.,    4622.,    5403.,    5790.,    4145.,   &
+              2616.,    1961.,    2119.,    4304.,    7870.,    6810./)
+          ! 71-Sanaga (Cameroun) 3.5N-9.5E (UNESCO, p31)    R1
+          ! Data from HLA: 3.9N -  9.6E   1944/80 = 1983m3/s
+          ! --> 1982.58337m3/s
+          criver(71) = "Sanaga              "
+          inb(71) = 1
+          iirnf(1:1,71) = 74
+          ijrnf(1:1,71) = 41
+          zrnfm(1:jpmois,71) = (/   &
+              813.,     578.,     517.,     633.,     909.,    1278.,   &
+              1928.,    2653.,    4361.,    5470.,    3307.,    1344./)
+          ! 72-Nyong (Cameroun) 3.1N-9.5E (UNESCO, p36)     R1
+          ! Data from HLA: 3.5N -  9.8E   1951/84 = 432m3/s
+          ! --> 431.166656m3/s      
+          criver(72) = "Nyong               "
+          inb(72) = 1
+          iirnf(1:1,72) = 74
+          ijrnf(1:1,72) = 41
+          zrnfm(1:jpmois,72) = (/   &
+              232.,     128.,     150.,     266.,     402.,     459.,   &
+              353.,     306.,     604.,     930.,     878.,     466./)
+          ! 73-Ntem (Cameroun) 2.5N-9.5E (UNESCO, p36)      R1
+          ! Data from HLA: 3N -  9.8E   1951/87 = 330m3/s      
+          ! --> 329.75m3/s
+          criver(73) = "Ntem                "
+          inb(73) = 1
+          iirnf(1:1,73) = 74
+          ijrnf(1:1,73) = 41
+          zrnfm(1:jpmois,73) = (/   &
+              452.,     455.,     492.,     466.,     482.,     251.,   &
+              151.,     108.,      87.,     133.,     395.,     485./)
+          ! 74-Wouri (Cameroun) 4N-9.5E (UNESCO, p34)       R1
+          ! Data from HLA: 4N -  9.5E   1951/84  = 307m3/s
+          ! --> 306.583374m3/s
+          criver(74) = "Wouri               "
+          inb(74) = 1
+          iirnf(1:1,74) = 74
+          ijrnf(1:1,74) = 41
+          zrnfm(1:jpmois,74) = (/   &
+              88.,      63.,      68.,      95.,     139.,     222.,   &
+              395.,     633.,     825.,     675.,     328.,     148./)
+          ! 75-Oueme (Benin) 6.5N-2.5E (UNESCO, p27)        R1
+          ! Data from HLA:  6.2N -  2.5E   1951/84 =113m3/s
+          ! --> 112.666664m3/s
+          criver(75) = "Oueme               "
+          inb(75) = 1
+          iirnf(1:1,75) = 73
+          ijrnf(1:1,75) = 42
+          zrnfm(1:jpmois,75) = (/   &
+              0.,       0.,       0.,       0.,       1.,      18.,   &
+              96.,     324.,     531.,     319.,      58.,       5./)
+          ! 76-Mono(Tepetou,Benin/Togo) 6.25N-1.8E (U, p27) R1
+          ! Data from HLA: 6.2N -  1  E   1951/85  = 96m3/s       
+          ! --> 96.4999924m3/s
+          criver(76) = "Mono                "
+          inb(76) = 1
+          iirnf(1:1,76) = 72
+          ijrnf(1:1,76) = 42
+          zrnfm(1:jpmois,76) = (/   &
+              2.,       1.,       1.,       4.,       8.,      44.,   &
+              168.,     274.,     386.,     215.,      47.,       8./)
+          ! 77-Comoe (Ivory Coast) 5N-4W (UNESCO, p56)      R1
+          ! Data from HLA: 5.1N -  4  W   1955/86 = 194m3/s       
+          ! --> 194.25m3/s
+          criver(77) = "Comoe               "
+          inb(77) = 1
+          iirnf(1:1,77) = 71
+          ijrnf(1:1,77) = 41
+          zrnfm(1:jpmois,77) = (/   &
+              14.,       7.,       9.,      17.,      29.,      90.,   &
+              145.,     349.,     740.,     688.,     198.,      45./)
+          ! 78-Sassandra (Ivory Coast) 5N-6W (UNESCO, p58)  R1
+          ! Data from HLA: 5N -  6  W   1953/86 = 449m3/s
+          ! --> 449.333344m3/s
+          criver(78) = "Sassandra           "
+          inb(78) = 1
+          iirnf(1:1,78) = 71
+          ijrnf(1:1,78) = 41
+          zrnfm(1:jpmois,78) = (/   &
+              144.,     116.,     119.,     143.,     156.,     334.,   &
+              419.,     692.,    1277.,    1190.,     553.,     249./)
+          ! 79-Jubba (Somali Coast)
+          criver(79) = "Jubba               "
+          inb(79) = 1
+          iirnf(1:1,79) = 84
+          ijrnf(1:1,79) = 39
+          zrnfm(1:jpmois,79) = 0.
+          ! 80-Senaga
+          criver(80) = "Senegal             "
+          inb(79) = 1
+          iirnf(1:1,80) = 66
+          ijrnf(1:1,80) = 47
+          zrnfm(1:jpmois,79) = 0.
+      
+          ! Total run-offs (VI)=63977.m3/s
+          ! Total run-offs (I+II+III+IV+V+VI)=560902.688m3/s
+          
+          ! VII OCEANIA
+          ! ------------
+          ! 91-Murray (Australia) 35S34 138E54              R5
+          ! Old=22 km3/year=697m3/s
+          ! --> 696.999939m3/s
+          criver(91) = "Murray              "
+          inb(91) = 1
+          iirnf(1:1,91) = 16
+          ijrnf(1:1,91) = 24
+          zrnfm(1:jpmois,91) = 697.
+          ! 92-Haast (N. Zeland) 43S50 169E02               R5
+          ! Old=6 km3/year=190m3/s
+          ! --> 189.999985m3/s
+          criver(92) = "Haast               "
+          inb(92) = 1
+          iirnf(1:1,92) = 24
+          ijrnf(1:1,92) = 22
+          zrnfm(1:jpmois,92) = 190.
+          ! 93-Fly (N. Guinea) 8S30 143E05                  R5
+          ! Old=77 km3/year=2440m3/s
+          ! --> 2440.m3/s
+          criver(93) = "Fly                 "
+          inb(93) = 1
+          iirnf(1:1,93) = 19
+          ijrnf(1:1,93) = 31
+          zrnfm(1:jpmois,93) = 2440.
+          ! 94-Purari (N. Guinea) 7S25 145E05               R4
+          ! Old=77 km3/year=2440m3/s; UNESCO(77+83,p595)=2727m3/s
+          ! --> 2727.33325m3/s
+          criver(94) = "Purari              "
+          inb(94) = 1
+          iirnf(1:1,94) = 19
+          ijrnf(1:1,94) = 33
+          zrnfm(1:jpmois,94) = (/   &
+              1972.,    3067.,    2332.,    2981.,    2693.,    2876.,   &
+              2867.,    3477.,    2195.,    2967.,    2674.,    2627./)
+          ! 95-Choshui ch''i (taiwan) 24N03 120E23          R2
+          ! Old=6 km3/year=190m3/s; UNESCO(65-68, p374)=120m3/s; ratio=1.58 
+          ! --> 0.m3/s
+          criver(95) = "Choshui             "
+          inb(95) = 1
+          iirnf(1:1,95) = 12
+          ijrnf(1:1,95) = 48
+          zrnfm(1:jpmois,95) = (/   &
+              65.,      63.,      83.,     100.,     177.,     535.,   &
+              332.,     313.,     236.,     193.,     101.,      84./)
+          ! 96-Kaoping (Taiwan)                             R5  
+          ! Old=9 km3/year=285m3/s
+          ! --> 0.m3/s
+          criver(96) = "Kaoping             "
+          inb(96) = 0
+          iirnf(1:1,96) = 0
+          ijrnf(1:1,96) = 0
+          zrnfm(1:jpmois,96) = 285.
+          ! 97-Tsengwen (Taiwan)                            R5
+          ! Old=2 km3/year=63m3/s
+          ! --> 0.m3/s
+          criver(97) = "Tsengwen            "
+          inb(97) = 0
+          iirnf(1:1,97) = 0
+          ijrnf(1:1,97) = 0
+          zrnfm(1:jpmois,97) = 63.
+          ! 98-Hualien (Taiwan)                             R5
+          ! Old=4 km3/year=127m3/s
+          ! --> 0.m3/s
+          criver(98) = "Hualien             "
+          inb(98) = 0
+          iirnf(1:1,98) = 0
+          ijrnf(1:1,98) = 0
+          zrnfm(1:jpmois,98) = 127.
+          ! 99-Peinan (Taiwan) 22N46 121E10                 R5
+          ! Old=4 km3/year=127m3/s
+          ! --> 127.000008m3/s
+          criver(99) = "Peinan              "
+          inb(99) = 1
+          iirnf(1:1,99) = 12
+          ijrnf(1:1,99) = 48
+          zrnfm(1:jpmois,99) = 127.
+          ! 100-Hsiukuluan (Taiwan)                         R5
+          ! Old=4 km3/year=127m3/s
+          ! --> 0.m3/s
+          criver(100) = "Hsiukuluan          "
+          inb(100) = 0
+          iirnf(1:1,100) = 0
+          ijrnf(1:1,100) = 0
+          zrnfm(1:jpmois,100) = 127.
+
+          !  Total run-offs(VII)=6181.33301m3/s
+          
+
+          ! VIII ANTARCTICA
+          ! ---------------
+          ! 103 -Antarctic ice discharge (2 613 Gt/year) (jacobs et al 1992)
+          ! Data from Jacobs et al 92: =2613 km3/year=82857.686454 m3/s
+          ! --> 82858 m3/s
+          criver(103) = "Antarctica         "
+          inb(103) = 108
+          iirnf(1:108,103) = (/   &
+               2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15,16,17,18,19,20,   &
+              21,22,23,24,25,25,24,24,24,25,26,27,28,29,30,31,32,33,34,   &
+              35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,51,53,   &
+              53,53,53,54,54,54,56,57,57,57,57,57,57,57,57,57,57,58,59,   &
+              60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,   &
+              79,80,81,82,83,84,85,86,87,88,89,90,91 /)
+          ijrnf(1:108,103) = (/   &
+              12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,11,11,   &
+              10,10, 9, 9, 8, 7, 6, 5, 3, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3,   &
+               3, 4, 5, 6, 6, 6, 7, 7, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7,   &
+               8, 9,10,10,11,12,13,12,11,10, 9, 8, 7, 6, 5, 4, 3, 2, 2,   &
+               2, 2, 2, 2, 3, 4, 4, 5, 7, 8, 9, 9, 9, 9, 9, 9,10,10,10,   &
+              10,10,10,10,11,12,12,12,12,11,11,10,10 /)
+          zrnfm(1:jpmois,100) = 82858.0
+                   
+
+          !  Total run-offs(I+II+III+IV+V+VI+VII)= 567084. m3/s
+          !                                      = 1.588668056E-6 kg/m2/s
+          !                                      = 17883.5586 km3/Year
+          !                                      = 0.567083955 Sverdrup
+      ENDIF
+
+      IF( kt == nit000 ) THEN
+         IF(lwp) WRITE(numout,*)
+         IF(lwp) WRITE(numout,*) 'flxrnf : runoff + orca4'
+         IF(lwp) WRITE(numout,*) '~~~~~~'
+         IF(lwp) WRITE(numout,*) '   nrunoff = ', nrunoff
+         IF(lwp) WRITE(numout,*)
+      ENDIF
+
+      ! 0. initialization and  indexes  modification for zoom version
+      ! --------------------------------------------------------------
+      
+      
+      ! conversion factor m3/s --> kg/m2/s *e1t*e2t
+
+      zconv = rauw
+
+      IF( kt == nit000 ) THEN 
+         ! Set runoffs and upstream coeff to zero
+         runoff (:,:) = 0.e0                                                                                  
+         upsrnfh(:,:) = 0.e0
+         upsrnfz(:)   = 0.e0
+         upsadv (:,:) = 0.e0
+         zcoefr(:,:,:) = 0.e0
+
+         IF( nrunoff == 0 ) THEN
+            IF(lwp) WRITE(numout,*)
+            IF(lwp) WRITE(numout,*) ' NO RUNOFF in this simulation '
+            IF(lwp) WRITE(numout,*)
+         ENDIF
+      ENDIF
+
+      IF( kt == nit000 ) THEN
+         IF( nrunoff >= 1 ) THEN 
+            zbilan = 0.0 
+!OCL SCALAR
+            DO jr = 1, jpriv-1
+               inbp = inb(jr)
+               IF( inbp /= 0 ) THEN
+                  ii = mj0(iirnf(1,jr))
+                  ij = mi0(ijrnf(1,jr))
+                  ii = MAX( 2, MIN( ii, jpi-1 ) )
+                  ij = MAX( 2, MIN( ij, jpj-1 ) )
+!OCL SCALAR
+                  IF( tmask(ii,ij,1) <= 0.5 ) THEN 
+                     IF(lwp) WRITE(numout,*) 'Erreur riviere masquee   ', ii, ij, jr, criver(jr)
+                  ENDIF
+                  IF( tmask(ii-1,ij,1)*tmask(ii+1,ij,1)   &
+                     *tmask(ii,ij-1,1)*tmask(ii,ij+1,1) /= 0. )THEN 
+                     IF(lwp) WRITE(numout,*) 'Erreur riviere non cotiere ',ii, ij, jr, criver(jr)
+                  ENDIF
+                  DO nrnf1 = 1, jpmois
+                     zbilan = zbilan + zrnfm(nrnf1,jr) * tmask(ii,ij,1)
+                  END DO
+               ENDIF
+            END DO
+            IF(lwp) WRITE(numout,*) 'zrnfm (runoff) ', zero, zconv, rauw, SUM(zrnfm)
+            IF(lwp) THEN 
+               WRITE(numout,'("Total runoff : ",1E30.15)' ) zbilan
+               WRITE(numout,*) 'Run-off : POSITION and value '
+               WRITE(numout,*) 'ji jj glamt gphit annual mask 12-month '
+!OCL SCALAR
+               DO jr = 1, jpriv-1
+                  inbp = inb(jr)
+                  IF(inbp /= 0) THEN
+!OCL SCALAR
+                     DO jl = 1, inbp
+                        ii = mj0(iirnf(jl,jr))
+                        ij = mi0(ijrnf(jl,jr))
+                        WRITE(numout,'(2I3,1X,1A20,2X,2I4,2F7.1,1I3,1PE10.1,1I2,12E9.1)')   &
+                           jr, jl, criver(jr),   &
+                           ii, ij, glamt(ii,ij), gphit(ii,ij), inbp,   &
+                           SUM(zrnfm(1:jpmois,jr))/float(inbp),   &
+                           NINT(tmask(ii,ij,1)),   &
+                           zrnfm(1:jpmois,jr)/float(inbp)
+                     END DO
+                  ENDIF
+               END DO
+            ENDIF
+            IF(lwp) WRITE(numout,*) ' zrnfm (runoff) ', zero, zconv, rauw, SUM(zrnfm)
+         ENDIF
+      ENDIF
+
+      ! 1. initialization of the runoff array
+      ! -------------------------------------
+
+      IF( nrunoff == 1 .OR. nrunoff == 2) THEN
+
+         iman  = jpmois
+         
+         i15 = nday/16
+         
+         imois = nmonth + i15 - 1
+         IF( imois == 0) imois = iman
+         IF( nleapy == 1 .AND. MOD( nyear, 4 ) == 0 ) THEN
+            ! Number of Day Between Data
+            idbd = nbiss(imois)
+         ELSEIF( nleapy > 1 ) THEN
+            idbd = nleapy
+         ELSE
+            idbd = nobis(imois)
+         ENDIF
+         ! Number of days between imois, 15 and the end of month
+         idmeom = idbd - 15
+         
+         ! 1.1 Calendar computation
+         
+         ! nrnf1 number of the first array record used in the simulation
+         ! nrnf2 number of the last  array record
+         
+         nrnf1 = imois
+         nrnf2 = nrnf1 + 1
+         nrnf1 = MOD( nrnf1, iman )
+         IF( nrnf1 == 0 ) nrnf1 = iman
+         nrnf2 = MOD( nrnf2, iman )
+         IF( nrnf2 == 0 ) nrnf2 = iman
+         
+         IF( kt == nit000 ) THEN
+            IF(lwp) WRITE(numout,*)
+            IF(lwp) WRITE(numout,*) 'flxrnf routine'
+            IF(lwp) WRITE(numout,*) 'first array record used nrnf1 ',nrnf1
+            IF(lwp) WRITE(numout,*) 'last  array record used nrnf2 ',nrnf2
+            IF(lwp) WRITE(numout,*) 'total zrnfm ', SUM(zrnfm)
+            IF(lwp) WRITE(numout,*) 'total surface ', SUM(e1t*e2t*tmask(:,:,1))
+         ENDIF
+
+         zxy = FLOAT( nday + idmeom - idbd * i15 ) / idbd
+
+!OCL SCALAR
+         DO jr = 1, jpriv-1
+            inbp = inb(jr)
+!OCL SCALAR
+            IF( inbp /= 0 ) THEN
+               DO jl = 1, inbp
+                  ii = iirnf(jl,jr) - nimpp + 1 - jpizoom + 1
+                  ij = ijrnf(jl,jr) - njmpp + 1 - jpjzoom + 1
+                  iipt0 = MAX( 1, MIN( ii, jpi   ) )
+                  iipt1 = MAX( 0, MIN( ii, jpi-1 ) )
+                  ijpt0 = MAX( 1, MIN( ij, jpj   ) )
+                  ijpt1 = MAX( 0, MIN( ij, jpj-1 ) )
+                  DO jj = ijpt0, ijpt1
+                     DO ji = iipt0, iipt1
+                        runoff(ji,jj) = runoff(ji,jj)   & 
+                                      + ( (1.-zxy) * zrnfm(nrnf1,jr)   &
+                                      +       zxy  * zrnfm(nrnf2,jr)  ) / FLOAT(inbp)      
+                     END DO
+                  END DO
+               END DO
+            ENDIF
+         END DO
+
+
+         ! 2. conversion in mm/day
+         ! -----------------------
+         !     C a u t i o n : upward water flux, runoff is negative
+
+         runoff(:,:) = -zconv * runoff(:,:) / ( e1t(:,:) * e2t(:,:) )
+         
+
+         ! 3. advectve coefficient
+         ! -----------------------
+
+         !  Creates the array coef that contains the coefficient to affect to
+         !  the upstream scheme. advection scheme will be:
+         !  coefr * upstream + (1- coefr) centered
+         !  coefr must be between 0 and 1.
+         !  3 values are used: maximum = zrup1, between zrup2, small zrup3.
+         ! 
+         IF( nrunoff == 2 .AND. kt == nit000 ) THEN
+
+            zrup1 = 0.5
+            zrup2 = 0.25
+            zrup3 = 0.125
+            DO jr = 1, jpriv-1
+               inbp = inb(jr)
+               IF( inbp /= 0) THEN
+                  DO jl = 1, inbp
+                     ! --> zrup1 (originally, = 1 = all upstream).
+                     ! ji,jj
+                     ii = iirnf(jl,jr) - nimpp + 1 - jpizoom - 1
+                     ij = ijrnf(jl,jr) - njmpp + 1 - jpjzoom - 1
+                     iipt0 = MAX( 1, MIN( ii,jpi  ) )
+                     iipt1 = MAX( 0, MIN( ii,jpi-1) )
+                     ijpt0 = MAX( 1, MIN( ij,jpj  ) )
+                     ijpt1 = MAX( 0, MIN( ij,jpj-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3
+                              zcoefr(ji,jj,jn) = zrup1
+                           END DO
+                           zcoefr(ji,jj,4) = zrup2
+                           zcoefr(ji,jj,5) = zrup3
+                        END DO
+                     END DO
+                     ! --> zrup2 (originally = 0.5)
+                     ! ji,jj+1
+                     ijpt0 = MAX( 1, MIN( ij+1, jpj  ) )
+                     ijpt1 = MAX( 0, MIN( ij+1, jpj-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3
+                              zcoefr(ji,jj,jn) = MAX( zrup2, zcoefr(ji,jj,jn) )
+                           END DO
+                           zcoefr(ji,jj,4) = MAX( zrup3, zcoefr(ji,jj,4) )
+                        END DO
+                     END DO
+                     ! ji,jj-1
+                     ijpt0 = MAX( 1, MIN( ij-1, jpj  ) )
+                     ijpt1 = MAX( 0, MIN( ij-1, jpj-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3
+                              zcoefr(ji,jj,jn) = MAX( zrup2, zcoefr(ji,jj,jn) )
+                           END DO
+                           zcoefr(ji,jj,4) = MAX( zrup3, zcoefr(ji,jj,4) )
+                        END DO
+                     END DO
+                     ! ji+1,jj-1
+                     iipt0 = MAX( 1, MIN( ii+1, jpi  ) )
+                     iipt1 = MAX( 0, MIN( ii+1, jpi-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3
+                              zcoefr(ji,jj,jn) = MAX( zrup2, zcoefr(ji,jj,jn) )
+                           END DO
+                           zcoefr(ji,jj,4) = MAX( zrup3, zcoefr(ji,jj,4) )
+                        END DO
+                     END DO
+                     ! ji+1,jj
+                     ijpt0 = MAX( 1, MIN( ij, jpj  ) )
+                     ijpt1 = MAX( 0, MIN( ij, jpj-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3
+                              zcoefr(ji,jj,jn) = MAX( zrup2, zcoefr(ji,jj,jn) )
+                           END DO
+                           zcoefr(ji,jj,4) = MAX( zrup3, zcoefr(ji,jj,4) )
+                        END DO
+                     END DO
+                     ! ji+1,jj+1
+                     ijpt0 = MAX( 1, MIN( ij+1,jpj  ) )
+                     ijpt1 = MAX( 0, MIN( ij+1,jpj-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3
+                              zcoefr(ji,jj,jn) = MAX( zrup2, zcoefr(ji,jj,jn) )
+                           END DO
+                           zcoefr(ji,jj,4) = MAX( zrup3, zcoefr(ji,jj,4) )
+                        END DO
+                     END DO
+                     ! ji-1,jj+1
+                     iipt0 = MAX( 1, MIN( ii-1,jpi  ) )
+                     iipt1 = MAX( 0, MIN( ii-1,jpi-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3
+                              zcoefr(ji,jj,jn) = MAX( zrup2, zcoefr(ji,jj,jn) )
+                           END DO
+                           zcoefr(ji,jj,4) = MAX( zrup3, zcoefr(ji,jj,4) )
+                        END DO
+                     END DO
+                     ! ji-1,jj
+                     ijpt0 = MAX( 1, MIN( ij,jpj  ) )
+                     ijpt1 = MAX( 0, MIN( ij,jpj-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3
+                              zcoefr(ji,jj,jn) = MAX( zrup2, zcoefr(ji,jj,jn) )
+                           END DO
+                           zcoefr(ji,jj,4) = MAX( zrup3, zcoefr(ji,jj,4) )
+                        END DO
+                     END DO
+                     ! ji-1,jj-1
+                     ijpt0 = MAX( 1, MIN( ij-1,jpj  ) )
+                     ijpt1 = MAX( 0, MIN( ij-1,jpj-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3
+                              zcoefr(ji,jj,jn) = MAX( zrup2, zcoefr(ji,jj,jn) )
+                           END DO
+                           zcoefr(ji,jj,4) = MAX( zrup3, zcoefr(ji,jj,4) )
+                        END DO
+                     END DO
+                     ! --> zrup3 (originally = 0.25)
+                     ! ji-1,jj+2
+                     ijpt0 = MAX( 1, MIN( ij+2,jpj  ) )
+                     ijpt1 = MAX( 0, MIN( ij+2,jpj-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3
+                              zcoefr(ji,jj,jn) = MAX( zrup3, zcoefr(ji,jj,jn) )
+                           END DO
+                        END DO
+                     END DO
+                     ! ji-1,jj-2
+                     ijpt0 = MAX( 1, MIN( ij-2,jpj  ) )
+                     ijpt1 = MAX( 0, MIN( ij-2,jpj-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3 
+                              zcoefr(ji,jj,jn) = MAX( zrup3, zcoefr(ji,jj,jn) )
+                           END DO
+                        END DO
+                     END DO
+                     ! ji,jj-2
+                     iipt0 = MAX( 1, MIN( ii,jpi  ) )
+                     iipt1 = MAX( 0, MIN( ii,jpi-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3 
+                              zcoefr(ji,jj,jn) = MAX( zrup3, zcoefr(ji,jj,jn) )
+                           END DO
+                        END DO
+                     END DO
+                     ! ji,jj+2
+                     ijpt0 = MAX( 1, MIN( ij+2,jpj  ) )
+                     ijpt1 = MAX( 0, MIN( ij+2,jpj-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3
+                              zcoefr(ji,jj,jn) = MAX( zrup3, zcoefr(ji,jj,jn) )
+                           END DO
+                        END DO
+                     END DO
+                     ! ji+1,jj-2
+                     iipt0 = MAX( 1, MIN( ii+1,jpi  ) )
+                     iipt1 = MAX( 0, MIN( ii+1,jpi-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3 
+                              zcoefr(ji,jj,jn) = MAX( zrup3, zcoefr(ji,jj,jn) )
+                           END DO
+                        END DO
+                     END DO
+                     ! ji+1,jj+2
+                     ijpt0 = MAX( 1, MIN( ij+2,jpj  ) )
+                     ijpt1 = MAX( 0, MIN( ij+2,jpj-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3 
+                              zcoefr(ji,jj,jn) = MAX( zrup3, zcoefr(ji,jj,jn) )
+                           END DO
+                        END DO
+                     END DO
+                     ! ji+2,jj-2
+                     iipt0 = MAX( 1, MIN( ii+2,jpi  ) )
+                     iipt1 = MAX( 0, MIN( ii+2,jpi-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3 
+                              zcoefr(ji,jj,jn) = MAX( zrup3, zcoefr(ji,jj,jn) )
+                           END DO
+                        END DO
+                     END DO
+                     ! ji+2,jj+2
+                     ijpt0 = MAX( 1, MIN( ij+2,jpj  ) )
+                     ijpt1 = MAX( 0, MIN( ij+2,jpj-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3  
+                              zcoefr(ji,jj,jn) = MAX( zrup3, zcoefr(ji,jj,jn) )
+                           END DO
+                        END DO
+                     END DO
+                     ! ji+2,jj-1
+                     ijpt0 = MAX( 1, MIN( ij-1,jpj  ) )
+                     ijpt1 = MAX( 0, MIN( ij-1,jpj-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3
+                              zcoefr(ji,jj,jn) = MAX( zrup3, zcoefr(ji,jj,jn) )
+                           END DO
+                        END DO
+                     END DO
+                     ! ji+2,jj+1
+                     ijpt0 = MAX( 1, MIN( ij+1,jpj  ) )
+                     ijpt1 = MAX( 0, MIN( ij+1,jpj-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3 
+                              zcoefr(ji,jj,jn) = MAX( zrup3, zcoefr(ji,jj,jn) )
+                           END DO
+                        END DO
+                     END DO
+                     ! ji+2,jj
+                     ijpt0 = MAX( 1, MIN( ij,jpj  ) )
+                     ijpt1 = MAX( 0, MIN( ij,jpj-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3
+                              zcoefr(ji,jj,jn) = MAX( zrup3, zcoefr(ji,jj,jn) )
+                           END DO
+                        END DO
+                     END DO
+                     ! ji-2,jj
+                     iipt0 = MAX( 1, MIN( ii-2,jpi  ) )
+                     iipt1 = MAX( 0, MIN( ii-2,jpi-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3        
+                              zcoefr(ji,jj,jn) = MAX( zrup3, zcoefr(ji,jj,jn) )
+                           END DO
+                        END DO
+                     END DO
+                     ! ji-2,jj-2
+                     ijpt0 = MAX( 1, MIN( ij-2,jpj  ) )
+                     ijpt1 = MAX( 0, MIN( ij-2,jpj-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3 
+                              zcoefr(ji,jj,jn) = MAX( zrup3, zcoefr(ji,jj,jn) )
+                           END DO
+                        END DO
+                     END DO
+                     ! ji-2,jj+2
+                     ijpt0 = MAX( 1, MIN( ij+2,jpj  ) )
+                     ijpt1 = MAX( 0, MIN( ij+2,jpj-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3
+                              zcoefr(ji,jj,jn) = MAX( zrup3, zcoefr(ji,jj,jn) )
+                           END DO
+                        END DO
+                     END DO
+                     ! ji-2,jj-1
+                     ijpt0 = MAX( 1, MIN( ij-1,jpj  ) )
+                     ijpt1 = MAX( 0, MIN( ij-1,jpj-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3 
+                              zcoefr(ji,jj,jn) = MAX( zrup3, zcoefr(ji,jj,jn) )
+                           END DO
+                        END DO
+                     END DO
+                     ! ji-2,jj+1
+                     ijpt0 = MAX( 1, MIN( ij+1,jpj  ) )
+                     ijpt1 = MAX( 0, MIN( ij+1,jpj-1) )
+                     DO jj = ijpt0, ijpt1
+                        DO ji = iipt0, iipt1
+                           DO jn = 1, 3 
+                              zcoefr(ji,jj,jn) = MAX( zrup3, zcoefr(ji,jj,jn) )
+                           END DO
+                        END DO
+                     END DO
+                  END DO
+               ENDIF
+            END DO
+            upsrnfh(:,:) = zcoefr(:,:,1)
+            upsrnfz(:)   = 0.e0
+            upsrnfz(1)   = 1.0
+            upsrnfz(2)   = 1.0
+            upsrnfz(3)   = zrup1
+            upsrnfz(4)   = zrup2
+            upsrnfz(5)   = zrup3
+         ENDIF
+      ENDIF
+      
+      ! Upstream and centered scheme in the vicinity of some straits
+      
+      IF( kt == nit000 ) THEN
+
+         ! ORCA_R4 configuration :
+         ! Gibraltar Strait
+         DO jj = mj0(52), mj1(53)
+            DO ji = mi0(70), mi1(71)
+               upsadv(ji,jj) = 0.5
+            END DO
+         END DO
+
+      ENDIF

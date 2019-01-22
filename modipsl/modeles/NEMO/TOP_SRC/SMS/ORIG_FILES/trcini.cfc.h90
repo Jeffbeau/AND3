@@ -1,0 +1,138 @@
+   !!----------------------------------------------------------------------
+   !!                    ***  trcini.cfc.h90 ***
+   !!----------------------------------------------------------------------
+   !! * Module variables
+   INTEGER  ::  &
+      inum = 16     ! unit number
+   CHARACTER (len=34) :: &
+      clname = 'cfc1112.atm' ! ???
+   REAL(wp) ::  &
+      ylats = -10.,    &     ! 10 degrees south
+      ylatn =  10.           ! 10 degrees north
+
+CONTAINS
+
+   SUBROUTINE trc_ini
+      !!---------------------------------------------------------------------
+      !!                     ***  trcini.cfc.h90  ***  
+      !!
+      !!   Purpose : special initialization for cfc model
+      !!  ---------
+      !!
+      !!
+      !! History :
+      !!   8.2  !  04-06  (JC. Dutay)  original code
+      !!   8.5  !  05-03  (O. Aumont and A. El Moussaoui F90
+      !!   9.0  !  05-10  (C. Ethe) Modularity 
+      !!---------------------------------------------------------------------
+      !!  TOP 1.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/TOP_SRC/SMS/trcini.cfc.h90,v 1.3 2006/04/10 15:39:56 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+      !!---------------------------------------------------------------------
+      !! Local declarations
+      INTEGER  :: ji, jj, jn, jl, jm
+      REAL(wp) :: zyy,  zyd
+
+   
+      !
+      ! Initialization of boundaries conditions
+      ! --------------------------------------- 
+
+      pp_cfc(:,:,:) = 0.0
+      qtr  (:,:,:) = 0.0
+      xphem(:,:  ) = 0.0
+
+ 
+      DO jn = 1, jptra
+         DO jm = 1, jphem
+            DO jl = 1, jpyear
+               p_cfc(jl,jm,jn) = 0.0
+            END DO
+         END DO
+      ENDDO
+      
+      
+      ! Initialization of qint in case of  no restart 
+      !----------------------------------------------
+      IF( .NOT. lrsttr ) THEN    
+         IF(lwp) THEN
+            WRITE(numout,*)
+            WRITE(numout,*) 'Initialization de qint ; No restart : qint equal zero '
+         ENDIF
+         DO jn = 1, jptra
+            DO jj = 1, jpj
+               DO ji = 1, jpi
+                  qint(ji,jj,jn) = 0.
+               END DO
+            END DO
+         ENDDO
+      ENDIF
+
+
+      !
+      !   READ CFC partial pressure atmospheric value :
+      !     p11(year,nt) = PCFC11  in northern (1) and southern (2) hemisphere 
+      !     p12(year,nt) = PCFC12  in northern (1) and southern (2) hemisphere 
+      !--------------------------------------------------------------------
+
+      IF(lwp) WRITE(numout,*) 'read of formatted file cfc1112atm'
+      
+      OPEN( UNIT = inum, FORM = 'FORMATTED',FILE = clname, STATUS = 'OLD')
+      REWIND(inum)
+      
+
+      ! Skip over 1st six descriptor lines
+      !-----------------------------------
+      DO jm = 1, 6
+         READ(inum,'(1x)')
+      END DO
+   
+   
+      !   Read file
+      ! ---------
+      DO jn = 31, 98
+         READ(inum,*) zyy, p_cfc(jn,1,jp11), p_cfc(jn,1,jp12), &
+            &              p_cfc(jn,2,jp11), p_cfc(jn,2,jp12)
+         WRITE(numout,'(f7.2, 4f8.2)' ) &
+            &         zyy, p_cfc(jn,1,jp11), p_cfc(jn,1,jp12), &
+            &              p_cfc(jn,2,jp11), p_cfc(jn,2,jp12)
+      END DO
+
+      p_cfc(32,1:2,jp11) = 5.e-4
+      p_cfc(33,1:2,jp11) = 8.e-4
+      p_cfc(34,1:2,jp11) = 1.e-6
+      p_cfc(35,1:2,jp11) = 2.e-3
+      p_cfc(36,1:2,jp11) = 4.e-3
+      p_cfc(37,1:2,jp11) = 6.e-3
+      p_cfc(38,1:2,jp11) = 8.e-3
+      p_cfc(39,1:2,jp11) = 1.e-2
+      
+      
+      IF(lwp) THEN
+         WRITE(numout,*)
+         WRITE(numout,*) ' Year   p11HN    p11HS    p12HN    p12HS '
+         DO jn = 30, 100
+            WRITE(numout, '( 1I4, 4F9.2)')   &
+               &         jn, p_cfc(jn,1,jp11), p_cfc(jn,2,jp11), &
+               &             p_cfc(jn,1,jp12), p_cfc(jn,2,jp12)
+         END DO
+      ENDIF
+
+
+      ! Interpolation factor of atmospheric partial pressure
+      ! Linear interpolation between 2 hemispheric function of latitud between ylats and ylatn
+      !---------------------------------------------------------------------------------------
+      zyd = ylatn - ylats      
+      DO jj = 1 , jpj
+         DO ji = 1 , jpi
+            IF( gphit(ji,jj) .GE. ylatn ) THEN
+               xphem(ji,jj) = 1.
+            ELSE IF (gphit(ji,jj) .LE. ylats) THEN
+               xphem(ji,jj) = 0.
+            ELSE 
+               xphem(ji,jj) = ( gphit(ji,jj) - ylats) / zyd
+            ENDIF
+         END DO
+      END DO
+
+   END SUBROUTINE trc_ini

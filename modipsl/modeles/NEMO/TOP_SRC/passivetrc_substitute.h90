@@ -1,0 +1,83 @@
+   !!----------------------------------------------------------------------
+   !!                    ***  passivetrc_substitute.h90   ***
+   !!----------------------------------------------------------------------
+   !! ** purpose : Statement function file: to be include in all routines
+   !!              concerning passive tracer model 
+   !!----------------------------------------------------------------------
+   !!  TOP 1.0,  LOCEAN-IPSL (2005)
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/TOP_SRC/passivetrc_substitute.h90,v 1.4 2005/09/12 09:04:53 opalod Exp $
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt
+   !!----------------------------------------------------------------------
+
+    ! Lateral eddy diffusivity coefficient for passive tracer:
+    ! ========================================================
+#if defined key_traldf_c3d
+!   'key_traldf_c3d' :                 aht: 3D coefficient
+#       define fsahtrt(i,j,k)  trcrat * ahtt(i,j,k)
+#       define fsahtru(i,j,k)  trcrat * ahtu(i,j,k)
+#       define fsahtrv(i,j,k)  trcrat * ahtv(i,j,k)
+#       define fsahtrw(i,j,k)  trcrat * ahtw(i,j,k)
+#elif defined key_traldf_smag
+!   SMAG scheme                    aht: 3D coefficient
+#       define fsahtrt(i,j,k)  trcrat * ahtt(i,j,k)
+#       define fsahtru(i,j,k)  trcrat * ahtu(i,j,k)
+#       define fsahtrv(i,j,k)  trcrat * ahtv(i,j,k)
+#       define fsahtrw(i,j,k)  trcrat * ahtw(i,j,k)
+#elif defined key_traldf_c2d
+!   'key_traldf_c2d' :                 aht: 2D coefficient
+#       define fsahtrt(i,j,k)  trcrat * ahtt(i,j)
+#       define fsahtru(i,j,k)  trcrat * ahtu(i,j)
+#       define fsahtrv(i,j,k)  trcrat * ahtv(i,j)
+#       define fsahtrw(i,j,k)  trcrat * ahtw(i,j)
+#elif defined key_traldf_c1d
+!   'key_traldf_c1d' :                 aht: 1D coefficient
+#       define fsahtrt(i,j,k)  trcrat * ahtt(k)
+#       define fsahtru(i,j,k)  trcrat * ahtu(k)
+#       define fsahtrv(i,j,k)  trcrat * ahtv(k)
+#       define fsahtrw(i,j,k)  trcrat * ahtw(k)
+#else
+!   Default option :             aht: Constant coefficient
+#       define fsahtrt(i,j,k)  ahtrc0
+#       define fsahtru(i,j,k)  ahtrc0
+#       define fsahtrv(i,j,k)  ahtrc0
+#       define fsahtrw(i,j,k)  ahtrc0
+#endif
+
+    ! Eddy induced velocity  coefficient for passive tracer:
+    ! ========================================================
+#if defined key_traldf_c3d
+!   'key_traldf_c3d' :                 eiv: 3D coefficient
+#       define fsaeitru(i,j,k)  trcrat * aeiu(i,j,k)
+#       define fsaeitrv(i,j,k)  trcrat * aeiv(i,j,k)
+#       define fsaeitrw(i,j,k)  trcrat * aeiw(i,j,k)
+#elif defined key_traldf_c2d
+!   'key_traldf_c2d' :                 eiv: 2D coefficient
+#       define fsaeitru(i,j,k)  trcrat * aeiu(i,j)
+#       define fsaeitrv(i,j,k)  trcrat * aeiv(i,j)
+#       define fsaeitrw(i,j,k)  trcrat * aeiw(i,j)
+#elif defined key_traldf_c1d
+!   'key_traldf_c1d' :                 eiv: 1D coefficient
+#       define fsaeitru(i,j,k)  trcrat * aeiu(k)
+#       define fsaeitrv(i,j,k)  trcrat * aeiv(k)
+#       define fsaeitrw(i,j,k)  trcrat * aeiw(k)
+#else
+!   Default option :             eiv: Constant coefficient
+#       define fsaeitru(i,j,k)  aeiv0
+#       define fsaeitrv(i,j,k)  aeiv0
+#       define fsaeitrw(i,j,k)  aeiv0
+#endif
+    ! mixing for passive tracer:
+    ! ========================================================
+#if defined key_trc_zdfddm
+!   'key_trc_zdfddm' :    avs 
+#       define fstravs(i,j,k)   avs(i,j,k)
+#else
+!   Default option :   avs = avt
+#       define fstravs(i,j,k)   avt(i,j,k)
+#endif
+
+! ========================================================
+#include "domzgr_substitute.h90"
+#include "ldfeiv_substitute.h90"
+#include "ldftra_substitute.h90"
+#include "vectopt_loop_substitute.h90"

@@ -1,0 +1,1390 @@
+!!DB 2009.05.05
+
+   !!----------------------------------------------------------------------
+   !!                    ***  flx_core.h90  ***
+   !!----------------------------------------------------------------------
+   !!   flx     : update surface thermohaline fluxes from the NCAR data set
+   !!             read in a NetCDF file
+   !!----------------------------------------------------------------------
+   !! * Modules used     C A U T I O N  already defined in flxmod.F90
+
+   !! * Shared module variables
+   REAL(wp), PUBLIC, DIMENSION(jpi,jpj) ::  &
+      gsss,            &  !: SSS mean on nfbulk ocean time step
+      gu  , gv ,       &  !: (un,vn)(jk=1) mean over nfbulk ocean time step
+      !                   ! these variables are used for output in diawri
+      qlw_oce  ,       &  !: long wave flx over ocean
+      qla_oce  ,       &  !: latent heat flx over ocean
+      qsb_oce  ,       &  !: sensible heat flx over ocean
+      qlw_ice  ,       &  !: long wave flx over ice
+      qsb_ice             !: sensible heat flx over ice
+
+   !! * Module variables
+   INTEGER, PARAMETER ::   jpfile  = 8  ! maximum number of files to read 
+   CHARACTER (LEN=32), DIMENSION (jpfile) ::  clvarname  
+   CHARACTER (LEN=50), DIMENSION (jpfile) ::  clname 
+
+   INTEGER   ::      isnap
+   INTEGER, DIMENSION(jpfile) ::   &
+      numflxall,           &  ! logical units for surface fluxes data
+      nrecflx  , nrecflx2     ! first and second record to be read in flux file
+   REAL(wp), DIMENSION(jpfile) ::   &
+      freqh                 ! Frequency for each forcing file (hours)
+      !                     ! a negative value of -12 corresponds to monthly
+   REAL(wp), DIMENSION(jpi,jpj,jpfile,2) ::   &
+      flxdta                !:  set of NCAR 6hourly/daily/monthly fluxes
+
+!!DB -- deleted this option
+
+!!DB -- keep for now
+   LOGICAL  :: &
+        &   ln_2m   = .FALSE.     !: logical flag for height of air temp. and hum.
+
+   REAL(wp) :: alpha_precip=1.    !: multiplication factor for precipitation
+
+
+!!DB -- related to I/O
+   INTEGER :: bflx1, bflx2, num_recsd, ireadd, frame_daily
+   INTEGER :: nyear0
+
+   !!----------------------------------------------------------------------
+   !! History :
+   !!   9.0  !  04-08  (U. Schweckendiek)  Original code
+   !!        !  05-04  (L. Brodeau, A.M. Treguier)  severals modifications:
+   !!        !         - new bulk routine for efficiency
+   !!        !         - WINDS ARE NOW ASSUMED TO BE AT T POINTS in input files
+   !!        !         - file names and file characteristics in namelist 
+   !!        !         - Implement reading of 6-hourly fields   
+   !!        !  06-02  (S. Masson, G. Madec)  IOM read + NEMO "style"
+   !!        !  12-06  (L. Brodeau) handle both 2m and 10m input fields
+   !!----------------------------------------------------------------------
+   !!   OPA 9.0 , LOCEAN-IPSL (2006)
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/OPA_SRC/SBC/flx_core.h90,v 1.4 2007/05/30 08:32:50 opalod Exp $
+   !! Software governed by the CeCILL licence (modipsl/doc/NEMO_CeCILL.txt)
+   !!----------------------------------------------------------------------
+   !
+CONTAINS
+   !
+   SUBROUTINE flx( kt )
+      !!---------------------------------------------------------------------
+      !!                     ***  ROUTINE flx  ***
+      !!                   
+      !! ** Purpose :   provide the thermohaline fluxes (heat and freshwater)
+      !!                and momentum fluxes (tau) 
+      !!      to the ocean at each time step.
+      !!
+      !! ** Method  :   Read NCAR data in a NetCDF file
+      !!               (file names and frequency of inputs specified in namelist)
+      !!          precipitation:  total (rain+snow)
+      !!          precipitation:  snow only 
+      !!          u10,v10 -> scalar wind at 10m in m/s -  ON 'T' GRID POINTS!!!
+      !!          solar radiation (short wave)  in W/m2
+      !!          thermal radiation (long wave) in W/m2
+      !!          specific humidity             in %
+      !!          temperature at 10m            in degrees K
+      !!
+      !!  ** Action  :   
+      !!          call flx_blk_albedo to compute ocean and ice albedo
+      !!          Calculates forcing fluxes to input into ice model 
+      !          or to be used directly for the ocean in ocesbc. 
+      !!
+      !!  ** Outputs 
+      !!          COMMENTS TO BE ADDED -units to be verified!
+      !!          taux    : zonal      wind stress on "u" points  (N/m2)
+      !!          tauy    : meridional wind stress on "v" points  (N/m2)
+      !!          qsr_oce : Solar flux over the ocean (W/m2)
+      !!          qnsr_oce: longwave flux over the ocean (W/m2)
+      !!          qsr_ice : solar flux over the ice (W/m2)
+      !!          qnsr_ice: longwave flux over the ice (W/m2)
+      !!          qla_ice : latent flux over sea-ice (W/m2)
+      !!          dqns_ice: total heat fluxes sensitivity over ice (dQ/dT)
+      !!          dqla_ice: latent heat flux sensitivity over ice (dQla/dT)
+      !!          fr1_i0
+      !!          fr2_i0
+      !!          tprecip
+      !!          sprecip
+      !!          evap
+      !!          
+      !! caution : now, in the opa global model, the net upward water flux is
+      !! -------   with mm/day unit,i.e. Kg/m2/s.
+      !!---------------------------------------------------------------------
+      !! * modules used
+!!DB
+!      USE iom
+!      USE restart         
+!! Will need (some of) these later
+!!DB
+      USE oce, only :  perpetual_forcing, ramp
+      USE lib_ncdf
+
+!
+      USE par_oce
+      USE flx_oce
+      USE blk_oce         ! bulk variable
+      USE taumod
+      USE bulk
+      USE phycst
+      USE lbclnk
+      USE dtatem          ! FOR Ce = F(SST(levitus)):
+      USE daymod 
+
+!!DB: -- in case no ice model
+#ifdef key_ice_lim
+! FD add for wind relative to ice velocity
+      USE ice, only    : u_ice , v_ice ! : ice velocity
+#endif
+
+      !! * arguments
+      INTEGER, INTENT( in  ) ::   kt   ! ocean time step
+
+!!DB -- will change
+      !! * Local declarations      
+
+#ifdef key_CORE_ANNUAL
+     
+      CHARACTER(len=45)  ::  &
+         clname_1 = 'CORE/core_t10_1d.xxxx.nc',        &
+         clname_2 = 'CORE/core_precip_1d.xxxx.nc',   &
+         clname_3 = 'CORE/core_q10_1d.xxxx.nc',        &
+         clname_4 = 'CORE/core_u10_v10_1d.xxxx.nc',        &
+         clname_5 = 'CORE/core_SWLW_1d.xxxx.nc'
+
+      LOGICAL ::  &
+         is_cyclical = .false.
+#else      
+      CHARACTER(len=45)  ::  &
+         clname_1 = 'core_t10_1d.nc',        &
+         clname_2 = 'core_precip_1d.nc',   &
+         clname_3 = 'core_q10_1d.nc',        &
+         clname_4 = 'core_u10_v10_1d.nc',        &
+         clname_5 = 'core_SWLW_1d.nc'
+
+      LOGICAL ::  &
+         is_cyclical = .true.
+#endif
+
+      REAL(wp) :: zxy, update_frac, rdt_in  !!NB: not used
+      INTEGER :: i, j,  status, ipi, ipj, idy, ndt, rec1, rec2
+
+
+      !! * Local declarations
+      INTEGER ::   &
+         jj   , ji                     !  Loop indices 
+      REAL(wp) ::   &
+         zcof , zzu , zzv              ! scalar 
+      REAL(wp), DIMENSION(jpi,jpj, jpfile) ::   &
+         flxnow             ! input flux values at current time step 
+      REAL(wp), DIMENSION(jpi,jpj) ::   &
+         dqlw_ice ,      &  ! long wave heat flx sensitivity over ice
+         dqsb_ice ,      &  ! sensible heat flx sensitivity over ice
+         alb_oce_os,     &  ! albedo of the ocean under overcast sky
+         alb_ice_os,     &  ! albedo of the ice under overcast sky
+         alb_ice_cs,     &  ! albedo of ice under clear sky
+         alb_oce_cs,     &  ! albedo of the ocean under clear sky
+         zsst,           &  ! nfbulk : mean SST
+         zsss,           &  ! nfbulk : mean tn_ice(:,:,1)
+         zut,            &  ! nfbulk : mean U at T-point
+         zvt,            &  ! nfbulk : mean V at T-point
+         dUnormt,        &  ! scalar wind (norm) on T points
+! FD modifications from JM Molines
+         tauxtwo, tauytwo,   &  ! wind stress on ocean computed at T-point
+         tauxtwi, tauytwi,   &  ! wind stress on ice computed at T-point
+! FD different Unormt for ice from Steven Alderson
+         Unormt,         &  ! scalar wind (norm) on T points
+         zus,            &  ! nfbulk : mean u_ice at T-point
+         zvs,            &  ! nfbulk : mean v_ice at T-point
+! FD end 
+         tauxt, tauyt,   &  ! wind stress computed at T-point
+         qsatw,          &  ! specific humidity at zSST
+         qsat,           &  ! specific humidity at zsss 
+         Ch,             &  ! coefficient for sensible heat flux
+         Ce,             &  ! coefficient for latent heat flux
+         Cd,             &  ! coefficient for wind stress
+         zt_zu,          &  !: air temperature at wind speed height
+         zq_zu              !: air spec. hum.  at wind speed height
+      REAL(wp), PARAMETER ::   &
+         rhoa  = 1.22,    &  ! air density
+         cp    = 1000.5,  &  ! specific heat of air
+         Lv    = 2.5e6,   &  ! latent heat of vaporization
+         Ls    = 2.839e6, &  ! latent heat of sublimation
+         Stef  = 5.67e-8, &  ! Stefan Boltzmann constant
+         Cice = 1.63e-3      ! transfert coefficient over ice
+      REAL(wp), DIMENSION(jpi,jpj) ::   &
+         catm1               ! 
+
+      !!---------------------------------------------------------------------
+
+
+!!DB: adapt flx_bulk_daily routine here
+!!NB: I do not do time-interpolation yet, just input a new frame every day
+!!DB: 
+
+
+      rdt_in = rday/rdt    !# of timesteps between input records (float)
+      ndt = int(rday/rdt)  !int version (REM: daily input routine)
+      idy = 365
+      IF(nleapy == 1) idy = 366
+
+
+
+                  
+
+
+
+      !! =============================================== !!
+      !!   PART A:   READING FLUX FILES WHEN NECESSARY   !!
+      !! =============================================== !!
+
+      !                                         ! ------------------------ !
+      IF( kt == nit000 ) THEN                   !   first call kt=nit000   !
+
+         !--- Initializes default values of file names, frequency of forcings 
+         !    and variable to be read in the files, before reading namelist 
+!         clname(1) = 'precip.nc'   ; freqh(1) = -12 ; clvarname(1) = 'precip'     ! monthly
+!         clname(2) = 'u10.nc'      ; freqh(2) =   6 ; clvarname(2) = 'u10'        ! 6 hourly          
+!         clname(3) = 'v10.nc'      ; freqh(3) =   6 ; clvarname(3) = 'v10'        ! 6 hourly    
+!         clname(4) = 'q10.nc'      ; freqh(4) =   6 ; clvarname(4) = 'q10'        ! 6 hourly   
+!         clname(5) = 'radsw.nc'    ; freqh(5) =  24 ; clvarname(5) = 'radsw'      ! daily 
+!         clname(6) = 'radlw.nc'    ; freqh(6) =  24 ; clvarname(6) = 'radlw'      ! daily 
+!         clname(7) = 't10.nc'      ; freqh(7) =   6 ; clvarname(7) = 't10'        ! 6 hourly 
+!         clname(8) = 'snow.nc'     ; freqh(8) = -12 ; clvarname(8) = 'snow'       ! monthly
+
+         IF(lwp) THEN
+            WRITE(numout2,*)' '
+            WRITE(numout2,*)' DB flx_core : global CORE fields in NetCDF format'
+            WRITE(numout2,*)' ~~~~~~~~~~ '
+            WRITE(numout2,*) 'DB: #-dt between inputs  rdt_in        = ', rdt_in
+            WRITE(numout2,*) 'DB: is_cyclical            = ', is_cyclical
+            WRITE(numout2,*) '           ln_2m        = ', ln_2m
+            WRITE(numout2,*) '           alpha_precip = ', alpha_precip
+!            WRITE(numout2,*) '           list of files and frequency (hour), or monthly (-12) '
+         ENDIF
+
+         !--- Initialization to zero
+         qsr_oce (:,:) = 0.e0
+         qsb_oce (:,:) = 0.e0
+         qla_oce (:,:) = 0.e0
+         qlw_oce (:,:) = 0.e0
+         qnsr_oce(:,:) = 0.e0
+         qsr_ice (:,:) = 0.e0
+         qnsr_ice(:,:) = 0.e0
+         qla_ice (:,:) = 0.e0
+         qlw_ice (:,:) = 0.e0
+         qsb_ice (:,:) = 0.e0
+
+         dqns_ice(:,:) = 0.e0
+         dqla_ice(:,:) = 0.e0
+         tprecip (:,:) = 0.e0
+         sprecip (:,:) = 0.e0
+         evap    (:,:) = 0.e0
+
+         flxnow  (:,:,:) = 1.e-15         !RB
+         flxdta  (:,:,:,:) = 1.e-15       !RB
+
+
+
+
+         if(is_cyclical) then
+!DB  frame_daily is the offset into the files. 
+            frame_daily = nday_year     
+         else
+!AD:            frame_daily = 1               ! for non-cyclical daily forcing
+!AD:  non-cyclical should start on nday_year in ndate0
+            frame_daily = nday_year     
+!AD:  insert nyear
+	    write(clname_1(18:21),'(I4.4)') nyear
+	    write(clname_2(21:24),'(I4.4)') nyear
+	    write(clname_3(18:21),'(I4.4)') nyear
+	    write(clname_4(22:25),'(I4.4)') nyear
+	    write(clname_5(19:22),'(I4.4)') nyear  
+            nyear0=nyear	                          
+         endif
+
+!!DB -- crucial assignments
+         call ncdf_get_dim_size(clname_1, 'time_counter',num_recsd,status)
+         if(status == 0) then
+            if(lwp) write(numout2,*)'db_flx_core: # records in ',clname_1, ' = ', num_recsd
+         else
+            if(lwp) write(numout2,*)'DBG: prob with ncdf_get_dim_size ====> STOP'
+            stop
+         endif
+         if(num_recsd /= idy) then
+            if(lwp) then
+               write(numout2,*)'DBG -- db_flx_core: # records /= ', idy, ' Could be an error'
+            endif
+         endif
+         call ncdf_get_dim_size(clname_1, 'x', ipi, status)
+         call ncdf_get_dim_size(clname_1, 'y', ipj, status)
+         if( ipi /= jpidta .OR. ipj /= jpjdta) then
+            if(lwp) then
+               write(numout2,*)
+               write(numout2,*) 'problem with file ', clname_1
+               write(numout2,*) 'problem with dimensions'
+               write(numout2,*) ' ipi ',ipi,' jpidta ',jpidta
+               write(numout2,*) ' ipj ',ipj,' jpjdta ',jpjdta
+            endif
+            stop 'db_flx_core'
+         endif
+
+
+         bflx1 =  0 + (frame_daily-1)  !!NB: to get 1st record correct, see below
+         if(bflx1 .gt. num_recsd) bflx1 = num_recsd
+         bflx2 = bflx1 + 1
+         if(bflx2 .gt. num_recsd) bflx2 = num_recsd
+         ireadd = 0 ! next input timestep rel nit000 = 0 to start
+
+
+      ENDIF   !! kt==nit000
+
+!!DB version here:
+
+    ! Read daily data
+    ! ----------------------------
+
+    if(kt-nit000 == ireadd) then   
+
+       bflx1 = bflx1 + 1
+       if(is_cyclical) then    !roll over to next cycle
+          rec1 = mod(bflx1,num_recsd)
+          if(rec1 == 0) rec1 = num_recsd
+
+       else          
+
+          if(nyear .gt. nyear0) then
+!AD:  insert nyear if calendar rolled over
+!   ---> should have a check here to see if file exists
+!        and if not it should use the last value as before
+ 	     write(clname_1(18:21),'(I4.4)') nyear
+	     write(clname_2(21:24),'(I4.4)') nyear
+	     write(clname_3(18:21),'(I4.4)') nyear
+	     write(clname_4(22:25),'(I4.4)') nyear
+	     write(clname_5(19:22),'(I4.4)') nyear                        
+	     nyear0=nyear
+	   endif   
+
+!AD:   Leave just in case	             !clamp if necessary
+          rec1 = nday_year !AD: leave bflx1 alone for ireadd to work
+          if(rec1 .gt. num_recsd) rec1 = num_recsd
+
+
+       endif
+       
+       bflx2 = bflx1 + 1
+       if(is_cyclical) then    !roll over to next cycle
+          rec2 = mod(bflx2,num_recsd)
+          if(rec2 == 0) rec2 = num_recsd
+       else                    !clamp if necessary
+
+           if(nyear .gt. nyear0) then
+!AD:  insert nyear if calendar rolled over
+!   ---> should have a check here to see if file exists
+!        and if not it should use the last value as before
+
+!         will need to keep 2 file names!!!           
+! 	     write(clname_1(18:21),'(I4.4)') nyear
+!	     write(clname_2(21:24),'(I4.4)') nyear
+!	     write(clname_3(18:21),'(I4.4)') nyear
+!	     write(clname_4(22:25),'(I4.4)') nyear
+!	     write(clname_5(19:22),'(I4.4)') nyear                        
+!	     nyear0=nyear
+
+	   endif   
+!AD:   Leave just in case	             !clamp if necessary
+          rec2 = rec1 + 1 
+          if(rec2 .gt. num_recsd) rec2 = num_recsd 
+       endif
+
+!!DB: better formula if #-timesteps-per-day is NOT an integer (see tau_forcing.h90)
+       ireadd = nint((bflx1-(frame_daily-1))*rdt_in) !! next input timestep rel nit000       
+!       ireadd = ireadd + ndt  !! next input timestep rel nit000
+       
+!!DB: perpetual_forcing from oce; 
+       if(perpetual_forcing > 0) then
+          bflx1 = frame_daily
+          if(bflx1 .gt. num_recsd) bflx1 = num_recsd
+          bflx2 = bflx1 
+          rec1 = bflx1
+          rec2 = rec1
+          ireadd = -1   !ensures (kt-nit000) /= ireadd, thus only 1 input of files
+!!DBG
+          if(lwp .AND. kt==nit000) then 
+             write(numout2,*)'DBG: In db_flx_core, perpetual_forcing = ', perpetual_forcing
+             write(numout2,*)'DBG: In db_flx_core, bflx2 = bflx1 = 1'
+          endif
+       endif
+
+!!DB
+
+       if(lwp) write(numout2,*)'DBG: In db_flx_core -- reading field ',rec1, 'at kt = ', kt 
+       if(lwp) write(numout2,*)'DBG: In db_flx_core -- next input at ireadd = ', ireadd
+       if(lwp) write(numout2,*)'AD:  In db_flx_core -- nyear,nday_year = ',nyear,nday_year
+       if(lwp) write(numout2,*)'--->',bflx1,frame_daily,rdt_in
+       ! Read data
+!!Adjust using frame_daily 
+
+       if(lwp) write(numout2,*)'db_flx_core reading ---> ',clname_1
+       call ncdf_read(clname_1, 'T_10_MOD', tatm, -(rec1), status)
+       if(status /= 0) then
+          if(lwp) then
+             write(numout2,*)'DBG: Prob reading tair file, status = ', status
+             !               nstop = nstop + 1
+          endif
+       endif
+!!DB -- done elsewhere or not necessary???
+       ! conversion of temperature Kelvin --> Celsius  [rt0=273.15]
+!       tatm(:,:) = ( tatm(:,:) - rt0 ) 
+       flxdta(:,:,7,1) = tatm(:,:)
+
+       ! read rain and snow
+       if(lwp) write(numout2,*)'db_flx_core reading ---> ',clname_2
+       call ncdf_read(clname_2, 'RAIN', vatm, -(rec1), status)
+       if(status /= 0) then
+          if(lwp) then
+             write(numout2,*)'DBG: Prob reading wspd file, status = ', status
+             !               nstop = nstop + 1
+          endif
+       endif
+       flxdta(:,:,1,1) = vatm(:,:)       
+
+       ! read rain and snow
+       if(lwp) write(numout2,*)'db_flx_core reading ---> ',clname_2
+       call ncdf_read(clname_2, 'SNOW', vatm, -(rec1), status)
+       if(status /= 0) then
+          if(lwp) then
+             write(numout2,*)'DBG: Prob reading wspd file, status = ', status
+             !               nstop = nstop + 1
+          endif
+       endif
+       flxdta(:,:,8,1) = vatm(:,:)       
+
+       ! read humidity
+       if(lwp) write(numout2,*)'db_flx_core reading ---> ',clname_3
+       call ncdf_read(clname_3, 'Q_10_MOD', vatm, -(rec1), status)
+       if(status /= 0) then
+          if(lwp) then
+             write(numout2,*)'DBG: Prob reading hum_cloud file, status = ', status
+             !               nstop = nstop + 1
+          endif
+       endif
+       flxdta(:,:,4,1) = vatm(:,:)       
+
+       ! read U and V atm
+       if(lwp) write(numout2,*)'db_flx_core reading ---> ',clname_4
+       call ncdf_read(clname_4, 'U10_MOD', vatm, -(rec1), status)
+       if(status /= 0) then
+          if(lwp) then
+             write(numout2,*)'DBG: Prob reading UV file, status = ', status
+             !               nstop = nstop + 1
+          endif
+       endif
+       flxdta(:,:,2,1) = vatm(:,:)       
+
+       ! read U and V atm
+       if(lwp) write(numout2,*)'db_flx_core reading ---> ',clname_4
+       call ncdf_read(clname_4, 'V10_MOD', vatm, -(rec1), status)
+       if(status /= 0) then
+          if(lwp) then
+             write(numout2,*)'DBG: Prob reading UV file, status = ', status
+             !               nstop = nstop + 1
+          endif
+       endif
+       flxdta(:,:,3,1) = vatm(:,:)       
+
+       ! read SW & LW
+       if(lwp) write(numout2,*)'db_flx_core reading ---> ',clname_5
+       call ncdf_read(clname_5, 'SWDN_MOD', vatm, -(rec1), status)
+       if(status /= 0) then
+          if(lwp) then
+             write(numout2,*)'DBG: Prob reading SWLW file, status = ', status
+             !               nstop = nstop + 1
+          endif
+       endif
+       flxdta(:,:,5,1) = vatm(:,:)       
+
+       ! read SW & LW
+       if(lwp) write(numout2,*)'db_flx_core reading ---> ',clname_5
+       call ncdf_read(clname_5, 'LWDN_MOD', vatm, -(rec1), status)
+       if(status /= 0) then
+          if(lwp) then
+             write(numout2,*)'DBG: Prob reading SWLW file, status = ', status
+             !               nstop = nstop + 1
+          endif
+       endif
+       flxdta(:,:,6,1) = vatm(:,:)       
+
+       call flush(numout2)
+         
+    ENDIF
+
+
+!!DB: basic structure to do time interpolation every ndt_1h
+!!See tau_forced_cmc for more details
+!!NB: would have to have input the bflx2 fields as well (not done above)
+!!DB Use ndt_3h & ndt_1h
+!!Want a formula that also accounts for nature of ndt_* variables which may not
+!!be integers (depending on rdt), and still gives a consistent zxy upon restart
+!!NB: formula below is incorrect if perpetual_forcing is on so avoid this possibility 
+!      if(mod(kt-nit000,ndt_1h) == 0  .AND.  perpetual_forcing == 0) then
+!         zxy = (float(kt-nit000) - (bflx1-1)*rdt_3h)/rdt_3h
+!         zxy = min(zxy,1.0)  !to be safe
+!         taux(:,:) = (1.-zxy) * taux_dta(:,:,1) + zxy * taux_dta(:,:,2)
+!         tauy(:,:) = (1.-zxy) * tauy_dta(:,:,1) + zxy * tauy_dta(:,:,2)
+!      endif
+
+!!DB
+    !   Interpolates in time   !
+!! adapt existing routine
+!!OLD
+!      DO ji = 1, jpfile       
+!         IF( freqh(ji) == -12 ) THEN
+!            zxy = REAL(nday) / REAL( nobis(imois) ) + 0.5 - i15         !!! <== Caution nobis hard coded !!!
+!            flxnow(:,:,ji) = ( ( 1. - zxy) * flxdta(:,:,ji,1) + zxy * flxdta(:,:,ji,2) )
+!         ELSE
+!            flxnow(:,:,ji) = flxdta(:,:,ji,1)
+!         ENDIF
+!      END DO
+!      ! JMM : add vatm needed in tracer routines  ==> wind module ???
+!      vatm(:,:) = SQRT( flxnow(:,:,2) * flxnow(:,:,2) + flxnow(:,:,3) * flxnow(:,:,3) )
+
+!!DB: assign to flxnow here as flxnow is local and flxdta is global and thus
+!!still exist if perpetual_forcing
+    do ji = 1, jpfile
+       flxnow(:,:,ji) = flxdta(:,:,ji,1)
+    enddo
+
+
+
+
+      !! =============================================== !!
+      !!   PART B:   CORE BULK CALCULATION               !!
+      !! =============================================== !!
+
+      !  for other forcing cases this is done in modules bulk.F90 and flxblk
+
+      !                                         ! ------------------------ !
+      !                                         !   Bulk initialisation    !
+      !                                         ! ------------------------ !
+
+!!DB from flxblk -- in case no ice model
+#if ! defined key_ice_lim
+      tn_ice(:,:) = ( tn(:,:,1)  + rt0 )
+#endif
+
+
+      ! code part from bulk.F90 :
+
+      IF( kt == nit000) THEN
+         !--- computation of rdtbs2     ===>  !gm  is it really usefull ????
+         IF( nacc == 1 ) THEN
+            rdtbs2 = nfbulk * rdtmin * 0.5
+         ELSE
+           rdtbs2 = nfbulk * rdt * 0.5
+         ENDIF
+         IF( .NOT.ln_rstart ) THEN
+            zcof =  REAL( nfbulk - 1, wp )
+            gsst(:,:) =  zcof * ( tn(:,:,1)  + rt0 )
+            gsss(:,:) =  zcof * tn_ice(:,:)
+            gu  (:,:) =  zcof * un(:,:,1)
+            gv  (:,:) =  zcof * vn(:,:,1)
+         ENDIF
+      ENDIF
+
+      ! ----------------------------------------------------------------------------- !
+      !      0   Mean SST, ice temperature and ocean currents over nfbulk pdt         !
+      ! ----------------------------------------------------------------------------- !
+      !
+      gsst(:,:) = gsst(:,:) + (tn(:,:,1) + rt0 )  
+      gsss(:,:) = gsss(:,:) + tn_ice(:,:)
+      gu  (:,:) = gu  (:,:) + un    (:,:,1)
+      gv  (:,:) = gv  (:,:) + vn    (:,:,1)
+
+      IF( MOD( kt - 1 , nfbulk ) == 0 ) THEN
+         !
+
+!!gm  better coded:
+         ! Caution set to rt0 over land, not 0 Kelvin (otherwise floating point exception in bulk computation) 
+         zcof =  1. / REAL( nfbulk, wp )
+         zsst(:,:) = gsst(:,:) * zcof * tmask(:,:,1) + rt0 * (1.- tmask(:,:,1))    ! mean sst in K
+         zsss(:,:) = gsss(:,:) * zcof * tmask(:,:,1) + rt0 * (1.- tmask(:,:,1))   ! mean tn_ice in K
+!!gm
+
+         zut(:,:) = 0.e0      !!gm not necessary but at least first and last column
+         zvt(:,:) = 0.e0
+         !            lb
+         ! Interpolation of surface current at T-point, zut and zvt :
+!!gm better coded
+         zcof =  0.5 / REAL( nfbulk, wp )
+         DO jj = 2, jpjm1
+            DO ji = 2, jpim1
+               zut(ji,jj) = ( gu(ji-1,jj  ) + gu(ji,jj) ) * zcof
+               zvt(ji,jj) = ( gv(ji  ,jj-1) + gv(ji,jj) ) * zcof
+            END DO
+         END DO
+!!gm
+! FD for ice velocity: B-grid (ice_vel-point) to T-grid
+!!DB -- in case no ice model
+#if defined key_ice_lim
+         zus(:,:) = 0.
+         zus(:,:) = 0.
+         DO jj = 2, jpjm1
+            DO ji = 2, jpim1
+               zus(ji,jj) = ( u_ice(ji+1,jj  ) + u_ice(ji,jj  ) &
+	                    + u_ice(ji+1,jj+1) + u_ice(ji,jj+1) ) * 0.25
+               zvs(ji,jj) = ( v_ice(ji+1,jj  ) + v_ice(ji,jj  ) &
+	                    + v_ice(ji+1,jj+1) + v_ice(ji,jj+1) ) * 0.25
+            END DO
+         END DO
+#else
+         zus(:,:) = zut(:,:)
+         zvs(:,:) = zvt(:,:)
+#endif
+
+
+         CALL lbc_lnk( zut(:,:), 'T', -1. )         
+         CALL lbc_lnk( zvt(:,:), 'T', -1. )         
+
+         ! ----------------------------------------------------------------------------- !
+         !      I   Radiative FLUXES                                                     !
+         ! ----------------------------------------------------------------------------- !
+
+         !--- Ocean & Ice Albedo
+         alb_oce_os(:,:) = 0.   ;   alb_oce_cs(:,:) = 0.   !gm is it necessary ???
+         alb_ice_os(:,:) = 0.   ;   alb_ice_cs(:,:) = 0.
+         CALL flx_blk_albedo( alb_ice_os, alb_oce_os, alb_ice_cs, alb_oce_cs )
+
+         !--- Radiative fluxes over ocean
+         qsr_oce(:,:) = ( 1. - 0.066 ) * flxnow(:,:,5)                                 ! Solar Radiation
+         qlw_oce(:,:) = flxnow(:,:,6) - Stef*zsst(:,:)*zsst(:,:)*zsst(:,:)*zsst(:,:)   ! Long Waves (Infra-red)
+
+         !--- Radiative fluxes over ice
+         qsr_ice(:,:) = ( 1. - alb_ice_cs(:,:) ) * flxnow(:,:,5)                                  ! Solar Radiation
+         qlw_ice(:,:) = 0.95 * ( flxnow(:,:,6) - Stef*zsss(:,:)*zsss(:,:)*zsss(:,:)*zsss(:,:) )   ! Long Waves (Infra-red)
+         !-------------------------------------------------------------------------------!
+!	 ji=175;jj=21;write(*,*) 'rad',qsr_oce(ji,jj),qlw_oce(ji,jj),qsr_ice(ji,jj),qlw_ice(ji,jj)
+
+         ! ----------------------------------------------------------------------------- !
+         !     II    Turbulent FLUXES                                                    !
+         ! ----------------------------------------------------------------------------- !
+         !
+         ! scalar wind ( = | U10m - SSU | )
+         ! It is important to take into account the sea surface courant
+         !                lb
+         ! Now, wind components are provided on T-points within the netcdf input file.
+         ! Thus, the wind module is computded at T-points taking into account the sea
+
+         !--- Module of relative wind
+!        dUnormt(:,:) = sqrt( (flxnow(:,:,2) - zut(:,:))*(flxnow(:,:,2) - zut(:,:))  &
+!             &             + (flxnow(:,:,3) - zvt(:,:))*(flxnow(:,:,3) - zvt(:,:)) )
+!!gm  more efficient coding:
+         DO jj = 1, jpj
+            DO ji = 1, jpi
+               zzu = flxnow(ji,jj,2) - zut(ji,jj)
+               zzv = flxnow(ji,jj,3) - zvt(ji,jj)
+               dUnormt(ji,jj) = SQRT( zzu*zzu + zzv*zzv )
+            END DO 
+         END DO 
+! FD Unormt for ice from Steven Alderson + difference from ice vel
+         DO jj = 1, jpj
+            DO ji = 1, jpi
+               zzu = flxnow(ji,jj,2) - zus(ji,jj)
+               zzv = flxnow(ji,jj,3) - zvs(ji,jj)
+               Unormt(ji,jj) = SQRT( zzu*zzu + zzv*zzv )
+            END DO 
+         END DO 
+!!gm
+         !--- specific humidity at temp SST
+         qsatw(:,:) = 0.98*640380*exp(-5107.4/zsst(:,:))/rhoa
+         !
+         !--- specific humidity at temp tn_ice
+         qsat(:,:)  = 11637800*exp(-5897.8/zsss(:,:))/rhoa
+         !
+         ! CORE iterartive algo for computation of Cd, Ch, Ce at T-point :
+         ! ===============================================================
+         IF( ln_2m ) THEN
+            IF( kt == nit000 .AND. lwp )   THEN
+               WRITE(numout,*) 
+               WRITE(numout,*) '           Calling TURB_CORE_2Z for bulk transfert coefficients'
+            ENDIF
+            !! If air temp. and spec. hum. are given at different height (2m) than wind (10m) :
+            CALL TURB_CORE_2Z(2.,10.,zsst(:,:), flxnow(:,:,7), qsatw(:,:), flxnow(:,:,4), &
+               &              dUnormt(:,:), Cd(:,:), Ch(:,:), Ce(:,:), zt_zu(:,:), zq_zu(:,:))
+         ELSE
+            IF( kt == nit000 .AND. lwp )    THEN
+               WRITE(numout,*) 
+               WRITE(numout,*) '           Calling TURB_CORE_1Z for bulk transfert coefficients'
+            ENDIF
+            !! If air temp. and spec. hum. are given at same height than wind (10m) :
+            CALL TURB_CORE_1Z(10., zsst(:,:), flxnow(:,:,7), qsatw(:,:), flxnow(:,:,4),  &
+               &              dUnormt(:,:), Cd(:,:), Ch(:,:), Ce(:,:) )
+         ENDIF
+
+! FD correction from JM Molines + Zeliang Wang suggestion
+         !   II.1) Momentum over ocean and ice
+         !   ---------------------------------
+         ! Tau_x and Tau_y at T-point
+         tauxtwo(:,:) = rhoa*dUnormt(:,:)*Cd(:,:)*(flxnow(:,:,2) - zut(:,:))
+         tauytwo(:,:) = rhoa*dUnormt(:,:)*Cd(:,:)*(flxnow(:,:,3) - zvt(:,:))
+
+! FD Unormt for ice from Steven Alderson
+         ! Tau_x and Tau_y at T-point
+	 !
+! FD        tauxtwi(:,:) = rhoa*Unormt(:,:)*Cice*flxnow(:,:,2)
+! FD        tauytwi(:,:) = rhoa*Unormt(:,:)*Cice*flxnow(:,:,3)
+! FD do the diff from ice vel
+         tauxtwi(:,:) = rhoa*Unormt(:,:)*Cice*(flxnow(:,:,2)-zus(:,:))
+         tauytwi(:,:) = rhoa*Unormt(:,:)*Cice*(flxnow(:,:,3)-zvs(:,:))
+! FD        tauxtwi(:,:) = rhoa*dUnormt(:,:)*Cice*flxnow(:,:,2)
+! FD        tauytwi(:,:) = rhoa*dUnormt(:,:)*Cice*flxnow(:,:,3) 
+         !
+         CALL lbc_lnk( tauxtwo(:,:), 'T', -1. )       !!gm seems not decessary at this point....
+         CALL lbc_lnk( tauxtwi(:,:), 'T', -1. )       !!gm seems not decessary at this point....
+         CALL lbc_lnk( tauytwo(:,:), 'T', -1. )
+         CALL lbc_lnk( tauytwi(:,:), 'T', -1. )
+
+         !
+         !Tau_x at U-point
+         DO ji = 1, jpim1
+            tauxwo(ji,:) = 0.5*(tauxtwo(ji,:) + tauxtwo(ji+1,:))
+            tauxwi(ji,:) = 0.5*(tauxtwi(ji,:) + tauxtwi(ji+1,:))
+         END DO
+         !
+         ! Tau_y at V-point
+         DO jj = 1, jpjm1
+            tauywo(:,jj) = 0.5*(tauytwo(:,jj) + tauytwo(:,jj+1))
+            tauywi(:,jj) = 0.5*(tauytwi(:,jj) + tauytwi(:,jj+1))
+         END DO
+
+
+! FD what follows was the original lines in flx_core.h90
+! FD         !   II.1) Momentum over ocean and ice
+! FD         !   ---------------------------------
+! FD         ! Tau_x at T-point
+! FD         tauxt(:,:) = rhoa*dUnormt(:,:)*( (1. - freeze(:,:))*Cd(:,:)*(flxnow(:,:,2) - zut(:,:))    &
+! FD              &                          + freeze(:,:)*Cice*flxnow(:,:,2) ) !lb correct pour glace
+! FD         ! Tau_y at T-point
+! FD         tauyt(:,:) = rhoa*dUnormt(:,:)*( (1. - freeze(:,:))*Cd(:,:)*(flxnow(:,:,3) - zvt(:,:))    &
+! FD              &                          + freeze(:,:)*Cice*flxnow(:,:,3) )
+! FD         !
+! FD         CALL lbc_lnk( tauxt(:,:), 'T', -1. )       !!gm seems not decessary at this point....
+! FD         CALL lbc_lnk( tauyt(:,:), 'T', -1. )
+! FD
+! FD         !
+! FD         !Tau_x at U-point
+! FD         DO ji = 1, jpim1
+! FD            taux(ji,:) = 0.5*(tauxt(ji,:) + tauxt(ji+1,:))
+! FD         END DO
+! FD         !
+! FD         ! Tau_y at V-point
+! FD         DO jj = 1, jpjm1
+! FD            tauy(:,jj) = 0.5*(tauyt(:,jj) + tauyt(:,jj+1))
+! FD         END DO
+
+! FD add just in case
+         taux = tauxwo
+         tauy = tauywo
+
+         !
+         !   II.2) Turbulent fluxes over ocean
+         !   ---------------------------------
+         !
+         IF( ln_2m ) THEN
+            !!
+            !! Values of temp. and hum. adjusted to 10m must be used instead of 2m values
+            !! Sensible Heat :    ! right sign for ocean
+            qsb_oce(:,:) = rhoa*cp*Ch(:,:)*(zt_zu(:,:) - zsst(:,:))*dUnormt(:,:)
+            !!
+            !! Latent Heat :      ! wrong sign for ocean
+            evap(:,:)    = rhoa*Ce(:,:)*(qsatw(:,:) - zq_zu(:,:))*dUnormt(:,:)
+            !!
+         ELSE
+            !!
+            !! Sensible Heat :    ! right sign for ocean
+!!DBG: 2009.07.27 -- jack up sensible heat flux to see if more ice is formed
+!!ANS=yes; Ch*=2 ----> too much ice (spatial distribution not bad)
+!!      ====> try Ch*=1.5
+!            qsb_oce(:,:) = rhoa*cp*Ch(:,:)*(flxnow(:,:,7) - zsst(:,:))*dUnormt(:,:)
+            qsb_oce(:,:) = (1.5) * rhoa*cp*Ch(:,:)*(flxnow(:,:,7) - zsst(:,:))*dUnormt(:,:)
+            !!
+            !! Latent Heat :      ! wrong sign for ocean
+            evap(:,:)    = rhoa*Ce(:,:)*(qsatw(:,:) - flxnow(:,:,4))*dUnormt(:,:)
+            !!
+         END IF
+         !!
+         qla_oce(:,:) =  -Lv * evap(:,:) ! right sign for ocean
+         
+!	 ji=175;jj=21;write(*,*) 'evap',evap(ji,jj)
+!	 ji=175;jj=21;write(*,*) 'qlatent',qla_oce(ji,jj)
+         ! 
+         !   II.3) Turbulent fluxes over ice
+         !   -------------------------------
+         ! 
+         ! Sensible Heat :
+! FD Unormt for ice from Steven Alderson
+! FD         qsb_ice(:,:) = rhoa*cp*Cice*( flxnow(:,:,7) - zsss(:,:) )*dUnormt(:,:) !lb     use
+         qsb_ice(:,:) = rhoa*cp*Cice*( flxnow(:,:,7) - zsss(:,:) )*Unormt(:,:) !lb     use
+         !                                                                    !lb   dUnormt???
+         ! Latent Heat :                                                      !lb or rather Unormt?
+! FD Unormt for ice from Steven Alderson
+! FD         qla_ice(:,:) = Ls*rhoa*Cice*( flxnow(:,:,4) - qsat(:,:) )*dUnormt(:,:)
+         qla_ice(:,:) = Ls*rhoa*Cice*( flxnow(:,:,4) - qsat(:,:) )*Unormt(:,:)
+         !
+         !-------------------------------------------------------------------------------------
+
+
+         ! ----------------------------------------------------------------------------- !
+         !     III    Total FLUXES                                                       !
+         ! ----------------------------------------------------------------------------- !
+         !
+         !   III.1) Downward Non Solar flux over ocean
+         !   -----------------------------------------
+         qnsr_oce(:,:) = qlw_oce(:,:) + qsb_oce(:,:) + qla_oce(:,:)
+         !
+         !   III.1) Downward Non Solar flux over ice
+         !   ---------------------------------------
+         qnsr_ice(:,:) = qlw_ice(:,:) + qsb_ice(:,:) + qla_ice(:,:) 
+         !
+         !-------------------------------------------------------------------------------!
+!	 ji=175;jj=21;write(*,*) 'total rad',qnsr_oce(ji,jj),qnsr_ice(ji,jj)
+
+         ! 6. TOTAL NON SOLAR SENSITIVITY 
+
+         dqlw_ice(:,:)= 4.0*0.95*Stef*zsss(:,:)*zsss(:,:)*zsss(:,:)
+
+         ! d qla_ice/ d zsss
+! FD correction from Steven Alderson
+! FD         dqla_ice(:,:) = -Ls*Cice*0.98*11637800/(rhoa*rhoa) &
+! FD              * (-5897.8)/(zsss(:,:)*zsss(:,:)) &
+! FD              * exp(-5897.8/zsss(:,:)) * dUnormt(:,:)
+! FD check on derivation:
+! FD we start from qla_ice = Ls*rhoa*Cice*( flxnow(:,:,4) - qsat )*Unormt
+! FD 
+! FD therefore d qla_ice / d qsat = - Ls*rhoa*Cice*Unormt
+! FD
+! FD but qsat  = 11637800*exp(-5897.8/zsss)/rhoa
+! FD
+! FD therefore d qsat / d zsss = 
+! FD          11637800/rhoa*(-5897.8) * (-1)/(zsss)**2 * exp(-5897.8/zsss)
+! FD and therefore
+! FD d qla_ice / d zsss = - Ls*Cice*Unormt * 
+! FD              11637800*(+5897.8) * 1/(zsss)**2 * exp(-5897.8/zsss)
+! FD
+! FD put sign back in 5897.8 because of the final minus sign below for total dqns_ice
+         dqla_ice(:,:) = - Ls*Cice*11637800 &
+              * (-5897.8)/(zsss(:,:)*zsss(:,:)) &
+              * exp(-5897.8/zsss(:,:)) * Unormt(:,:) 
+
+         ! d qsb_ice/ d zsss
+! FD Unormt for ice from Steven Alderson
+! FD         dqsb_ice(:,:) = rhoa * cp * Cice * dUnormt(:,:)
+         dqsb_ice(:,:) = rhoa * cp * Cice * dUnormt(:,:)
+
+         dqns_ice(:,:) = - ( dqlw_ice(:,:) + dqsb_ice(:,:) + dqla_ice(:,:) )
+
+         !--------------------------------------------------------------------
+         ! FRACTION of net shortwave radiation which is not absorbed in the
+         ! thin surface layer and penetrates inside the ice cover
+         ! ( Maykut and Untersteiner, 1971 ; Elbert and Curry, 1993 )
+
+! FD correction from Steven Alderson
+         catm1(:,:) = 1.0  - 0.3  ! flxnow(:,:,8)
+! FD         fr1_i0(:,:) = & 
+! FD              (0.18 * catm1(:,:) + 0.35 * flxnow(:,:,8))
+! FD         fr2_i0(:,:) = &
+! FD              (0.82 * catm1(:,:) + 0.65 * flxnow(:,:,8))
+         fr1_i0(:,:) = (0.18 * (1.0-catm1(:,:)) + 0.35 * catm1(:,:) ) 
+         fr2_i0(:,:) = (0.82 * (1.0-catm1(:,:)) + 0.65 * catm1(:,:) ) 
+
+
+         !  Total  PRECIPITATION (kg/m2/s)
+         tprecip(:,:) = alpha_precip*flxnow(:,:,1) 
+         ! rename precipitation for freshwater budget calculations:
+!         watm(:,:) =  flxnow(:,:,1)*1000
+         watm(:,:) =  flxnow(:,:,1)*rday
+         !
+
+         !  SNOW PRECIPITATION  (kg/m2/s)
+         sprecip(:,:) =  alpha_precip*flxnow(:,:,8) 
+
+         !---------------------------------------------------------------------
+
+         CALL lbc_lnk( taux (:,:)    , 'U', -1. )
+         CALL lbc_lnk( tauy (:,:)    , 'V', -1. )
+         CALL lbc_lnk( qsr_oce (:,:) , 'T', 1. )
+         CALL lbc_lnk( qnsr_oce(:,:) , 'T', 1. )
+         CALL lbc_lnk( qsr_ice (:,:) , 'T', 1. )
+         CALL lbc_lnk( qnsr_ice(:,:) , 'T', 1. )
+         CALL lbc_lnk( qla_ice (:,:) , 'T', 1. )
+         CALL lbc_lnk( dqns_ice(:,:) , 'T', 1. )
+         CALL lbc_lnk( dqla_ice(:,:) , 'T', 1. )
+         CALL lbc_lnk( fr1_i0  (:,:) , 'T', 1. )
+         CALL lbc_lnk( fr2_i0  (:,:) , 'T', 1. )
+         CALL lbc_lnk( tprecip (:,:) , 'T', 1. )
+         CALL lbc_lnk( sprecip (:,:) , 'T', 1. )
+         CALL lbc_lnk( evap    (:,:) , 'T', 1. )
+         !!
+         !!
+         !!   NEVER mask the windstress!!
+         qsr_oce (:,:) = qsr_oce (:,:)*tmask(:,:,1)
+         qnsr_oce(:,:) = qnsr_oce(:,:)*tmask(:,:,1)
+         qsr_ice (:,:) = qsr_ice (:,:)*tmask(:,:,1)
+         qnsr_ice(:,:) = qnsr_ice(:,:)*tmask(:,:,1)
+         qla_ice (:,:) = qla_ice (:,:)*tmask(:,:,1)
+         dqns_ice(:,:) = dqns_ice(:,:)*tmask(:,:,1)
+         dqla_ice(:,:) = dqla_ice(:,:)*tmask(:,:,1)
+         fr1_i0  (:,:) = fr1_i0  (:,:)*tmask(:,:,1)
+         fr2_i0  (:,:) = fr2_i0  (:,:)*tmask(:,:,1)
+         tprecip (:,:) = tprecip (:,:)*tmask(:,:,1)
+         sprecip (:,:) = sprecip (:,:)*tmask(:,:,1)
+         evap    (:,:) = evap    (:,:)*tmask(:,:,1)
+         gsst(:,:) = 0.e0
+         gsss(:,:) = 0.e0
+         gu  (:,:) = 0.e0
+         gv  (:,:) = 0.e0
+
+      ENDIF
+
+      ! ------------------- !
+      ! Last call kt=nitend ! not required in SOPA code
+      ! ------------------- !
+
+      ! Closing of the numflx file (required in mpp)
+
+
+   END SUBROUTINE flx
+
+   SUBROUTINE TURB_CORE_1Z(zu, sst, T_a, q_sat, q_a,   &
+      &                        dU, Cd, Ch, Ce   )
+      !!----------------------------------------------------------------------
+      !!                      ***  ROUTINE  turb_core  ***
+      !!
+      !! ** Purpose :   Computes turbulent transfert coefficients of surface
+      !!                fluxes according to Large & Yeager (2004)
+      !!
+      !! ** Method  :   I N E R T I A L   D I S S I P A T I O N   M E T H O D
+      !!      Momentum, Latent and sensible heat exchange coefficients
+      !!      Caution: this procedure should only be used in cases when air
+      !!      temperature (T_air), air specific humidity (q_air) and wind (dU)
+      !!      are provided at the same height 'zzu'!
+      !!
+      !! References :
+      !!      Large & Yeager, 2004 : ???
+      !! History :
+      !!        !  XX-XX  (???     )  Original code
+      !!   9.0  !  05-08  (L. Brodeau) Rewriting and optimization
+      !!----------------------------------------------------------------------
+      !! * Arguments
+
+      REAL(wp), INTENT(in) :: zu                 ! altitude of wind measurement       [m]
+      REAL(wp), INTENT(in), DIMENSION(jpi,jpj) ::  &
+         sst,       &       ! sea surface temperature         [Kelvin]
+         T_a,       &       ! potential air temperature       [Kelvin]
+         q_sat,     &       ! sea surface specific humidity   [kg/kg]
+         q_a,       &       ! specific air humidity           [kg/kg]
+         dU                 ! wind module |U(zu)-U(0)|        [m/s]
+      REAL(wp), intent(out), DIMENSION(jpi,jpj)  :: &
+         Cd,    &                ! transfert coefficient for momentum       (tau)
+         Ch,    &                ! transfert coefficient for temperature (Q_sens)
+         Ce                      ! transfert coefficient for evaporation  (Q_lat)
+
+      !! * Local declarations
+      REAL(wp), DIMENSION(jpi,jpj)  ::   &
+         dU10,        &       ! dU                                   [m/s]
+         dT,          &       ! air/sea temperature differeence      [K]
+         dq,          &       ! air/sea humidity difference          [K]
+         Cd_n10,      &       ! 10m neutral drag coefficient
+         Ce_n10,      &       ! 10m neutral latent coefficient
+         Ch_n10,      &       ! 10m neutral sensible coefficient
+         sqrt_Cd_n10, &       ! root square of Cd_n10
+         sqrt_Cd,     &       ! root square of Cd
+         T_vpot,      &       ! virtual potential temperature        [K]
+         T_star,      &       ! turbulent scale of tem. fluct.
+         q_star,      &       ! turbulent humidity of temp. fluct.
+         U_star,      &       ! turb. scale of velocity fluct.
+         L,           &       ! Monin-Obukov length                  [m]
+         zeta,        &       ! stability parameter at height zu
+         U_n10,       &       ! neutral wind velocity at 10m         [m]   
+         xlogt, xct, zpsi_h, zpsi_m
+      !!
+      INTEGER :: j_itt
+      INTEGER, PARAMETER :: nb_itt = 3
+      INTEGER, DIMENSION(jpi,jpj)  ::   &
+         stab         ! 1st guess stability test integer
+
+      REAL(wp), PARAMETER ::                        &
+         grav   = 9.8,          &  ! gravity                       
+         kappa  = 0.4              ! von Karman s constant
+
+      !! * Start
+      !! Air/sea differences
+      dU10 = max(0.5, dU)     ! we don't want to fall under 0.5 m/s
+      dT = T_a - sst          ! assuming that T_a is allready the potential temp. at zzu
+      dq = q_a - q_sat
+      !!    
+      !! Virtual potential temperature
+      T_vpot = T_a*(1. + 0.608*q_a)
+      !!
+      !! Neutral Drag Coefficient
+      stab    = 0.5 + sign(0.5,dT)    ! stable : stab = 1 ; unstable : stab = 0 
+      Cd_n10  = 1E-3 * ( 2.7/dU10 + 0.142 + dU10/13.09 )    !   L & Y eq. (6a)
+      sqrt_Cd_n10 = sqrt(Cd_n10)
+      Ce_n10  = 1E-3 * ( 34.6 * sqrt_Cd_n10 )               !   L & Y eq. (6b)
+      Ch_n10  = 1E-3*sqrt_Cd_n10*(18*stab + 32.7*(1-stab)) !   L & Y eq. (6c), (6d)
+      !!
+      !! Initializing transfert coefficients with their first guess neutral equivalents :
+      Cd = Cd_n10 ;  Ce = Ce_n10 ;  Ch = Ch_n10 ;  sqrt_Cd = sqrt(Cd)
+
+      !! * Now starting iteration loop
+      DO j_itt=1, nb_itt
+         !! Turbulent scales :
+         U_star  = sqrt_Cd*dU10                !   L & Y eq. (7a)
+         T_star  = Ch/sqrt_Cd*dT               !   L & Y eq. (7b)
+         q_star  = Ce/sqrt_Cd*dq               !   L & Y eq. (7c)
+
+         !! Estimate the Monin-Obukov length :
+         L  = (U_star**2)/( kappa*grav*(T_star/T_vpot + q_star/(q_a + 1./0.608)) )
+
+         !! Stability parameters :
+         zeta = zu/L ;  zeta   = sign( min(abs(zeta),10.0), zeta )
+         zpsi_h = psi_h(zeta)
+         zpsi_m = psi_m(zeta)
+
+         !! Shifting the wind speed to 10m and neutral stability :
+         U_n10 = dU10*1./(1. + sqrt_Cd_n10/kappa*(log(zu/10.) - zpsi_m)) !  L & Y eq. (9a)
+
+         !! Updating the neutral 10m transfer coefficients :
+         Cd_n10  = 1E-3 * (2.7/U_n10 + 0.142 + U_n10/13.09)              !  L & Y eq. (6a)
+         sqrt_Cd_n10 = sqrt(Cd_n10)
+         Ce_n10  = 1E-3 * (34.6 * sqrt_Cd_n10)                           !  L & Y eq. (6b)
+         stab    = 0.5 + sign(0.5,zeta)
+         Ch_n10  = 1E-3*sqrt_Cd_n10*(18.*stab + 32.7*(1-stab))           !  L & Y eq. (6c), (6d)
+
+         !! Shifting the neutral  10m transfer coefficients to ( zu , zeta ) :
+         !!
+         xct = 1. + sqrt_Cd_n10/kappa*(log(zu/10) - zpsi_m)
+         Cd  = Cd_n10/(xct*xct) ;  sqrt_Cd = sqrt(Cd)
+         !!
+         xlogt = log(zu/10.) - zpsi_h
+         !!
+         xct = 1. + Ch_n10*xlogt/kappa/sqrt_Cd_n10
+         Ch  = Ch_n10*sqrt_Cd/sqrt_Cd_n10/xct
+         !!
+         xct = 1. + Ce_n10*xlogt/kappa/sqrt_Cd_n10
+         Ce  = Ce_n10*sqrt_Cd/sqrt_Cd_n10/xct
+         !!
+      END DO
+      !!
+    END SUBROUTINE TURB_CORE_1Z
+
+
+    SUBROUTINE TURB_CORE_2Z(zt, zu, sst, T_zt, q_sat, q_zt, dU, Cd, Ch, Ce, T_zu, q_zu)
+      !!----------------------------------------------------------------------
+      !!                      ***  ROUTINE  turb_core  ***
+      !!
+      !! ** Purpose :   Computes turbulent transfert coefficients of surface 
+      !!                fluxes according to Large & Yeager (2004).
+      !!
+      !! ** Method  :   I N E R T I A L   D I S S I P A T I O N   M E T H O D
+      !!      Momentum, Latent and sensible heat exchange coefficients
+      !!      Caution: this procedure should only be used in cases when air
+      !!      temperature (T_air) and air specific humidity (q_air) are at 2m
+      !!      whereas wind (dU) is at 10m.
+      !!
+      !! References :
+      !!      Large & Yeager, 2004 : ???
+      !! History :
+      !!   9.0  !  06-12  (L. Brodeau) Original code for 2Z
+      !!----------------------------------------------------------------------
+      !! * Arguments
+      REAL(wp), INTENT(in)   :: &
+         zt,      &     ! height for T_zt and q_zt                   [m]
+         zu             ! height for dU                              [m]
+      REAL(wp), INTENT(in), DIMENSION(jpi,jpj) ::  &
+         sst,      &     ! sea surface temperature              [Kelvin]
+         T_zt,     &     ! potential air temperature            [Kelvin]
+         q_sat,    &     ! sea surface specific humidity         [kg/kg]
+         q_zt,     &     ! specific air humidity                 [kg/kg]
+         dU              ! relative wind module |U(zu)-U(0)|       [m/s]
+      REAL(wp), INTENT(out), DIMENSION(jpi,jpj)  ::  &
+         Cd,       &     ! transfer coefficient for momentum         (tau)
+         Ch,       &     ! transfer coefficient for sensible heat (Q_sens)
+         Ce,       &     ! transfert coefficient for evaporation   (Q_lat)
+         T_zu,     &     ! air temp. shifted at zu                     [K]
+         q_zu            ! spec. hum.  shifted at zu               [kg/kg]
+
+      !! * Local declarations
+      REAL(wp), DIMENSION(jpi,jpj) ::  &
+         dU10,        &     ! dU                                [m/s]
+         dT,          &     ! air/sea temperature differeence   [K]
+         dq,          &     ! air/sea humidity difference       [K]
+         Cd_n10,      &     ! 10m neutral drag coefficient
+         Ce_n10,      &     ! 10m neutral latent coefficient
+         Ch_n10,      &     ! 10m neutral sensible coefficient
+         sqrt_Cd_n10, &     ! root square of Cd_n10
+         sqrt_Cd,     &     ! root square of Cd
+         T_vpot_u,    &     ! virtual potential temperature        [K]
+         T_star,      &     ! turbulent scale of tem. fluct.
+         q_star,      &     ! turbulent humidity of temp. fluct.
+         U_star,      &     ! turb. scale of velocity fluct.
+         L,           &     ! Monin-Obukov length                  [m]
+         zeta_u,      &     ! stability parameter at height zu
+         zeta_t,      &     ! stability parameter at height zt
+         U_n10,       &     ! neutral wind velocity at 10m        [m]
+         xlogt, xct, zpsi_hu, zpsi_ht, zpsi_m
+
+      INTEGER :: j_itt
+      INTEGER, PARAMETER :: nb_itt = 3   ! number of itterations
+      INTEGER, DIMENSION(jpi,jpj) :: &
+           &     stab                ! 1st stability test integer
+      REAL(wp), PARAMETER ::                        &
+         grav   = 9.8,      &  ! gravity                       
+         kappa  = 0.4          ! von Karman's constant
+
+      !!  * Start
+
+      !! Initial air/sea differences
+      dU10 = max(0.5, dU)      !  we don't want to fall under 0.5 m/s
+      dT = T_zt - sst 
+      dq = q_zt - q_sat
+
+      !! Neutral Drag Coefficient :
+      stab = 0.5 + sign(0.5,dT)                 ! stab = 1  if dT > 0  -> STABLE
+      Cd_n10  = 1E-3*( 2.7/dU10 + 0.142 + dU10/13.09 ) 
+      sqrt_Cd_n10 = sqrt(Cd_n10)
+      Ce_n10  = 1E-3*( 34.6 * sqrt_Cd_n10 )
+      Ch_n10  = 1E-3*sqrt_Cd_n10*(18*stab + 32.7*(1 - stab))
+
+      !! Initializing transf. coeff. with their first guess neutral equivalents :
+      Cd = Cd_n10 ;  Ce = Ce_n10 ;  Ch = Ch_n10 ;  sqrt_Cd = sqrt(Cd)
+
+      !! Initializing z_u values with z_t values :
+      T_zu = T_zt ;  q_zu = q_zt
+
+      !!  * Now starting iteration loop
+      DO j_itt=1, nb_itt
+         dT = T_zu - sst ;  dq = q_zu - q_sat ! Updating air/sea differences
+         T_vpot_u = T_zu*(1. + 0.608*q_zu)    ! Updating virtual potential temperature at zu
+         U_star = sqrt_Cd*dU10                ! Updating turbulent scales :   (L & Y eq. (7))
+         T_star  = Ch/sqrt_Cd*dT              !
+         q_star  = Ce/sqrt_Cd*dq              !
+         !!
+         L = (U_star*U_star) &                ! Estimate the Monin-Obukov length at height zu
+              & / (kappa*grav/T_vpot_u*(T_star*(1.+0.608*q_zu) + 0.608*T_zu*q_star))
+         !! Stability parameters :
+         zeta_u  = zu/L  ;  zeta_u = sign( min(abs(zeta_u),10.0), zeta_u )
+         zeta_t  = zt/L  ;  zeta_t = sign( min(abs(zeta_t),10.0), zeta_t )
+         zpsi_hu = psi_h(zeta_u)
+         zpsi_ht = psi_h(zeta_t)
+         zpsi_m  = psi_m(zeta_u)
+         !!
+         !! Shifting the wind speed to 10m and neutral stability : (L & Y eq.(9a))
+!        U_n10 = dU10/(1. + sqrt_Cd_n10/kappa*(log(zu/10.) - psi_m(zeta_u)))
+         U_n10 = dU10/(1. + sqrt_Cd_n10/kappa*(log(zu/10.) - zpsi_m))
+         !!
+         !! Shifting temperature and humidity at zu :          (L & Y eq. (9b-9c))
+!        T_zu = T_zt - T_star/kappa*(log(zt/zu) + psi_h(zeta_u) - psi_h(zeta_t))
+         T_zu = T_zt - T_star/kappa*(log(zt/zu) + zpsi_hu - zpsi_ht)
+!        q_zu = q_zt - q_star/kappa*(log(zt/zu) + psi_h(zeta_u) - psi_h(zeta_t))
+         q_zu = q_zt - q_star/kappa*(log(zt/zu) + zpsi_hu - zpsi_ht)
+         !!
+         !! q_zu cannot have a negative value : forcing 0
+         stab = 0.5 + sign(0.5,q_zu) ;  q_zu = stab*q_zu
+         !!
+         !! Updating the neutral 10m transfer coefficients :
+         Cd_n10  = 1E-3 * (2.7/U_n10 + 0.142 + U_n10/13.09)    ! L & Y eq. (6a)
+         sqrt_Cd_n10 = sqrt(Cd_n10)
+         Ce_n10  = 1E-3 * (34.6 * sqrt_Cd_n10)                 ! L & Y eq. (6b)
+         stab    = 0.5 + sign(0.5,zeta_u)
+         Ch_n10  = 1E-3*sqrt_Cd_n10*(18.*stab + 32.7*(1-stab)) ! L & Y eq. (6c-6d)
+         !!
+         !!
+         !! Shifting the neutral 10m transfer coefficients to (zu,zeta_u) :
+!        xct = 1. + sqrt_Cd_n10/kappa*(log(zu/10.) - psi_m(zeta_u))
+         xct = 1. + sqrt_Cd_n10/kappa*(log(zu/10.) - zpsi_m)
+         Cd = Cd_n10/(xct*xct) ; sqrt_Cd = sqrt(Cd)
+         !!
+!        xlogt = log(zu/10.) - psi_h(zeta_u)
+         xlogt = log(zu/10.) - zpsi_hu
+         !!
+         xct = 1. + Ch_n10*xlogt/kappa/sqrt_Cd_n10
+         Ch  = Ch_n10*sqrt_Cd/sqrt_Cd_n10/xct
+         !!
+         xct = 1. + Ce_n10*xlogt/kappa/sqrt_Cd_n10
+         Ce  = Ce_n10*sqrt_Cd/sqrt_Cd_n10/xct
+         !!
+         !!
+      END DO
+      !!
+    END SUBROUTINE TURB_CORE_2Z
+
+    FUNCTION psi_m(zta)   !! Psis, L & Y eq. (8c), (8d), (8e)
+      REAL(wp), DIMENSION(jpi,jpj), INTENT(in) :: zta
+
+      REAL(wp), PARAMETER :: pi = 3.14159
+      REAL(wp), DIMENSION(jpi,jpj)             :: psi_m
+      REAL(wp), DIMENSION(jpi,jpj)             :: X2, X, stabit
+      X2 = sqrt(abs(1. - 16.*zta))  ;  X2 = max(X2 , 1.0) ;  X  = sqrt(X2)
+      stabit    = 0.5 + sign(0.5,zta)
+      psi_m = -5.*zta*stabit  &                                                  ! Stable
+           & + (1. - stabit)*(2*log((1. + X)/2) + log((1. + X2)/2) - 2*atan(X) + pi/2)  ! Unstable 
+    END FUNCTION psi_m
+
+    FUNCTION psi_h(zta)    !! Psis, L & Y eq. (8c), (8d), (8e)
+      REAL(wp), DIMENSION(jpi,jpj), INTENT(in) :: zta
+
+      REAL(wp), DIMENSION(jpi,jpj)             :: psi_h
+      REAL(wp), DIMENSION(jpi,jpj)             :: X2, X, stabit
+      X2 = sqrt(abs(1. - 16.*zta))  ;  X2 = max(X2 , 1.) ;  X  = sqrt(X2)
+      stabit    = 0.5 + sign(0.5,zta)
+      psi_h = -5.*zta*stabit  &                                       ! Stable
+           & + (1. - stabit)*(2.*log( (1. + X2)/2. ))                 ! Unstable
+    END FUNCTION psi_h
+
+
+  SUBROUTINE flx_blk_albedo( palb , palcn , palbp , palcnp )
+    !!----------------------------------------------------------------------
+    !!               ***  ROUTINE flx_blk_albedo  ***
+    !!
+    !! ** Purpose :   Computation of the albedo of the snow/ice system
+    !!      as well as the ocean one
+    !!
+    !! ** Method  : - Computation of the albedo of snow or ice (choose the
+    !!      right one by a large number of tests
+    !!              - Computation of the albedo of the ocean
+    !!
+    !! References :
+    !!      Shine and Hendersson-Sellers 1985, JGR, 90(D1), 2243-2250.
+    !!
+    !! History :
+    !!  8.0   !  01-04  (LIM 1.0)
+    !!  8.5   !  03-07  (C. Ethe, G. Madec)  Optimization (old name:shine)
+    !!----------------------------------------------------------------------
+    !! * Modules used
+    USE ice                   ! ???
+
+    !! * Arguments
+    REAL(wp), DIMENSION(jpi,jpj), INTENT(out) ::  &
+         palb         , & !  albedo of ice under overcast sky
+         palcn        , & !  albedo of ocean under overcast sky
+         palbp        , & !  albedo of ice under clear sky
+         palcnp                  !  albedo of ocean under clear sky
+
+    !! * Local variables
+    INTEGER ::    &
+         ji, jj                   ! dummy loop indices
+    REAL(wp) ::   &
+         c1     = 0.05  , & ! constants values
+         c2     = 0.1   , &
+         albice = 0.50  , & !  albedo of melting ice in the arctic and antarctic (Shine & Hendersson-Sellers)
+         cgren  = 0.06  , & !  correction of the snow or ice albedo to take into account
+         !  effects of cloudiness (Grenfell & Perovich, 1984)
+         alphd  = 0.80  , & !  coefficients for linear interpolation used to compute
+         alphdi = 0.72  , & !  albedo between two extremes values (Pyane, 1972)
+         alphc  = 0.65  , &
+         zmue   = 0.4   , &     !  cosine of local solar altitude
+         zzero   = 0.0     ,  &
+         zone    = 1.0
+
+    REAL(wp) ::   &
+         zmue14         , & !  zmue**1.4
+         zalbpsnm       , & !  albedo of ice under clear sky when snow is melting
+         zalbpsnf       , & !  albedo of ice under clear sky when snow is freezing
+         zalbpsn        , & !  albedo of snow/ice system when ice is coverd by snow
+         zalbpic        , & !  albedo of snow/ice system when ice is free of snow
+         zithsn         , & !  = 1 for hsn >= 0 ( ice is cov. by snow ) ; = 0 otherwise (ice is free of snow)
+         zitmlsn        , & !  = 1 freezinz snow (sist >=rt0_snow) ; = 0 melting snow (sist<rt0_snow)
+         zihsc1         , & !  = 1 hsn <= c1 ; = 0 hsn > c1
+         zihsc2                   !  = 1 hsn >= c2 ; = 0 hsn < c2
+    REAL(wp), DIMENSION(jpi,jpj) ::  &
+         zalbfz         , & !  ( = alphdi for freezing ice ; = albice for melting ice )
+         zficeth                  !  function of ice thickness
+    LOGICAL , DIMENSION(jpi,jpj) ::  &
+         llmask
+    !!    to be included for without seaice
+    !!      REAL(wp), DIMENSION(jpi,jpj) ::   &  !:
+    !!      sist   ,   &  !: Sea-Ice Surface Temperature (Kelvin )
+    !!      hsnif  ,   &  !: Snow thickness
+    !!      hicif       !: Ice thickness
+    
+    !!---------------------------------------------------------------------
+
+    !-------------------------
+    !  Computation of  zficeth
+    !--------------------------
+
+    llmask = (hsnif == 0.0) .AND. ( sist >= rt0_ice )
+    WHERE ( llmask )   !  ice free of snow and melts
+       zalbfz = albice
+    ELSEWHERE
+       zalbfz = alphdi
+    END WHERE
+
+    DO jj = 1, jpj
+       DO ji = 1, jpi
+          IF( hicif(ji,jj) > 1.5 ) THEN
+             zficeth(ji,jj) = zalbfz(ji,jj)
+          ELSEIF( hicif(ji,jj) > 1.0  .AND. hicif(ji,jj) <= 1.5 ) THEN
+             zficeth(ji,jj) = 0.472 + 2.0 * ( zalbfz(ji,jj) - 0.472 ) * ( hicif(ji,jj) - 1.0 )
+          ELSEIF( hicif(ji,jj) > 0.05 .AND. hicif(ji,jj) <= 1.0 ) THEN
+             zficeth(ji,jj) = 0.2467 + 0.7049 * hicif(ji,jj)                                &
+                  &                    - 0.8608 * hicif(ji,jj) * hicif(ji,jj)                 &
+                  &                    + 0.3812 * hicif(ji,jj) * hicif(ji,jj) * hicif (ji,jj)
+          ELSE
+             zficeth(ji,jj) = 0.1 + 3.6 * hicif(ji,jj)
+          ENDIF
+       END DO
+    END DO
+
+    !-----------------------------------------------
+    !    Computation of the snow/ice albedo system
+    !-------------------------- ---------------------
+
+    !    Albedo of snow-ice for clear sky.
+    !-----------------------------------------------
+     DO jj = 1, jpj
+        DO ji = 1, jpi
+           !  Case of ice covered by snow.
+           !  melting snow
+           zihsc1       = 1.0 - MAX ( zzero , SIGN ( zone , - ( hsnif(ji,jj) - c1 ) ) )
+           zalbpsnm     = ( 1.0 - zihsc1 ) & 
+                * ( zficeth(ji,jj) + hsnif(ji,jj) * ( alphd - zficeth(ji,jj) ) / c1 ) &
+                &                 + zihsc1   * alphd
+          !  freezing snow
+           zihsc2       = MAX ( zzero , SIGN ( zone , hsnif(ji,jj) - c2 ) )
+           zalbpsnf     = ( 1.0 - zihsc2 ) * & 
+                ( albice + hsnif(ji,jj) * ( alphc - albice ) / c2 ) &
+                &                 + zihsc2   * alphc
+
+           zitmlsn      =  MAX ( zzero , SIGN ( zone , sist(ji,jj) - rt0_snow ) )
+           zalbpsn      =  zitmlsn * zalbpsnf + ( 1.0 - zitmlsn ) * zalbpsnm
+
+           !  Case of ice free of snow.
+           zalbpic      = zficeth(ji,jj)
+
+           ! albedo of the system
+           zithsn       = 1.0 - MAX ( zzero , SIGN ( zone , - hsnif(ji,jj) ) )
+           palbp(ji,jj) =  zithsn * zalbpsn + ( 1.0 - zithsn ) *  zalbpic
+        END DO
+     END DO
+
+     !    Albedo of snow-ice for overcast sky.
+     !----------------------------------------------
+     palb(:,:)   = palbp(:,:) + cgren
+
+     !--------------------------------------------
+     !    Computation of the albedo of the ocean
+     !-------------------------- -----------------
+
+
+     !  Parameterization of Briegled and Ramanathan, 1982
+     zmue14      = zmue**1.4
+     palcnp(:,:) = 0.05 / ( 1.1 * zmue14 + 0.15 )
+
+     !  Parameterization of Kondratyev, 1969 and Payne, 1972
+     palcn(:,:)  = 0.06
+
+   END SUBROUTINE flx_blk_albedo
+
+
+#if defined key_flx_core_inter
+
+#endif

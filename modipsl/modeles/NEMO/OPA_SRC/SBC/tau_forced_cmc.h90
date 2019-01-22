@@ -1,0 +1,310 @@
+!!DB: 2009.02.02
+!!NB: if frame0 /= 0 then code is incorrect: should limit
+!! ntau?+frame0 to be <= numrecs, not ntau? as is now done
+!!Also, error in application of ramp when perpetual forcing is on
+!!= fixed 
+
+!!DB: 2008.06.26
+!!I/O routines migrated to lib_ncdf
+
+!!DB: 2007.11.14
+!!Read and time interpolate GEM WS fields. 
+!!Default netcdf file structure every 3h for 6days
+!!Started as tau_forced_monthly -- NB: some code frags removed
+!! eg
+!!(1) jpday = 49, but I no longer crash if the ws files do not confirm this
+!!    The idea is to just continue the run with the last WS fields
+!!(2) num_recs is the number of frames in the input file. It is used to limit
+!!    the last possible frame input, in the case where the model run length
+!!    is longer than the number of 3h frames
+!!(3) the ice_conc.nc file is an ice cover climatology (like a simple ice model)
+!! It does not use ice_conc file (yet)
+!!(4) Defaults to hourly interpolation -- see ndt_1hr
+!!(5) Uses kt as time-base -- not absolute day/time
+
+   !!----------------------------------------------------------------------
+   !!                   ***  tau_forced_cmc.h90  ***
+   !!----------------------------------------------------------------------
+
+   !!----------------------------------------------------------------------
+   !!   tau     :   update the surface stress - daily fields in NetCDF file
+   !!----------------------------------------------------------------------
+   !! * local modules variables
+   INTEGER ::   &
+      numtau,         &  ! logical unit for the i-component of the wind data
+      numtav,         &  ! logical unit for the j-component of the wind data
+      ntau1, ntau2 ,  &  ! index of the first and second record used
+      ndt_3h,ndt_1h,ndt1,ndt2,  &  ! related to updating fields
+      ndaytau, num_recs, iread
+
+   CHARACTER (len=34) ::   &      !!! * monthly climatology/interanual fields
+      cl_taux ,  & ! generic name of the i-component monthly NetCDF file
+      cl_tauy      ! generic name of the j-component monthly NetCDF file
+
+!!DB
+   REAL(wp), DIMENSION(jpi,jpj,2) ::   &
+      taux_dta,    &  ! i- and j-components of the surface stress (Pascal)
+      tauy_dta        ! at 2 consecutive frames in (i,j) referential
+!!DB --2007.10.16
+   REAL(wp), DIMENSION(jpi,jpj,2) ::   &
+        ice_conc      ! for daily ice concentration
+   CHARACTER (len=34) ::   cl_ice
+   INTEGER :: numice
+
+
+
+   !!----------------------------------------------------------------------
+   !!   OPA 9.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/OPA_SRC/SBC/tau_forced_daily.h90,v 1.5 2006/03/10 10:55:42 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+   !!----------------------------------------------------------------------
+
+CONTAINS
+
+   SUBROUTINE tau( kt )
+      !!---------------------------------------------------------------------
+      !!                    ***  ROUTINE tau  ***
+      !!     
+      !! ** Purpose :   provide to the ocean the stress at each time step
+      !!
+      !! ** Method  :   Read the 3h surface stress components in NetCDF 
+      !!      file. They are given in the (i,j) referential 
+      !!        The i-component is given at U-point (INTERP package)
+      !!        The j-component is given at V-point (INTERP package)
+      !!
+      !!    CAUTION: never mask the surface stress field !
+      !!
+      !! ** Action  :   update at each time-step the two components of the 
+      !!      surface stress in both (i,j) and geographical referencial
+      !!
+      !! History :
+      !!   4.0  !  91-03  (G. Madec)  Original code
+      !!   6.0  !  92-07  (M. Imbard)
+      !!   8.1  !  00-08  (D. Ludicone) adapted to ERS-NCEP
+      !!   8.5  !  02-11  (G. Madec)  F90: Free form and module
+      !!        !  03-07  (C. Ethe, G. Madec)  daily generic forcing
+      !!----------------------------------------------------------------------
+      !! * Modules used
+
+!!DB
+!      USE ioipsl       ! NetCDF library
+      USE oce, only :  perpetual_forcing, ramp
+      USE lib_ncdf
+
+
+      !! * Arguments
+      INTEGER, INTENT( in  ) ::   kt   ! ocean time step
+
+      !! * Local declarations
+      INTEGER, PARAMETER ::   jpday = 49
+      INTEGER ::   &
+         itime,   &
+         iday, idy,   &
+         ipi, ipj, ipk
+      INTEGER  , DIMENSION(jpday)  ::   istep
+      REAL(wp) , DIMENSION(jpi,jpj)::  &
+         zlon  , & 
+         zlat
+      REAL(wp) , DIMENSION(jpk)::  &
+         zlev
+      REAL(wp) ::   zsecond, zdate0
+!!DB
+      REAL(wp) :: zxy, update_frac, rdt_3h
+      INTEGER :: update_freq, i, j, frame0, status
+!!DBG
+      REAL(wp) :: dbg1(10), dbg2(10)
+
+
+      !!---------------------------------------------------------------------
+
+!!DB
+      cl_taux = 'taux_3h.nc'
+      cl_tauy = 'tauy_3h.nc'
+!!DB
+!      cl_ice = 'ice_conc_1d.nc'
+
+
+
+      ! -------------- !
+      ! Initialization !
+      ! -------------- !
+      
+      rdt_3h = 3.0*3600./rdt
+      ndt_3h = nint(3.0*3600./rdt)
+      ndt_1h = nint(1.0*3600./rdt) 
+!!DB  frame0 is a hardwired offset into the ws files. Use for the (likely restart) 
+!!    case where  ntau1 = (kt-nit000)/ndt_3h + 1 points to the wrong frame
+      frame0 = 0
+
+!!DB: OLD code 
+      itime = jpday    !!must initialize, even to the wrong value; elso IOIPSL ERROR
+      ipi   = jpiglo
+      ipj   = jpjglo
+      ipk   = jpk
+      idy   = 365
+      IF ( nleapy == 1 ) idy = 366 
+
+      if(lwp) write(numout,*)'DBG: tau_forced_cmc kt, ramp = ', kt, ramp
+
+      ndt2 = kt
+
+      ! -------------------- !
+      ! First call kt=nit000 !
+      ! -------------------- !
+
+      IF( kt == nit000 ) THEN
+
+!!DB
+         ndt1 = nit000
+         ndt2 = ndt1
+
+
+         IF(lwp) THEN
+            WRITE(numout,*) ' '
+            WRITE(numout,*) ' tau    : 3h 6day wind stress in NetCDF files'
+            WRITE(numout,*) ' ~~~~~~~'
+            write(numout,*) ' rdt_3h, ndt_3h, ndt_1h = ', rdt_3h, ndt_3h, ndt_1h 
+         ENDIF
+         ! title, dimensions and tests
+#if defined key_agrif
+      if ( .NOT. Agrif_Root() ) then
+         cl_taux = TRIM(Agrif_CFixed())//'_'//TRIM(cl_taux)
+      endif
+#endif
+         
+#if defined key_agrif
+      if ( .NOT. Agrif_Root() ) then
+         cl_tauy = TRIM(Agrif_CFixed())//'_'//TRIM(cl_tauy)
+      endif
+#endif
+
+
+!!DB -- crucial assignments
+         call ncdf_get_dim_size(cl_taux, 'time_counter',num_recs,status)
+         if(status == 0) then
+            if(lwp) write(numout,*)'DBG: # records in ',cl_taux, ' = ', num_recs
+         else
+            if(lwp) write(numout,*)'DBG: prob with ncdf_get_dim_size ====> STOP'
+            call flush(numout)
+            stop
+         endif
+
+!!DB 2009.02.02 -- fix potential error with frame0
+         ntau1 =  0 + (frame0-1) !!to get the first input correct (see below)
+         if(ntau1 .gt. num_recs) ntau1 = num_recs
+         ntau2 = ntau1 + 1
+         if(ntau2 .gt. num_recs) ntau2 = num_recs
+         iread = 0 ! next input timestep rel nit000 = 0 to start
+
+      ENDIF
+
+      ! ----------------- !
+      ! Read 3h-6d file   !
+      ! ----------------- !
+
+
+      if(kt-nit000 == iread) then
+
+         ntau1 = ntau1 + 1
+         if(ntau1 .gt. num_recs) ntau1 = num_recs
+         ntau2 = ntau1 + 1
+         if(ntau2 .gt. num_recs) ntau2 = num_recs
+         iread = nint((ntau1)*rdt_3h) !! next input timestep rel nit000
+
+!!DB: perpetual_forcing from oce; 
+         if(perpetual_forcing > 0) then
+            ntau1 = 1
+            ntau2 = ntau1 
+            if(lwp .AND. kt==nit000) then 
+               write(numout,*)'DBG: In tau_forced_cmc, perpetual_forcing = ', perpetual_forcing
+               write(numout,*)'DBG: In tau_forced_cmc, ntau2 = ntau1 = 1'
+            endif
+         endif
+            
+! Read wind stress data
+!!DB adjust ntau? using frame0 -- lazy coding as I do not want to retype the Calls
+!!2009.02.02 -- no longer necessary
+!         ntau1 = ntau1 + frame0
+!         ntau2 = ntau2 + frame0
+
+!!DB 2008.06.26 -- use lib_ncdf; NB: use -ve index to point directly to file frame-#
+         call ncdf_read(cl_taux, 'sozotaux', taux_dta(:,:,1), -ntau1, status)
+         if(status /= 0) then
+            if(lwp) then
+               write(numout,*)'DBG: Prob reading taux file, status = ', status
+               call flush(numout)
+!               nstop = nstop + 1
+            endif
+         endif
+
+         call ncdf_read(cl_taux, 'sozotaux', taux_dta(:,:,2), -ntau2, status)
+         if(status /= 0) then
+            if(lwp) then
+               write(numout,*)'DBG: Prob reading taux file, status = ', status
+!               nstop = nstop + 1
+            endif
+         endif
+
+         call ncdf_read(cl_tauy, 'sometauy', tauy_dta(:,:,1), -ntau1, status)
+         if(status /= 0) then
+            if(lwp) then
+               write(numout,*)'DBG: Prob reading tauy file'
+!               nstop = nstop + 1
+            endif
+         endif
+         call ncdf_read(cl_tauy, 'sometauy', tauy_dta(:,:,2), -ntau2, status)
+         if(status /= 0) then
+            if(lwp) then
+               write(numout,*)'DBG: Prob reading tauy file'
+!               nstop = nstop + 1
+            endif
+         endif
+
+!!DB re-adjust 
+!!2009.02.02 -- no longer necessary
+!         ntau1 = ntau1 - frame0
+!         ntau2 = ntau2 - frame0
+!!DBG:
+         if(lwp) write(numout,*)'DBG: Input WS fields ', ntau1, ntau2, ' kt = ', kt
+         if(lwp)write(numout,*)'DBG: Next WS input at iread = ', iread
+
+
+!         if(lwp) write(numout,*)'NB: NOT adjusting WS using ice_conc'
+         CALL FLUSH(numout)
+
+!!DB -- apply ramp here -- slightly more efficient if tau?_dta() is not lost between calls
+!!DB: 2009.02.02 -- ramp now applied in time-interpolation section
+!         taux_dta = ramp * taux_dta
+!         tauy_dta = ramp * tauy_dta
+
+!!DB: 2009.02.02 -- changed, see below
+!!If perpetual_forcing > 0  (see below) OR no time interpolation desired 
+!         taux(:,:) = taux_dta(:,:,1)
+!         tauy(:,:) = tauy_dta(:,:,1)
+
+
+      ENDIF
+
+!!DB: 2009.02.02 -- apply ramp here 
+      if(perpetual_forcing > 0) then
+         taux(:,:) = ramp*taux_dta(:,:,1)
+         tauy(:,:) = ramp*tauy_dta(:,:,1)
+      endif
+
+
+
+!!DB Use ndt_3h & ndt_1h
+!!Want a formula that also accounts for nature of ndt_* variables which may not
+!!be integers (depending on rdt), and still gives a consistent zxy upon restart
+!!NB: formula below is incorrect if perpetual_forcing is on so avoid this possibility 
+      if(mod(kt-nit000,ndt_1h) == 0  .AND.  perpetual_forcing == 0) then
+         zxy = (float(kt-nit000) - (ntau1-1)*rdt_3h)/rdt_3h
+         zxy = min(zxy,1.0)  !to be safe
+         taux(:,:) = (1.-zxy) * taux_dta(:,:,1) + zxy * taux_dta(:,:,2)
+         tauy(:,:) = (1.-zxy) * tauy_dta(:,:,1) + zxy * tauy_dta(:,:,2)
+         taux(:,:) = ramp*taux(:,:)
+         tauy(:,:) = ramp*tauy(:,:)
+      endif
+
+
+   END SUBROUTINE tau

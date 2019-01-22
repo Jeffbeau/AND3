@@ -1,0 +1,76 @@
+##DB 2008.05.20 -- some more lines of keys deleted, see BB_make.ldef.2008.05.20
+#----------------------------------------------------------------------
+#- NEMO SYSTEM : Ocean model + Sea Ice Model   (BB_make.ldef in scripts)
+#----------------------------------------------------------------------
+SHELL = /bin/sh
+#-
+#-Q- t3e     #--- Please use gmake instead of make
+#-Q- fjvpp   #--- Please use gmake instead of make
+
+#-
+#- Define the libraries ---
+LIBDIR = ../../../lib
+MODDIR = $(LIBDIR)
+MODEL_LIB = $(LIBDIR)/oce/libopa.a
+IOIPSL_LIB = $(LIBDIR)/libioipsl.a
+#-Q- sxnec  IOIPSL_LIB = $(LIBDIR)/libsxioipsl.a
+#-Q- sx6nec IOIPSL_LIB = $(LIBDIR)/libsxioipsl.a
+#-Q- sxdkrz IOIPSL_LIB = $(LIBDIR)/libsxioipsl.a
+AGRIF_LIB = $(LIBDIR)/libagrif.a
+#-Q- sxnec  AGRIF_LIB = $(LIBDIR)/libsxagrif.a
+#-Q- sx6nec AGRIF_LIB = $(LIBDIR)/libsxagrif.a
+#-Q- sxdkrc AGRIF_LIB = $(LIBDIR)/libsxagrif.a
+SXMODEL_LIB = $(MODEL_LIB)
+#-Q- sxnec  SXMODEL_LIB = $(LIBDIR)/oce/libsxopa.a
+#-Q- sx6nec SXMODEL_LIB = $(LIBDIR)/oce/libsxopa.a
+#-Q- sxdkrz SXMODEL_LIB = $(LIBDIR)/oce/libsxopa.a
+OASISMPI2_LIB = 
+LIBMPI  =
+LIBMP   =
+EXEC_BIN = ../../../bin/opa
+
+#-
+#- Key options for OPA ocean model + LIM sea ice model : ORCA_R2 - FORCED (CLIO)
+#  Keys have to be written on one single line (does NOT accept "\")
+
+##Default as of 2008.10.06
+##tau forced with 365 daily winds -- TKE scheme in vertical  -- smag_tracer 
+#P_P = key_ADJ_TRANSPORT key_dynldf_smag key_ss_bio key_dynspg_ts  key_zdftke key_dtatem key_dtasal key_tau_daily key_obc key_tradmp key_traldf_smag key_ldfslp key_mpp_mpi
+
+##tau forced with 365 daily winds -- TKE scheme in vertical  -- smag_tracer -- key_floats
+#P_P = key_ADJ_TRANSPORT key_dynldf_smag key_ss_bio key_dynspg_ts  key_zdftke key_dtatem key_dtasal key_tau_daily key_obc key_tradmp key_traldf_smag key_ldfslp key_mpp_mpi key_floats
+
+
+## NO ADJ_TRANSPORT tau forced with 365 daily winds -- TKE scheme in vertical -- key_floats -- smag_tracer 
+#P_P =  key_dynldf_smag key_ss_bio key_dynspg_ts  key_zdftke key_dtatem key_dtasal key_tau_daily key_obc key_tradmp key_traldf_smag key_ldfslp key_mpp_mpi key_floats
+
+##tau forced with cmc 3h winds -- TKE scheme in vertical -- key_floats -- smag_tracer 
+#P_P = key_ADJ_TRANSPORT key_dynldf_smag key_ss_bio key_dynspg_ts  key_zdftke key_dtatem key_dtasal key_tau_cmc key_obc key_tradmp key_traldf_smag key_ldfslp key_mpp_mpi key_floats
+
+##Default + ICE key_ice_lim key_lim_fdd key_flx_bulk_daily
+##tau forced with 365 daily winds -- TKE scheme in vertical -- key_floats -- smag_tracer 
+#P_P = key_ADJ_TRANSPORT key_dynldf_smag key_ss_bio key_dynspg_ts  key_zdftke key_dtatem key_dtasal key_tau_daily key_obc key_tradmp key_traldf_smag key_ldfslp key_mpp_mpi key_floats key_ice_lim key_lim_fdd key_flx_bulk_daily
+
+##Defaults + cmc 3h winds + cmc 3h bulk forcing + ICE key_ice_lim key_lim_fdd key_flx_bulk_daily key_flx_bulk_cmc
+#P_P = key_ADJ_TRANSPORT key_dynldf_smag key_ss_bio key_dynspg_ts  key_zdftke key_dtatem key_dtasal key_tau_cmc key_obc key_tradmp key_traldf_smag key_ldfslp key_mpp_mpi key_floats key_ice_lim key_lim_fdd key_flx_bulk_daily key_flx_bulk_cmc
+##DBG:  cmc 3h winds + daily fluxes + ICE key_ice_lim key_lim_fdd key_flx_bulk_daily 
+#P_P = key_ADJ_TRANSPORT key_dynldf_smag key_ss_bio key_dynspg_ts  key_zdftke key_dtatem key_dtasal key_tau_cmc key_obc key_tradmp key_traldf_smag key_ldfslp key_mpp_mpi key_floats key_ice_lim key_lim_fdd key_flx_bulk_daily
+
+##Defaults plus addition of new BioGeoChemical Model #1 key key_BGCM_01
+##tau forced with 365 daily winds -- TKE scheme in vertical -- key_floats OFF-- smag_tracer -- key_passivetrc
+P_P = key_ADJ_TRANSPORT key_dynldf_smag key_ss_bio key_dynspg_ts  key_zdftke key_dtatem key_dtasal key_tau_daily key_obc key_tradmp key_traldf_smag key_ldfslp key_mpp_mpi key_passivetrc key_BGCM_01
+
+
+#-
+#- Prefix for preprocessing ---
+#-Q- sxnec  prefix = -D
+#-Q- sx6nec prefix = -D
+#-Q- eshpux prefix = -D
+#-Q- sxdkrz prefix = -D
+#-Q- linux  prefix = -D
+#-Q- lxiv7  prefix = -D
+#-Q- lxiv8  prefix = -D
+#-Q- gfortran    prefix = -D
+#-Q- aix    prefix = -WF,-D
+#-Q- osxxlf prefix = -WF,-D
+

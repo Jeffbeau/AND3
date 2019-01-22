@@ -1,0 +1,225 @@
+!!DB 2008.06.27
+!!Read 3h cmc bulk files using lib_ncdf I/O routines
+!!Update fields as they are input -- i.e. no time interpolation
+!!although I include basic structure for time interpolation 
+
+   !!----------------------------------------------------------------------
+   !!                    ***  flx_bulk_cmc  ***
+   !!----------------------------------------------------------------------
+
+   !!----------------------------------------------------------------------
+   !!   bulk          : reading 
+   !!----------------------------------------------------------------------
+   !! * Modules used     C A U T I O N  already defined in flxmod.F90
+
+   !! * Module variables
+   
+   INTEGER ::          &
+      ji, jj,          &  ! loop indices
+      numfl1, numfl2,  &  ! logical units for surface fluxes data
+      numfl3, numfl4,  &  ! 
+      nflx11, nflx12 , &  ! ???
+      ndayflx
+!!DB
+   INTEGER :: nflx1, nflx2, num_recsf, ireadf 
+
+   !!----------------------------------------------------------------------
+   !!   OPA 9.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/OPA_SRC/SBC/flx_bulk_daily.h90,v 1.4 2005/03/27 18:35:13 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+   !!----------------------------------------------------------------------
+
+CONTAINS
+
+   SUBROUTINE flx( kt )
+      !!---------------------------------------------------------------------
+      !!                    ***  ROUTINE flx  ***
+      !!        
+      !! ** Purpose :   provide the thermohaline fluxes (heat and freshwater)
+      !!      to the ocean at each time step.
+      !!
+      !!       Read several cmc fluxes file
+      !!             temperature at 2m   tatm   (K)
+      !!             relative humidite   hatm   (%)
+      !!             wind speed          vatm   (m/s)
+      !!             precip              watm   (kg/m2/day)
+      !!             clouds              catm   (%)
+      !!
+      !! caution : now, in the opa global model, the net upward water flux is
+      !! -------   with mm/day unit.
+      !!
+      !! History :
+      !!        !  91-03  (O. Marti and Ph Dandin)  Original code
+      !!        !  92-07  (M. Imbard)
+      !!        !  96-11  (E. Guilyardi)  Daily AGCM input files
+      !!        !  99-11  (M. Imbard)  NetCDF FORMAT with ioipsl
+      !!        !  00-05  (K. Rodgers) Daily Netcdf
+      !!   8.5  !  02-09  (C. Ethe and G. Madec)  F90: Free form and MODULE 
+      !!----------------------------------------------------------------------
+      !! * modules used
+      USE blk_oce         ! bulk variable
+      USE bulk            ! bulk module
+!!DB
+      USE oce, only :  perpetual_forcing, ramp
+      USE lib_ncdf
+
+      !! * arguments
+      INTEGER, INTENT( in  ) ::   kt ! ocean time step
+
+      !! * Local declarations      
+      CHARACTER(len=45)  ::  &
+         clname_n = 'tair_3h.nc',        &
+         clname_c = 'hum_cloud_3h.nc',   &
+         clname_x = 'rain_3h.nc',        &
+         clname_w = 'wspd_3h.nc'
+!!DB
+      REAL(wp) :: zxy, update_frac, rdt_3h
+      INTEGER :: i, j, frame0, status, ndt_3h, ndt_1h
+
+
+      !!---------------------------------------------------------------------
+
+
+      ! Initialization
+      ! --------------
+      rdt_3h = 3.0*3600./rdt
+      ndt_3h = nint(3.0*3600./rdt)
+      ndt_1h = nint(1.0*3600./rdt) 
+!!DB  frame0 is a hardwired offset into the files. Use for the (likely restart) 
+!!    case where  ntau1 = (kt-nit000)/ndt_3h + 1 points to the wrong frame
+      frame0 = 0
+      !for September 17,2007
+      !frame0 = 4273
+      ! Print*,"WARNING: frame0 is 4273, in cmc forcing"
+      !for October 15, 2010
+      !frame0 = 15945
+      ! Print*,"WARNING: frame0 is 15945, in cmc forcing"
+
+
+      ! 1. first call kt = nit000
+      ! -------------------------
+      
+      IF( kt == nit000 ) THEN
+
+!!DB -- crucial assignments
+!!Use new routine to get #-records !Joel: Varaible: num_recsf
+         call ncdf_get_dim_size(clname_x, 'time_counter',num_recsf,status)
+         if(status == 0) then
+            if(lwp)write(numout,*)'DBG: # records in ',clname_x, ' = ', num_recsf
+         else
+            if(lwp) write(numout,*)'DBG: prob with ncdf_get_dim_size ====> STOP'
+            stop
+         endif
+
+         nflx1 =  0
+         if(nflx1 .gt. num_recsf) nflx1 = num_recsf
+         nflx2 = nflx1 + 1
+         if(nflx2 .gt. num_recsf) nflx2 = num_recsf
+         ireadf = 0 ! next input timestep rel nit000 = 0 to start
+!DL test with increased wind
+!     print*, 'Wind speed increased by 8%'
+
+    ENDIF
+
+
+    ! 2. Read (3h) cmc data
+    ! ----------------------------
+
+    if(kt-nit000 == ireadf) then   
+
+
+       nflx1 = nflx1 + 1
+       if(nflx1 .gt. num_recsf) nflx1 = num_recsf
+       nflx2 = nflx1 + 1
+       if(nflx2 .gt. num_recsf) nflx2 = num_recsf
+       ireadf = nint((nflx1)*rdt_3h) !! next input timestep rel nit000
+       
+!!DB: perpetual_forcing from oce; 
+       if(perpetual_forcing > 0) then
+          nflx1 = 1
+          nflx2 = nflx1 
+!!DBG
+          if(lwp .AND. kt==nit000) then 
+             write(numout,*)'DBG: In flx_bulk_cmc, perpetual_forcing = ', perpetual_forcing
+             write(numout,*)'DBG: In flx_bulk_cmc, nflx2 = nflx1 = 1'
+          endif
+       endif
+
+!!DB
+       if(lwp) write(numout,*)'DBG: In flx_bulk_cmc -- reading field ',nflx1, 'at kt = ', kt 
+       if(lwp) write(numout,*)'DBG: In flx_bulk_cmc -- next input at ireadf = ', ireadf
+       
+       ! Read data
+!!Adjust using frame0 
+       ! read temp at 2m (in K)
+       call ncdf_read(clname_n, 'air', tatm, -(nflx1+frame0), status)
+       if(status /= 0) then
+          if(lwp) then
+             write(numout,*)'DBG: Prob reading tair file, status = ', status
+             !               nstop = nstop + 1
+          endif
+       endif
+       ! conversion of temperature Kelvin --> Celsius  [rt0=273.15]
+       tatm(:,:) = ( tatm(:,:) - rt0 ) 
+
+       ! read wind speed
+       call ncdf_read(clname_w, 'wspd', vatm, -(nflx1+frame0), status)
+       if(status /= 0) then
+          if(lwp) then
+             write(numout,*)'DBG: Prob reading wspd file, status = ', status
+             !               nstop = nstop + 1
+          endif
+       endif
+!DL test for increased wind speed
+!     vatm=1.08*vatm
+!--------------------------------
+       ! read humidity
+       call ncdf_read(clname_c, 'socliohu', hatm, -(nflx1+frame0), status)
+       if(status /= 0) then
+          if(lwp) then
+             write(numout,*)'DBG: Prob reading hum_cloud file, status = ', status
+             !               nstop = nstop + 1
+          endif
+       endif
+       ! read clouds
+       call ncdf_read(clname_c, 'socliocl', catm, -(nflx1+frame0), status)
+       if(status /= 0) then
+          if(lwp) then
+             write(numout,*)'DBG: Prob reading hum_cloud file, status = ', status
+             !               nstop = nstop + 1
+          endif
+       endif
+       ! read precipitation
+       call ncdf_read(clname_x, 'rain', watm, -(nflx1+frame0), status)
+       if(status /= 0) then
+          if(lwp) then
+             write(numout,*)'DBG: Prob reading rain file, status = ', status
+             !               nstop = nstop + 1
+          endif
+       endif
+
+       call flush(numout)
+         
+    ENDIF
+
+
+!!DB: basic structure to do time interpolation every ndt_1h
+!!See tau_forced_cmc for more details
+!!NB: would have to have input the nflx2 fields as well (not done above)
+!!DB Use ndt_3h & ndt_1h
+!!Want a formula that also accounts for nature of ndt_* variables which may not
+!!be integers (depending on rdt), and still gives a consistent zxy upon restart
+!!NB: formula below is incorrect if perpetual_forcing is on so avoid this possibility 
+!      if(mod(kt-nit000,ndt_1h) == 0  .AND.  perpetual_forcing == 0) then
+!         zxy = (float(kt-nit000) - (nflx1-1)*rdt_3h)/rdt_3h
+!         zxy = min(zxy,1.0)  !to be safe
+!         taux(:,:) = (1.-zxy) * taux_dta(:,:,1) + zxy * taux_dta(:,:,2)
+!         tauy(:,:) = (1.-zxy) * tauy_dta(:,:,1) + zxy * tauy_dta(:,:,2)
+!      endif
+
+      CALL blk(kt)
+      
+      CALL FLUSH(numout)
+      
+   END SUBROUTINE flx
+

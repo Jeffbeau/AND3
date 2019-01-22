@@ -1,0 +1,179 @@
+#!/bin/ksh
+######################################################
+# Author : Rachid benshila for ESOPA
+# Contact : opatlod@lodyc.jussieu.fr
+#
+# This script aims to create the OPA/WORK directory 
+# with links to target directories for the sources
+# and to link in the WORK the BB_make and BB_make.ldef 
+# associated  to a chosen configuration
+#
+######################################################
+
+###################################
+#                                 #
+# Beginning of user modifications #
+#                                 #
+###################################
+#- Config name ---
+# To add a new configuration called NAME you have to change this script
+# 1. Add your configuration in LIST
+# 2. Add the directories needed for this config : set -A DIR_NAME DIR1 DIR2 ...
+# 3. Run fait_config NAME
+# If there is no directory config/NAME/scripts, and in this no BB_make.ldef, 
+# the config/ORCA2_LIM directory is copied under NAME
+# ! CN: Since ORCA2_LIM doesn't exist in our current version of the code, SS008 is copied
+#       instead. Look for "#CN: Should fix problems building new configurations" in this
+#       script to see the line you need to change to copy a different directory
+#
+# Example 1 : in order to create a GYRE_TRC configuration :
+# 1. In this script, change LIST to LIST="ORCA2_LIM \nGYRE \nGYRE_TRC"
+# 2. In this script, add set -A DIR_GYRE_TRC OPA_SRC LIM_SRC TOP_SRC C1D_SRC, take care of the syntax
+# 3. Run fait_config GYRE_TRC
+# Example 2 : in order to create an OFFLINE_TRC configuration :
+# 1. In this script, change LIST to LIST="ORCA2_LIM \nGYRE \nOFFLINE_TRC"
+# 2. In this script, add set -A DIR_OFFLINE_TRC OFF_SRC TOP_SRC, take care of the syntax
+# 3. Run fait_config OFFLINE_TRC
+
+LIST="GYRE \nSS008"
+set -A DIR_GYRE OPA_SRC LIM_SRC C1D_SRC 
+set -A DIR_SS008 OPA_SRC LIM_SRC C1D_SRC TOP_SRC
+
+###################################
+#                                 #
+#    End of user modifications    #
+#                                 #
+###################################
+
+
+#- Some tests ---
+d_n=$(dirname $0); b_n=$(basename $0);
+
+if   [ ${#} -gt 1 ]; then
+    echo 'Only one configuration can be specified in:' 1>&2;
+    echo $LIST 1>&2;
+    exit 3;
+elif [ ${#} -eq 1 ]; then
+     m_n="${1}"
+elif [ ${#} -eq 0 ]; then
+    echo 'You must specify one configuration in :' 1>&2;
+    echo $LIST 1>&2;
+    echo 'You can also complete fait_config to add a new one'
+    exit 3;
+fi
+
+#- Create the WORK --
+d_m=`find ${d_n}/.. -name NEMO`  ;
+[ -d ${d_m}/WORK ] || mkdir ${d_m}/WORK;
+cd ${d_m}/WORK
+
+#DB
+echo ${d_m}
+
+
+#- Clean links and librairies
+[ -f Makefile ] && make clean 
+[ -n "`\ls`" ] && \rm -rf * 
+
+#- Find the number of directories ---
+eval NDIR=\${#DIR_${m_n}[*]}
+
+#- Build a working array TAB containing the directories ---
+i=0
+while [ i -lt $NDIR ]
+do
+    eval  TAB[i]=\${DIR_${m_n}[i]}
+    let i=i+1
+done
+
+#- Creating the good links, at first on OPA_SRC ---
+if [ ${#TAB[*]} -ne 0 ] ; then
+    echo " Creating NEMO/WORK = ${TAB[*]} for ${m_n}"
+
+    i=0
+    while [ i -lt $NDIR ]
+    do
+	[ ${#TAB[i]} -ne 0 ] && [ "${TAB[i]}" = "OPA_SRC" ] && ln -sf ../OPA_SRC/*.[Ffh]90 .
+	[ ${#TAB[i]} -ne 0 ] && [ "${TAB[i]}" = "OPA_SRC" ] && ln -sf ../OPA_SRC/*/*.[Ffh]90 . && break
+	let i=$i+1
+    done
+
+    i=0
+    while [ i -lt $NDIR ]
+    do
+      if [ "${TAB[i]}" = "LIM_SRC" ]; then
+	  ln -sf ../LIM_SRC/*.[Ffh]90 .  
+      
+      elif [ "${TAB[i]}" = "C1D_SRC" ]; then
+	  ln -sf ../C1D_SRC/*.[Ffh]90 .  
+      
+      elif [ "${TAB[i]}" = "TOP_SRC" ]; then
+	  [ -f  trcstp.F90 ] && \rm trcstp.F90                    
+	  [ -f  sms.F90 ] && \rm sms.F90                    
+	  [ -f  initrc.F90 ] && \rm initrc.F90                    
+	  ln -sf ../TOP_SRC/*.[Ffh]90 .       
+	  ln -sf ../TOP_SRC/SMS/*.[Ffh] .        
+	  ln -sf ../TOP_SRC/SMS/*.[Ffh]90 .  
+	  ln -sf ../TOP_SRC/TRP/*.[Ffh]90 .
+      
+      elif [ "${TAB[i]}" = "NST_SRC" ]; then
+	  [ -f  agrif_opa_interp.F90 ] && \rm agrif_opa_interp.F90                    
+	  [ -f  agrif_opa_sponge.F90 ] && \rm agrif_opa_sponge.F90                    
+	  [ -f  agrif_opa_update.F90 ] && \rm agrif_opa_update.F90                    
+	  ln -sf ../NST_SRC/*.[Ffh]90 .
+      
+      elif [ "${TAB[i]}" = "OFF_SRC" ]; then  
+	  ln -sf ../OFF_SRC/*.[Ffh]90 .
+	  ln -sf ../OFF_SRC/*/*.[Ffh]90 .
+      fi
+      let i=$i+1
+    done
+
+#DB
+#CN: Should fix problems building new configurations
+    #[ ! -d ../../../config/${m_n} ] && \cp -R ../../../config/ORCA2_LIM ../../../config/${m_n} 
+#DB    [ ! -d ../../../config/${m_n} ] && \cp -R ../../../config/SS008 ../../../config/${m_n} 
+   [ ! -d ../../../config/${m_n} ] && \cp -R ../../../config/MC_DEFAULT ../../../config/${m_n} 
+    ln -sf ../../../*/${m_n}/scripts/BB_make AA_make ; 
+    ln -sf ../../../*/${m_n}/scripts/BB_make.ldef AA_make.ldef ;
+
+else
+
+    echo "Configuration "${m_n}" not supported" 1>&2
+    echo 'Make your choice in :' 1>&2
+    echo $LIST 1>&2
+    echo 'You can also complete fait_config to add a new one'
+    exit 1
+
+fi 
+
+#- Building the standard list of source files ---
+cat >.patron <<"EOF" 
+CVS
+SRC_PARAM
+SRC_FILE_LIST
+tmplist
+AA_make
+KEY_CPP
+Makefile
+*?.o
+ i.?*
+*?.L
+.patron
+bloc.com
+para.com
+defcst.f
+fontbc.f
+icdyna.f
+thersf.f
+OPAFILES
+EOF
+ls -1 | fgrep -v -f .patron  >SRC_FILE_LIST ; cp SRC_FILE_LIST SRC_FILE_LIST.temp ;
+
+#- Writing KEY_CPP file ---
+sed -e /^P_P/\!d -e "s/P_P = //" AA_make.ldef > KEY_CPP;    
+
+#- Save new configuration an d directories names ---
+print ${m_n} ${TAB[*]} >.config 
+
+exit 0;

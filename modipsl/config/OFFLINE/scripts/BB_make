@@ -1,0 +1,3895 @@
+# $Header: /home/opalod/NEMOCVSROOT/UTIL/fait_AA_make,v 1.25 2006/04/28 13:06:17 opalod Exp $
+# some variables
+TMP = ../../../tmp
+#-Q- sxnec  # Compiler options for NEMO (IDRIS SX5-NEC) 
+#-Q- sxnec  F_O = -dw -Wf\"-A idbl4\" -sx5 -ftrace -C vopt -Wf"-init stack=nan" -Wl"-f nan" -Wf"-P nh" -Wf,-pvctl noassume loopcnt=10000 -L transform -I $(MODDIR) -I $(MODDIR)/oce
+#-Q- sxnec  F_F = $(F_O)
+#-Q- sxnec  L_X = $(L_O) $(L_C) -ftrace
+#-Q- sx6nec  # Compiler options NEMO (CEA SX6-NEC) 
+#-Q- sx6nec  F_O = -size_t64 -dw -Wf\"-A dbl4\" -sx6 -C vopt -Wf"-P nh" -Wf,-pvctl noassume loopcnt=10000 -L transform -I $(MODDIR) -I $(MODDIR)/oce
+#-Q- sx6nec  F_O = -size_t64 -dw -Wf\"-A dbl4\" -sx6 -ftrace -C vopt -Wf"-init stack=nan" -Wl"-f nan" -Wf"-P nh" -Wf,-pvctl noassume loopcnt=10000 -L transform -I $(MODDIR) -I $(MODDIR)/oce
+#-Q- sx6nec  F_F = $(F_O)
+#-Q- sx6nec  L_X = $(L_O) $(L_C) -ftrace
+#-Q- sxdkrz  # Compiler options for NEMO (DKRZ SX6-NEC) 
+#-Q- sxdkrz  F_O = -ew -sx6 -ftrace -C vopt -Wf"-init stack=nan" -Wl"-f nan" -Wf"-P nh" -Wf"-pvctl noassume loopcnt=10000" -L transform -I $(MODDIR) -I $(MODDIR)/oce
+#-Q- sxdkrz  F_F = $(F_O)
+#-Q- sxdkrz  L_X = $(L_O) $(L_C) -ftrace
+#-Q- eshpux  # Compiler options for NEMO (Earth Simulator)
+#-Q- eshpux  # for super perfs!
+#-Q- eshpux  # F_O = $(FTRACE) -pi nest=5 line=10000 expin=Fmpplib.F -Wf,-A idbl4 -C hopt -Wf"-P nh" -Wf,-pvctl noassume loopcnt=10000 -L transform -I $(MODDIR) -I $(MODDIR)/oce
+#-Q- eshpux  # regular options!
+#-Q- eshpux  F_O = $(FTRACE) -Wf,-A idbl4 -C vopt -P stack -Wf"-P nh" -Wf,-pvctl noassume loopcnt=10000 -L transform -Wf,-pvctl nomsg -Wf"-O nomsg" -I $(MODDIR) -I $(MODDIR)/oce
+#-Q- eshpux  F_F = $(F_O)
+#-Q- eshpux  L_X = $(L_O)
+#-Q- linux  # Compiler options for NEMO (pgf version)
+#-Q- linux  F_O = -Mlist -O3 -byteswapio -r8  -I $(MODDIR) -I$(MODDIR)/oce
+#-Q- linux  F_F = $(F_O)
+#-Q- linux  L_X = -r8 -O3
+#-Q- lxiv7  # Compiler options for NEMO (ifc version)
+#-Q- lxiv7  F_O = -O3 -r8  -I $(MODDIR) -I$(MODDIR)/oce
+#-Q- lxiv7  L_X = -r8 -O3
+#-Q- lxiv8  # Compiler options for NEMO (ifort version)
+#-Q- lxiv8  F_O = -O3 -r8  -I $(MODDIR) -I$(MODDIR)/oce
+#-Q- lxiv8  F_F = $(F_O) 
+#-Q- lxiv8  L_X = -r8 -O3
+#-Q- g95  # Compiler options for NEMO (g95 version)
+#-Q- g95  F_O = -O3 -fno-second-underscore -r8 -funroll-all-loops -I $(MODDIR) -I $(MODDIR)/oce
+#-Q- g95  F_F = $(F_O)
+#-Q- g95  L_X = -r8 -O3
+#-Q- aix    # Compiler options for NEMO (aix version)
+#-Q- aix    F_O = -O3 -qsave -qrealsize=8 -qsuffix=f=f90 -qsuffix=cpp=F90 -qextname -qsource -q64 -qlargepage -qmaxmem=-1 -I $(MODDIR) -I $(MODDIR)/oce
+#-Q- aix    F_F = -O3 -qsave -qrealsize=8 -qsuffix=f=f -qsuffix=cpp=F -qfixed -qextname -qsource -q64 -qlargepage -qmaxmem=-1 -I $(MODDIR) -I $(MODDIR)/oce
+#-Q- aix   L_O = $(F_P) -q64 -O3
+#-Q- aix   L_X = $(L_O) $(L_C) 
+#-Q- osxxlf    # Compiler options for NEMO (osxxlf version)
+#-Q- osxxlf    F_O = -O3 -qsave -qrealsize=8 -qsuffix=f=f90 -qsuffix=cpp=F90 -qsource -qmaxmem=-1 -I $(MODDIR) -I $(MODDIR)/oce
+#-Q- osxxlf    F_F = -O3 -qsave -qrealsize=8 -qsuffix=f=f -qsuffix=cpp=F -qfixed -qsource -qmaxmem=-1 -I $(MODDIR) -I $(MODDIR)/oce
+#-Q- osxxlf    L_X = -qrealsize=8 -O3
+PREF=
+#-Q- sxnec	PREF=i.
+#-Q- sx6nec	PREF=i.
+#-Q- sxdkrz	PREF=i.
+#-Q- eshpux	PREF=i.
+
+# add suffix to P_P
+P_P := $(P_P:%=$(prefix)%)
+
+# Some tests to define variables related to Agrif compilation
+# Please do not change 
+ifneq (,$(findstring key_agrif,$(P_P)))
+AGRIF=use
+else
+AGRIF=notuse
+AGRIF_LIB=
+endif
+ifneq (,$(findstring key_mpp_mpi,$(P_P)))
+AGRIF_MPI=-DAGRIF_MPI
+else
+AGRIF_MPI=
+endif
+
+KEY_LIST = \
+     key_agrif \
+     key_antarctic \
+     key_arctic \
+     key_autotasking \
+     key_cfc \
+     key_cfg_1d \
+     key_coupled \
+     key_diaeiv \
+     key_diainstant \
+     key_dimgout \
+     key_dynspg_exp \
+     key_dynspg_flt \
+     key_dynspg_rl \
+     key_eel_r2 \
+     key_eel_r5 \
+     key_eel_r6 \
+     key_esopa \
+     key_fdir \
+     key_flx_bulk_daily \
+     key_flx_bulk_monthly \
+     key_gyre \
+     key_ice_lim \
+     key_ldfslp \
+     key_mpp_mpi \
+     key_mpp_shmem \
+     key_obc \
+     key_off_degrad \
+     key_off_tra \
+     key_orca_r025 \
+     key_orca_r05 \
+     key_orca_r2 \
+     key_orca_r4 \
+     key_partial_steps \
+     key_passivetrc \
+     key_s_coord \
+     key_ss_bio \
+     key_trabbl_adv \
+     key_trabbl_dif \
+     key_traldf_c1d \
+     key_traldf_c2d \
+     key_traldf_c3d \
+     key_traldf_eiv \
+     key_trcbbc \
+     key_trcbbl_adv \
+     key_trcbbl_dif \
+     key_trc_dia3d \
+     key_trc_diaadd \
+     key_trc_diabio \
+     key_trc_diatrd \
+     key_trcdmp \
+     key_trc_dta \
+     key_trc_ldfeiv \
+     key_trcldf_eiv \
+     key_trc_ldfiso \
+     key_trc_lobster1 \
+     key_trc_pisces \
+     key_trc_zdfddm \
+     key_vectopt_loop \
+     key_vectopt_memory \
+     key_vpp \
+     key_zdfddm \
+     key_zdftke 
+# .o file list in the library
+LIB_OBJ = \
+		$(MODEL_LIB)(ctlopn.o)\
+		$(MODEL_LIB)(lib_cray.o)\
+		$(MODEL_LIB)(lib_isml.o)\
+		$(MODEL_LIB)(lib_print.o)\
+		$(MODEL_LIB)(blk_oce.o)\
+		$(MODEL_LIB)(daymod.o)\
+		$(MODEL_LIB)(dianam.o)\
+		$(MODEL_LIB)(domain.o)\
+		$(MODEL_LIB)(domcfg.o)\
+		$(MODEL_LIB)(dommsk.o)\
+		$(MODEL_LIB)(dom_oce.o)\
+		$(MODEL_LIB)(domrea.o)\
+		$(MODEL_LIB)(domstp.o)\
+		$(MODEL_LIB)(dtadyn.o)\
+		$(MODEL_LIB)(dynspg_oce.o)\
+		$(MODEL_LIB)(eosbn2.o)\
+		$(MODEL_LIB)(flxrnf.o)\
+		$(MODEL_LIB)(initrc.o)\
+		$(MODEL_LIB)(in_out_manager.o)\
+		$(MODEL_LIB)(istate.o)\
+		$(MODEL_LIB)(lbclnk.o)\
+		$(MODEL_LIB)(ldfeiv.o)\
+		$(MODEL_LIB)(ldfslp.o)\
+		$(MODEL_LIB)(ldftra.o)\
+		$(MODEL_LIB)(ldftra_oce.o)\
+		$(MODEL_LIB)(lib_mpp.o)\
+		$(MODEL_LIB)(mppini.o)\
+		$(MODEL_LIB)(oce.o)\
+		$(MODEL_LIB)(ocesbc.o)\
+		$(MODEL_LIB)(oce_trc.o)\
+		$(MODEL_LIB)(ocfzpt.o)\
+		$(MODEL_LIB)(opa.o)\
+		$(MODEL_LIB)(par_kind.o)\
+		$(MODEL_LIB)(par_oce.o)\
+		$(MODEL_LIB)(par_sms.o)\
+		$(MODEL_LIB)(par_trc.o)\
+		$(MODEL_LIB)(par_trc_trp.o)\
+		$(MODEL_LIB)(phycst.o)\
+		$(MODEL_LIB)(prtctl_trc.o)\
+		$(MODEL_LIB)(sms.o)\
+		$(MODEL_LIB)(step.o)\
+		$(MODEL_LIB)(stpctl.o)\
+		$(MODEL_LIB)(taumod.o)\
+		$(MODEL_LIB)(trabbl.o)\
+		$(MODEL_LIB)(traqsr.o)\
+		$(MODEL_LIB)(trcadv_cen2.o)\
+		$(MODEL_LIB)(trcadv_muscl2.o)\
+		$(MODEL_LIB)(trcadv_muscl.o)\
+		$(MODEL_LIB)(trcadv_smolar.o)\
+		$(MODEL_LIB)(trcadv_tvd.o)\
+		$(MODEL_LIB)(trcbbc.o)\
+		$(MODEL_LIB)(trcbbl.o)\
+		$(MODEL_LIB)(trcctl.o)\
+		$(MODEL_LIB)(trcdia.o)\
+		$(MODEL_LIB)(trcdit.o)\
+		$(MODEL_LIB)(trcdmp.o)\
+		$(MODEL_LIB)(trcdta.o)\
+		$(MODEL_LIB)(trcdtr.o)\
+		$(MODEL_LIB)(trc.o)\
+		$(MODEL_LIB)(trcfreons.o)\
+		$(MODEL_LIB)(trcini.o)\
+		$(MODEL_LIB)(trcldf_bilap.o)\
+		$(MODEL_LIB)(trcldf_bilapg.o)\
+		$(MODEL_LIB)(trcldf_iso.o)\
+		$(MODEL_LIB)(trcldf_iso_zps.o)\
+		$(MODEL_LIB)(trcldf_lap.o)\
+		$(MODEL_LIB)(trclec.o)\
+		$(MODEL_LIB)(trclsm.o)\
+		$(MODEL_LIB)(trcnxt.o)\
+		$(MODEL_LIB)(trcrad.o)\
+		$(MODEL_LIB)(trcrst.o)\
+		$(MODEL_LIB)(trcsbc.o)\
+		$(MODEL_LIB)(trcsms.o)\
+		$(MODEL_LIB)(trcstp.o)\
+		$(MODEL_LIB)(trctrp_ctl.o)\
+		$(MODEL_LIB)(trctrp.o)\
+		$(MODEL_LIB)(trctrp_lec.o)\
+		$(MODEL_LIB)(trczdf_exp.o)\
+		$(MODEL_LIB)(trczdf_imp.o)\
+		$(MODEL_LIB)(trczdf_iso.o)\
+		$(MODEL_LIB)(trczdf_iso_vopt.o)\
+		$(MODEL_LIB)(trp_trc.o)\
+		$(MODEL_LIB)(zdfddm.o)\
+		$(MODEL_LIB)(zdfini.o)\
+		$(MODEL_LIB)(zdfmxl.o)\
+		$(MODEL_LIB)(zdf_oce.o)\
+		$(MODEL_LIB)(zpshde.o)\
+		$(MODEL_LIB)(zpshde_trc.o)\
+		$(MODEL_LIB)(p4zbio.o)\
+		$(MODEL_LIB)(p4zche.o)\
+		$(MODEL_LIB)(p4zday.o)\
+		$(MODEL_LIB)(p4zdiat.o)\
+		$(MODEL_LIB)(p4zflx.o)\
+		$(MODEL_LIB)(p4zint.o)\
+		$(MODEL_LIB)(p4zlim.o)\
+		$(MODEL_LIB)(p4zlys.o)\
+		$(MODEL_LIB)(p4zmeso.o)\
+		$(MODEL_LIB)(p4zmicro.o)\
+		$(MODEL_LIB)(p4znano.o)\
+		$(MODEL_LIB)(p4zopt.o)\
+		$(MODEL_LIB)(p4zprg.o)\
+		$(MODEL_LIB)(p4zprod.o)\
+		$(MODEL_LIB)(p4zrem.o)\
+		$(MODEL_LIB)(p4zsed.o)\
+		$(MODEL_LIB)(p4zsink2.o)\
+		$(MODEL_LIB)(p4zsink.o)\
+		$(MODEL_LIB)(p4zslow.o)\
+		$(MODEL_LIB)(trcbio.o)\
+		$(MODEL_LIB)(trcexp.o)\
+		$(MODEL_LIB)(trcopt.o)\
+		$(MODEL_LIB)(trcsed.o)
+
+.SUFFIXES: .f90 .F90 .F
+
+# Target
+all: 		diroce $(EXEC_BIN)
+		@cp SRC_FILE_LIST.temp SRC_FILE_LIST
+		@echo OPA model is OK
+# Cleaning objects, libraries and executables
+clean:
+ifeq ($(AGRIF),use)
+		-@(cd OPAFILES; ./efface)
+endif
+		$(RM) model.o $(MODDIR)/oce/*.mod $(MODEL_LIB) $(SXMODEL_LIB) $(EXEC_BIN)
+		@echo OPA model \(.o .mod libraries and executables are removed\)
+
+# Dependancies
+diroce:
+		@if [ ! -d ../../../lib/oce ] ; then mkdir ../../../lib/oce ; fi
+
+$(EXEC_BIN) :	libioipsl firstagrif mpiagrif key keyverif src_file_list libagrif $(MODEL_LIB) $(IOIPSL_LIB) $(AGRIF_LIB) agrif2model.o model.o
+ifeq ($(AGRIF),use)
+		$(F_L) $(L_X) -o $(EXEC_BIN) model.o agrif2model.o $(SXMODEL_LIB) $(OASISMPI2_LIB) $(IOIPSL_LIB) $(AGRIF_LIB) $(NCDF_LIB) $(LIBMPI) $(LIBMP)
+else
+		$(F_L) $(L_X) -o $(EXEC_BIN) model.o $(SXMODEL_LIB) $(OASISMPI2_LIB) $(IOIPSL_LIB) $(NCDF_LIB) $(LIBMPI) $(LIBMP)
+endif
+
+# Agrif library and conv
+libagrif :
+ifeq ($(AGRIF),use)
+	@( if [ ! -d OPAFILES ]; then mkdir OPAFILES; fi )
+	@( if [ ! -d OPAFILES/AGRIF_INC ]; then mkdir OPAFILES/AGRIF_INC ; fi )
+	@( if [ ! -d OPAFILES/AGRIF_MODELFILES ]; then mkdir OPAFILES/AGRIF_MODELFILES ; fi )
+	@(cd ../../AGRIF ; $(M_K) -f Makefile P_P="$(AGRIF_MPI)" )
+	@cp -rf ../../AGRIF/agrif_opa.in OPAFILES/. 
+	@cp -rf ../../AGRIF/conv OPAFILES/. 
+	@cp -rf ../../AGRIF/efface OPAFILES/. 
+endif
+
+# Agrif interface with NEMO
+agrif2model.o :
+ifeq ($(AGRIF),use)
+	@$(P_C) $(P_O) -IOPAFILES/AGRIF_INC $*.F90 > OPAFILES/$*.F90 
+	@$(F_C) \
+#-Q- aix		-qsuffix=f=F90 \
+#-Q- osxxlf		-qsuffix=f=F90 \
+	$(P_P) $(F_O) \
+#-Q- fjvpp		-Z $*.L \
+#-Q- sxnec		-R2 \
+#-Q- sx6nec		-R2 \
+#-Q- sxdkrz		-R2 \
+#-Q- eshpux		-R2 \
+#-Q- aix		-qsource \
+	   OPAFILES/$*.F90 || { mv $(PREF).L $(TMP) ; false ; exit ; }
+#-Q- sxnec		@$(A_X) $(SXMODEL_LIB) $*.o  > /dev/null
+#-Q- sx6nec		@$(A_X) $(SXMODEL_LIB) $*.o  > /dev/null
+#-Q- sxdkrz		@$(A_X) $(SXMODEL_LIB) $*.o  > /dev/null
+#-Q- hpux			@$(A_X) $(SXMODEL_LIB) $*.o  > /dev/null
+endif
+
+# IOIPSL library 
+libioipsl :
+	(cd ../../IOIPSL/src ; $(M_K) -f Makefile )
+
+# Main program
+model.o :	model.f90
+		@$(F_C) $(F_O) -c model.f90
+
+# if the make script is stopped, one doesn't destroy library
+.PRECIOUS : $(MODEL_LIB)
+#-Q- sxnec .PRECIOUS : $(SXMODEL_LIB)
+#-Q- sx6nec .PRECIOUS : $(SXMODEL_LIB)
+#-Q- sxdkrz .PRECIOUS : $(SXMODEL_LIB)
+#-Q- eshpux .PRECIOUS : $(SXMODEL_LIB)
+
+# library dependancies
+$(MODEL_LIB):	$(LIB_OBJ)
+		@echo
+		@echo La bibliotheque est a jour
+		@echo
+
+# Default rules
+.DEFAULTS:
+
+# rules for the .f90 files
+.f90.a :           
+		@$(F_C) $(P_P) $(F_O) \
+#-Q- fjvpp		-Z $*.L \
+#-Q- sxnec		-R2 \
+#-Q- sx6nec		-R2 \
+#-Q- sxdkrz		-R2 \
+#-Q- eshpux		-R2 \
+#-Q- aix		-qsource \
+		$*.f90 || { if [ -f $(PREF)$*.L ] ; then mv $(PREF)$*.L $(TMP) ; fi ; false ; exit ; }
+#-Q- sxnec		@$(A_X) $(SXMODEL_LIB) $*.o  > /dev/null
+#-Q- sx6nec		@$(A_X) $(SXMODEL_LIB) $*.o  > /dev/null
+#-Q- sxdkrz		@$(A_X) $(SXMODEL_LIB) $*.o  > /dev/null
+#-Q- eshpux		@$(A_X) $(SXMODEL_LIB) $*.o  > /dev/null
+		@$(A_C) $(MODEL_LIB) $*.o  > /dev/null
+		@$(RM) $*.[of]
+		@if [ -f $*.mod ] ; then mv $*.mod $(MODDIR)/oce ; fi
+#-Q- aix		@mv $(PREF)$*.lst $(PREF)$*.L
+#-Q- linux		@mv $(PREF)$*.lst $(PREF)$*.L
+#-Q- osxxlf		@mv $(PREF)$*.lst $(PREF)$*.L
+		@if [ -f $(PREF)$*.L ] ; then mv $(PREF)$*.L $(TMP) ; fi
+
+# rules for the .F90 files
+.F90.a :  
+ifeq ($(AGRIF),use) 
+		@$(P_C) $(P_O) -IOPAFILES/AGRIF_INC $*.F90 > OPAFILES/$*.F90 
+		@(cd OPAFILES ; ./conv agrif_opa.in -rm \
+#-Q- linux		-SubloopScalar \
+#-Q- lxiv8		-SubloopScalar \
+#-Q- g95			-SubloopScalar \
+#-Q- f95			-SubloopScalar \
+#-Q- osf1			-SubloopScalar \
+		-comdirin ./ -comdirout AGRIF_MODELFILES/. -convfile $*.F90)
+		-@mv -f OPAFILES/AGRIF_MODELFILES/$*.F90 OPAFILES/$*.F90
+		@$(P_C) $(P_O) -IOPAFILES/AGRIF_INC OPAFILES/$*.F90 > OPAFILES/AGRIF_MODELFILES/$*.F90
+		-@mv -f OPAFILES/AGRIF_MODELFILES/$*.F90 OPAFILES/$*.F90
+		@$(F_C) $(P_P) $(F_O) \
+#-Q- fjvpp		-Z $*.L \
+#-Q- sxnec		-R2 \
+#-Q- sx6nec		-R2 \
+#-Q- sxdkrz		-R2 \
+#-Q- eshpux		-R2 \
+#-Q- aix		-qsource \
+		OPAFILES/$*.F90 || { if [ -f $(PREF)$*.L ] ; then mv $(PREF)$*.L $(TMP) ; fi ; false ; exit ; } 
+else
+		@$(F_C) $(P_P) $(F_O) \
+#-Q- fjvpp		-Z $*.L \
+#-Q- sxnec		-R2 \
+#-Q- sx6nec		-R2 \
+#-Q- sxdkrz		-R2 \
+#-Q- eshpux		-R2 \
+#-Q- aix		-qsource \
+		$*.F90 || { if [ -f $(PREF)$*.L ] ; then mv $(PREF)$*.L $(TMP) ; fi ; false ; exit ; }
+endif
+#-Q- sxnec		@$(A_X) $(SXMODEL_LIB) $*.o  > /dev/null
+#-Q- sx6nec		@$(A_X) $(SXMODEL_LIB) $*.o  > /dev/null
+#-Q- sxdkrz		@$(A_X) $(SXMODEL_LIB) $*.o  > /dev/null
+#-Q- eshpux		@$(A_X) $(SXMODEL_LIB) $*.o  > /dev/null
+		@$(A_C) $(MODEL_LIB) $*.o  > /dev/null
+		@$(RM) $*.[of]
+		@if [ -f $*.mod ] ; then mv $*.mod $(MODDIR)/oce ; fi
+#-Q- aix		@mv $(PREF)$*.lst $(PREF)$*.L
+#-Q- linux		@mv $(PREF)$*.lst $(PREF)$*.L
+#-Q- osxxlf		@mv $(PREF)$*.lst $(PREF)$*.L
+		@if [ -f $(PREF)$*.L ] ; then mv $(PREF)$*.L $(TMP) ; fi
+
+# rules for the .F files
+.F.a :           
+		@$(F_C) $(P_P) $(F_F) \
+#-Q- fjvpp		-Z $*.L \
+#-Q- sxnec		-R2 \
+#-Q- sx6nec		-R2 \
+#-Q- sxdkrz		-R2 \
+#-Q- eshpux		-R2 \
+#-Q- aix		-qsource \
+		$*.F || { if [ -f $(PREF)$*.L ] ; then mv $(PREF)$*.L $(TMP) ; fi ; false ; exit ; }
+#-Q- sxnec		@$(A_X) $(SXMODEL_LIB) $*.o  > /dev/null
+#-Q- sx6nec		@$(A_X) $(SXMODEL_LIB) $*.o  > /dev/null
+#-Q- sxdkrz		@$(A_X) $(SXMODEL_LIB) $*.o  > /dev/null
+#-Q- eshpux		@$(A_X) $(SXMODEL_LIB) $*.o  > /dev/null
+		@$(A_C) $(MODEL_LIB) $*.o  > /dev/null
+		@$(RM) $*.[of]
+		@if [ -f $*.mod ] ; then mv $*.mod $(MODDIR)/oce ; fi
+#-Q- aix		@mv $(PREF)$*.lst $(PREF)$*.L
+#-Q- linux		@mv $(PREF)$*.lst $(PREF)$*.L
+#-Q- osxxlf		@mv $(PREF)$*.lst $(PREF)$*.L
+		@if [ -f $(PREF)$*.L ] ; then mv $(PREF)$*.L $(TMP) ; fi
+
+# rules for the library from the .f files 
+.f.a : 		
+		@$(F_C) $(F_O) \
+#-Q- fjvpp		-Z $*.L \
+#-Q- sxnec		-R2 \
+#-Q- sx6nec		-R2 \
+#-Q- sxdkrz		-R2 \
+#-Q- eshpux		-R2 \
+#-Q- aix		-qsource \
+		$*.f|| { if [ -f $(PREF)$*.L ] ; then mv $*.L $(TMP) ; fi ; false ; exit ; }
+#-Q- sxnec		@$(A_X) $(SXMODEL_LIB) $*.o  > /dev/null
+#-Q- sx6nec		@$(A_X) $(SXMODEL_LIB) $*.o  > /dev/null
+#-Q- sxdkrz		@$(A_X) $(SXMODEL_LIB) $*.o  > /dev/null
+#-Q- eshpux		@$(A_X) $(SXMODEL_LIB) $*.o  > /dev/null
+		@$(A_C) $(MODEL_LIB) $*.o  > /dev/null
+		@$(RM) -f $*.o
+#-Q- aix		@mv $(PREF)$*.lst $(PREF)$*.L
+#-Q- linux	@mv $(PREF)$*.lst $(PREF)$*.L
+#-Q- osxxlf		@mv $(PREF)$*.lst $(PREF)$*.L
+		@if [ -f $(PREF)$*.L ] ; then mv $*.L $(TMP) ; fi
+
+$(MODEL_LIB)(blk_oce.o) :	\
+	$(MODEL_LIB)(par_kind.o) \
+	par_kind.F90 \
+	$(MODEL_LIB)(par_oce.o) \
+	par_oce.F90 \
+	KEY_CPP \
+	blk_oce.F90
+$(MODEL_LIB)(ctlopn.o) :	\
+	ctlopn.f90
+$(MODEL_LIB)(daymod.o) :	\
+	in_out_manager.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	par_kind.F90 \
+	par_oce.F90 \
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(phycst.o) \
+	phycst.F90 \
+	daymod.F90
+$(MODEL_LIB)(dianam.o) :	\
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(phycst.o) \
+	par_kind.F90 \
+	par_oce.F90 \
+	phycst.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(phycst.o) \
+	phycst.F90 \
+	KEY_CPP \
+	dianam.F90
+$(MODEL_LIB)(domain.o) :	\
+	daymod.F90 \
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lbclnk.F90 \
+	lib_mpp.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(phycst.o) \
+	oce.F90 \
+	par_kind.F90 \
+	par_oce.F90 \
+	phycst.F90 \
+	daymod.F90 \
+	dommsk.F90 \
+	dom_oce.F90 \
+	domrea.F90 \
+	domstp.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dommsk.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(domrea.o) \
+	$(MODEL_LIB)(domstp.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(phycst.o) \
+	oce.F90 \
+	phycst.F90 \
+	domzgr_substitute.h90 \
+	$(IOIPSL_LIB) \
+	KEY_CPP \
+	domain.F90
+$(MODEL_LIB)(domcfg.o) :	\
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	par_kind.F90 \
+	par_oce.F90 \
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	phycst.F90 \
+	domcfg.F90
+$(MODEL_LIB)(dommsk.o) :	\
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lib_mpp.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	oce.F90 \
+	par_kind.F90 \
+	par_oce.F90 \
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lbclnk.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	oce.F90 \
+	vectopt_loop_substitute.h90 \
+	KEY_CPP \
+	dommsk.F90
+$(MODEL_LIB)(dom_oce.o) :	\
+	$(MODEL_LIB)(par_kind.o) \
+	par_kind.F90 \
+	$(MODEL_LIB)(par_oce.o) \
+	par_oce.F90 \
+	KEY_CPP \
+	dom_oce.F90
+$(MODEL_LIB)(domrea.o) :	\
+	lib_print.f90 \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	par_kind.F90 \
+	par_oce.F90 \
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	daymod.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	domrea_dimg.h90 \
+	domrea_fdir.h90 \
+	$(IOIPSL_LIB) \
+	KEY_CPP \
+	domrea.F90
+$(MODEL_LIB)(domstp.o) :	\
+	lib_print.f90 \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	par_kind.F90 \
+	par_oce.F90 \
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(oce.o) \
+	oce.F90 \
+	domzgr_substitute.h90 \
+	KEY_CPP \
+	domstp.F90
+$(MODEL_LIB)(dtadyn.o) :	\
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lbclnk.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	par_kind.F90 \
+	par_oce.F90 \
+	phycst.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	blk_oce.F90 \
+	dom_oce.F90 \
+	eosbn2.F90 \
+	in_out_manager.F90 \
+	lbclnk.F90 \
+	ldfeiv.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(eosbn2.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(ldfeiv.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	phycst.F90 \
+	trabbl.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	domzgr_substitute.h90 \
+	vectopt_loop_substitute.h90 \
+	$(IOIPSL_LIB) \
+	KEY_CPP \
+	dtadyn.F90
+$(MODEL_LIB)(dynspg_oce.o) :	\
+	KEY_CPP \
+	dynspg_oce.F90
+$(MODEL_LIB)(eosbn2.o) :	\
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lbclnk.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	par_kind.F90 \
+	par_oce.F90 \
+	zdf_oce.F90 \
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	phycst.F90 \
+	zdfddm.F90 \
+	domzgr_substitute.h90 \
+	vectopt_loop_substitute.h90 \
+	KEY_CPP \
+	eosbn2.F90
+$(MODEL_LIB)(flxrnf.o) :	\
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(phycst.o) \
+	par_kind.F90 \
+	par_oce.F90 \
+	phycst.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(phycst.o) \
+	phycst.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(phycst.o) \
+	phycst.F90 \
+	flxrnf_ORCA_R05.h90 \
+	$(IOIPSL_LIB) \
+	KEY_CPP \
+	flxrnf.F90
+$(MODEL_LIB)(initrc.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	lbclnk.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trcdta.o) \
+	$(MODEL_LIB)(trclsm.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(trctrp_ctl.o) \
+	$(MODEL_LIB)(trctrp_lec.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	oce_trc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	sms.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trcdta.F90 \
+	trc.F90 \
+	trclsm.F90 \
+	trctrp_ctl.F90 \
+	trctrp_lec.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(prtctl_trc.o) \
+	$(MODEL_LIB)(trcctl.o) \
+	$(MODEL_LIB)(trcdtr.o) \
+	$(MODEL_LIB)(trcini.o) \
+	$(MODEL_LIB)(trclec.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(trcrst.o) \
+	oce_trc.F90 \
+	prtctl_trc.F90 \
+	trcctl.F90 \
+	trcdtr.F90 \
+	trc.F90 \
+	trcini.F90 \
+	trclec.F90 \
+	trcrst.F90 \
+	KEY_CPP \
+	initrc.F90
+$(MODEL_LIB)(in_out_manager.o) :	\
+	$(MODEL_LIB)(par_kind.o) \
+	par_kind.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	par_kind.F90 \
+	par_oce.F90 \
+	in_out_manager.F90
+$(MODEL_LIB)(istate.o) :	\
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(phycst.o) \
+	par_kind.F90 \
+	par_oce.F90 \
+	phycst.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	ldftra_oce.F90 \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	phycst.F90 \
+	zdf_oce.F90 \
+	domzgr_substitute.h90 \
+	vectopt_loop_substitute.h90 \
+	KEY_CPP \
+	istate.F90
+$(MODEL_LIB)(lbclnk.o) :	\
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	par_kind.F90 \
+	par_oce.F90 \
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	oce.F90 \
+	KEY_CPP \
+	lbclnk.F90
+$(MODEL_LIB)(ldfeiv.o) :	\
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lib_mpp.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	oce.F90 \
+	par_kind.F90 \
+	par_oce.F90 \
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lbclnk.F90 \
+	ldftra_oce.F90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(phycst.o) \
+	oce.F90 \
+	phycst.F90 \
+	domzgr_substitute.h90 \
+	vectopt_loop_substitute.h90 \
+	KEY_CPP \
+	ldfeiv.F90
+$(MODEL_LIB)(ldfslp.o) :	\
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lib_mpp.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	par_kind.F90 \
+	par_oce.F90 \
+	zdf_oce.F90 \
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lbclnk.F90 \
+	ldftra_oce.F90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	oce.F90 \
+	phycst.F90 \
+	zdfmxl.F90 \
+	domzgr_substitute.h90 \
+	vectopt_loop_substitute.h90 \
+	KEY_CPP \
+	ldfslp.F90
+$(MODEL_LIB)(ldftra.o) :	\
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lbclnk.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	oce.F90 \
+	par_kind.F90 \
+	par_oce.F90 \
+	phycst.F90 \
+	zdfmxl.F90 \
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lbclnk.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(phycst.o) \
+	oce.F90 \
+	phycst.F90 \
+	domzgr_substitute.h90 \
+	ldftra_c1d.h90 \
+	ldftra_c2d.h90 \
+	ldftra_c3d.h90 \
+	vectopt_loop_substitute.h90 \
+	$(IOIPSL_LIB) \
+	KEY_CPP \
+	ldftra.F90
+$(MODEL_LIB)(ldftra_oce.o) :	\
+	$(MODEL_LIB)(par_kind.o) \
+	par_kind.F90 \
+	$(MODEL_LIB)(par_oce.o) \
+	par_oce.F90 \
+	KEY_CPP \
+	ldftra_oce.F90
+$(MODEL_LIB)(lib_cray.o) :	\
+	lib_cray.f90
+$(MODEL_LIB)(lib_isml.o) :	\
+	lib_isml.f90
+$(MODEL_LIB)(lib_mpp.o) :	\
+	lib_print.f90 \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	par_kind.F90 \
+	par_oce.F90 \
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	KEY_CPP \
+	lib_mpp.F90
+$(MODEL_LIB)(lib_print.o) :	\
+	$(MODEL_LIB)(par_kind.o) \
+	par_kind.F90 \
+	lib_print.f90
+$(MODEL_LIB)(model.o) :	\
+	daymod.F90 \
+	domain.F90 \
+	domcfg.F90 \
+	dom_oce.F90 \
+	dtadyn.F90 \
+	eosbn2.F90 \
+	initrc.F90 \
+	in_out_manager.F90 \
+	istate.F90 \
+	ldftra.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(domain.o) \
+	$(MODEL_LIB)(domcfg.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dtadyn.o) \
+	$(MODEL_LIB)(eosbn2.o) \
+	$(MODEL_LIB)(initrc.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(istate.o) \
+	$(MODEL_LIB)(ldftra.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(mppini.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(step.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(zdfini.o) \
+	$(MODEL_LIB)(zpshde.o) \
+	mppini.F90 \
+	oce.F90 \
+	phycst.F90 \
+	step.F90 \
+	traqsr.F90 \
+	zdfini.F90 \
+	zpshde.F90 \
+	$(MODEL_LIB)(opa.o) \
+	opa.F90 \
+	model.f90
+$(MODEL_LIB)(mppini.o) :	\
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	par_kind.F90 \
+	par_oce.F90 \
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	domzgr_substitute.h90 \
+	mppini_2.h90 \
+	$(IOIPSL_LIB) \
+	KEY_CPP \
+	mppini.F90
+$(MODEL_LIB)(oce.o) :	\
+	$(MODEL_LIB)(par_kind.o) \
+	par_kind.F90 \
+	$(MODEL_LIB)(par_oce.o) \
+	par_oce.F90 \
+	KEY_CPP \
+	oce.F90
+$(MODEL_LIB)(ocesbc.o) :	\
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	par_kind.F90 \
+	par_oce.F90 \
+	in_out_manager.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	oce.F90 \
+	ocesbc.F90
+$(MODEL_LIB)(oce_trc.o) :	\
+	daymod.F90 \
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lbclnk.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	par_kind.F90 \
+	par_oce.F90 \
+	phycst.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	KEY_CPP \
+	oce_trc.F90
+$(MODEL_LIB)(ocfzpt.o) :	\
+	$(MODEL_LIB)(par_oce.o) \
+	par_oce.F90 \
+	dom_oce.F90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(oce.o) \
+	oce.F90 \
+	ocfzpt.F90
+$(MODEL_LIB)(opa.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dommsk.F90 \
+	dom_oce.F90 \
+	domrea.F90 \
+	domstp.F90 \
+	dtadyn.F90 \
+	eosbn2.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	lbclnk.F90 \
+	ldfeiv.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dommsk.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(domrea.o) \
+	$(MODEL_LIB)(domstp.o) \
+	$(MODEL_LIB)(dtadyn.o) \
+	$(MODEL_LIB)(eosbn2.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(ldfeiv.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(prtctl_trc.o) \
+	$(MODEL_LIB)(stpctl.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(trcctl.o) \
+	$(MODEL_LIB)(trcdia.o) \
+	$(MODEL_LIB)(trcdtr.o) \
+	$(MODEL_LIB)(trcini.o) \
+	$(MODEL_LIB)(trclec.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(trcrst.o) \
+	$(MODEL_LIB)(trcstp.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	oce_trc.F90 \
+	ocfzpt.F90 \
+	par_kind.F90 \
+	par_oce.F90 \
+	phycst.F90 \
+	prtctl_trc.F90 \
+	stpctl.F90 \
+	trabbl.F90 \
+	trcctl.F90 \
+	trcdia.F90 \
+	trcdtr.F90 \
+	trc.F90 \
+	trcini.F90 \
+	trclec.F90 \
+	trcrst.F90 \
+	trcstp.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	daymod.F90 \
+	domain.F90 \
+	domcfg.F90 \
+	dom_oce.F90 \
+	dtadyn.F90 \
+	eosbn2.F90 \
+	initrc.F90 \
+	in_out_manager.F90 \
+	istate.F90 \
+	ldftra.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(domain.o) \
+	$(MODEL_LIB)(domcfg.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dtadyn.o) \
+	$(MODEL_LIB)(eosbn2.o) \
+	$(MODEL_LIB)(initrc.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(istate.o) \
+	$(MODEL_LIB)(ldftra.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(mppini.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(step.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(zdfini.o) \
+	$(MODEL_LIB)(zpshde.o) \
+	mppini.F90 \
+	oce.F90 \
+	phycst.F90 \
+	step.F90 \
+	traqsr.F90 \
+	zdfini.F90 \
+	zpshde.F90 \
+	KEY_CPP \
+	opa.F90
+$(MODEL_LIB)(p4zbio.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trp_trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trp_trc.F90 \
+	domzgr_substitute.h90 \
+	KEY_CPP \
+	p4zbio.F
+$(MODEL_LIB)(p4zche.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trp_trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trp_trc.F90 \
+	domzgr_substitute.h90 \
+	KEY_CPP \
+	p4zche.F
+$(MODEL_LIB)(p4zday.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trp_trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trp_trc.F90 \
+	KEY_CPP \
+	p4zday.F
+$(MODEL_LIB)(p4zdiat.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trp_trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trp_trc.F90 \
+	KEY_CPP \
+	p4zdiat.F
+$(MODEL_LIB)(p4zflx.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trp_trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trp_trc.F90 \
+	domzgr_substitute.h90 \
+	KEY_CPP \
+	p4zflx.F
+$(MODEL_LIB)(p4zint.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trp_trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trp_trc.F90 \
+	KEY_CPP \
+	p4zint.F
+$(MODEL_LIB)(p4zlim.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trp_trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trp_trc.F90 \
+	domzgr_substitute.h90 \
+	KEY_CPP \
+	p4zlim.F
+$(MODEL_LIB)(p4zlys.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trp_trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trp_trc.F90 \
+	KEY_CPP \
+	p4zlys.F
+$(MODEL_LIB)(p4zmeso.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trp_trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trp_trc.F90 \
+	KEY_CPP \
+	p4zmeso.F
+$(MODEL_LIB)(p4zmicro.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trp_trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trp_trc.F90 \
+	KEY_CPP \
+	p4zmicro.F
+$(MODEL_LIB)(p4znano.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trp_trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trp_trc.F90 \
+	KEY_CPP \
+	p4znano.F
+$(MODEL_LIB)(p4zopt.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trp_trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trp_trc.F90 \
+	domzgr_substitute.h90 \
+	KEY_CPP \
+	p4zopt.F
+$(MODEL_LIB)(p4zprg.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	lbclnk.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trp_trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trp_trc.F90 \
+	KEY_CPP \
+	p4zprg.F
+$(MODEL_LIB)(p4zprod.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trp_trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trp_trc.F90 \
+	domzgr_substitute.h90 \
+	KEY_CPP \
+	p4zprod.F
+$(MODEL_LIB)(p4zrem.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trp_trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trp_trc.F90 \
+	domzgr_substitute.h90 \
+	KEY_CPP \
+	p4zrem.F
+$(MODEL_LIB)(p4zsed.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trp_trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trp_trc.F90 \
+	domzgr_substitute.h90 \
+	KEY_CPP \
+	p4zsed.F
+$(MODEL_LIB)(p4zsink2.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trp_trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trp_trc.F90 \
+	domzgr_substitute.h90 \
+	KEY_CPP \
+	p4zsink2.F
+$(MODEL_LIB)(p4zsink.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trp_trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trp_trc.F90 \
+	domzgr_substitute.h90 \
+	KEY_CPP \
+	p4zsink.F
+$(MODEL_LIB)(p4zslow.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trp_trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trp_trc.F90 \
+	KEY_CPP \
+	p4zslow.F
+$(MODEL_LIB)(par_kind.o) :	\
+	par_kind.F90
+$(MODEL_LIB)(par_oce.o) :	\
+	$(MODEL_LIB)(par_kind.o) \
+	par_kind.F90 \
+	par_EEL_R2.h90 \
+	par_EEL_R5.h90 \
+	par_EEL_R6.h90 \
+	par_GYRE.h90 \
+	par_ORCA_R025.h90 \
+	par_ORCA_R05.h90 \
+	par_ORCA_R2.h90 \
+	par_ORCA_R4.h90 \
+	par_SS_R008.h90 \
+	KEY_CPP \
+	par_oce.F90
+$(MODEL_LIB)(par_sms.o) :	\
+	$(MODEL_LIB)(par_trc_trp.o) \
+	par_trc_trp.F90 \
+	par_sms_cfc.h90 \
+	par_sms_lobster1.h90 \
+	par_sms_pisces.h90 \
+	KEY_CPP \
+	par_sms.F90
+$(MODEL_LIB)(par_trc.o) :	\
+	$(MODEL_LIB)(par_trc_trp.o) \
+	par_trc_trp.F90 \
+	KEY_CPP \
+	par_trc.F90
+$(MODEL_LIB)(par_trc_trp.o) :	\
+	KEY_CPP \
+	par_trc_trp.F90
+$(MODEL_LIB)(phycst.o) :	\
+	lib_print.f90 \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	par_kind.F90 \
+	par_oce.F90 \
+	in_out_manager.F90 \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	par_oce.F90 \
+	phycst.F90
+$(MODEL_LIB)(prtctl_trc.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_kind.F90 \
+	par_oce.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	in_out_manager.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	oce_trc.F90 \
+	par_trc_trp.F90 \
+	KEY_CPP \
+	prtctl_trc.F90
+$(MODEL_LIB)(sms.o) :	\
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	par_kind.F90 \
+	par_trc_trp.F90 \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	sms_cfc.h90 \
+	sms_lobster1.h90 \
+	sms_pisces.h90 \
+	KEY_CPP \
+	sms.F90
+$(MODEL_LIB)(step.o) :	\
+	blk_oce.F90 \
+	dom_oce.F90 \
+	eosbn2.F90 \
+	in_out_manager.F90 \
+	lbclnk.F90 \
+	ldfeiv.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(eosbn2.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(ldfeiv.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(prtctl_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(trcdia.o) \
+	$(MODEL_LIB)(trcdit.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(trcrst.o) \
+	$(MODEL_LIB)(trcsms.o) \
+	$(MODEL_LIB)(trctrp_lec.o) \
+	$(MODEL_LIB)(trctrp.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	oce_trc.F90 \
+	ocfzpt.F90 \
+	par_kind.F90 \
+	par_oce.F90 \
+	phycst.F90 \
+	prtctl_trc.F90 \
+	sms.F90 \
+	trabbl.F90 \
+	trcdia.F90 \
+	trcdit.F90 \
+	trc.F90 \
+	trcrst.F90 \
+	trcsms.F90 \
+	trctrp.F90 \
+	trctrp_lec.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dtadyn.F90 \
+	eosbn2.F90 \
+	in_out_manager.F90 \
+	lbclnk.F90 \
+	ldftra_oce.F90 \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dtadyn.o) \
+	$(MODEL_LIB)(eosbn2.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(stpctl.o) \
+	$(MODEL_LIB)(trcdia.o) \
+	$(MODEL_LIB)(trcrst.o) \
+	$(MODEL_LIB)(trcstp.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	stpctl.F90 \
+	trcdia.F90 \
+	trcrst.F90 \
+	trcstp.F90 \
+	zdf_oce.F90 \
+	domzgr_substitute.h90 \
+	KEY_CPP \
+	step.F90
+$(MODEL_LIB)(stpctl.o) :	\
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lib_mpp.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	oce.F90 \
+	par_kind.F90 \
+	par_oce.F90 \
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lbclnk.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	oce.F90 \
+	stpctl.F90
+$(MODEL_LIB)(taumod.o) :	\
+	dom_oce.F90 \
+	in_out_manager.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	par_kind.F90 \
+	par_oce.F90 \
+	in_out_manager.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	oce.F90 \
+	taumod.F90
+$(MODEL_LIB)(trabbl.o) :	\
+	lib_print.f90 \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	par_kind.F90 \
+	par_oce.F90 \
+	in_out_manager.F90 \
+	$(MODEL_LIB)(in_out_manager.o) \
+	domzgr_substitute.h90 \
+	vectopt_loop_substitute.h90 \
+	KEY_CPP \
+	trabbl.F90
+$(MODEL_LIB)(traqsr.o) :	\
+	lib_print.f90 \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	par_kind.F90 \
+	par_oce.F90 \
+	in_out_manager.F90 \
+	$(MODEL_LIB)(in_out_manager.o) \
+	traqsr.F90
+$(MODEL_LIB)(trcadv_cen2.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	eosbn2.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(eosbn2.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(prtctl_trc.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	oce_trc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	prtctl_trc.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(prtctl_trc.o) \
+	$(MODEL_LIB)(trcbbl.o) \
+	$(MODEL_LIB)(trc.o) \
+	oce_trc.F90 \
+	prtctl_trc.F90 \
+	trcbbl.F90 \
+	trc.F90 \
+	domzgr_substitute.h90 \
+	ldfeiv_substitute.h90 \
+	ldftra_substitute.h90 \
+	passivetrc_substitute.h90 \
+	vectopt_loop_substitute.h90 \
+	KEY_CPP \
+	trcadv_cen2.F90
+$(MODEL_LIB)(trcadv_muscl2.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	eosbn2.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(eosbn2.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(prtctl_trc.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	oce_trc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	prtctl_trc.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	lbclnk.F90 \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(prtctl_trc.o) \
+	$(MODEL_LIB)(trcbbl.o) \
+	$(MODEL_LIB)(trc.o) \
+	oce_trc.F90 \
+	prtctl_trc.F90 \
+	trcbbl.F90 \
+	trc.F90 \
+	domzgr_substitute.h90 \
+	ldfeiv_substitute.h90 \
+	ldftra_substitute.h90 \
+	passivetrc_substitute.h90 \
+	vectopt_loop_substitute.h90 \
+	KEY_CPP \
+	trcadv_muscl2.F90
+$(MODEL_LIB)(trcadv_muscl.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	eosbn2.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(eosbn2.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(prtctl_trc.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	oce_trc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	prtctl_trc.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	lbclnk.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(prtctl_trc.o) \
+	$(MODEL_LIB)(trcbbl.o) \
+	$(MODEL_LIB)(trc.o) \
+	oce_trc.F90 \
+	prtctl_trc.F90 \
+	trcbbl.F90 \
+	trc.F90 \
+	domzgr_substitute.h90 \
+	ldfeiv_substitute.h90 \
+	ldftra_substitute.h90 \
+	passivetrc_substitute.h90 \
+	vectopt_loop_substitute.h90 \
+	KEY_CPP \
+	trcadv_muscl.F90
+$(MODEL_LIB)(trcadv_smolar.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	eosbn2.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(eosbn2.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(prtctl_trc.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	oce_trc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	prtctl_trc.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	lbclnk.F90 \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(prtctl_trc.o) \
+	$(MODEL_LIB)(trcbbl.o) \
+	$(MODEL_LIB)(trc.o) \
+	oce_trc.F90 \
+	prtctl_trc.F90 \
+	trcbbl.F90 \
+	trc.F90 \
+	domzgr_substitute.h90 \
+	ldfeiv_substitute.h90 \
+	ldftra_substitute.h90 \
+	passivetrc_substitute.h90 \
+	vectopt_loop_substitute.h90 \
+	KEY_CPP \
+	trcadv_smolar.F90
+$(MODEL_LIB)(trcadv_tvd.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	eosbn2.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(eosbn2.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(prtctl_trc.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	oce_trc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	prtctl_trc.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	lbclnk.F90 \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(prtctl_trc.o) \
+	$(MODEL_LIB)(trcbbl.o) \
+	$(MODEL_LIB)(trc.o) \
+	oce_trc.F90 \
+	prtctl_trc.F90 \
+	trcbbl.F90 \
+	trc.F90 \
+	domzgr_substitute.h90 \
+	ldfeiv_substitute.h90 \
+	ldftra_substitute.h90 \
+	passivetrc_substitute.h90 \
+	vectopt_loop_substitute.h90 \
+	KEY_CPP \
+	trcadv_tvd.F90
+$(MODEL_LIB)(trcbbc.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	oce_trc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(prtctl_trc.o) \
+	$(MODEL_LIB)(trc.o) \
+	oce_trc.F90 \
+	prtctl_trc.F90 \
+	trc.F90 \
+	domzgr_substitute.h90 \
+	ldfeiv_substitute.h90 \
+	ldftra_substitute.h90 \
+	passivetrc_substitute.h90 \
+	vectopt_loop_substitute.h90 \
+	$(IOIPSL_LIB) \
+	KEY_CPP \
+	trcbbc.F90
+$(MODEL_LIB)(trcbbl.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	oce_trc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	eosbn2.F90 \
+	$(MODEL_LIB)(eosbn2.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(prtctl_trc.o) \
+	$(MODEL_LIB)(trc.o) \
+	oce_trc.F90 \
+	prtctl_trc.F90 \
+	trc.F90 \
+	eosbn2.F90 \
+	lbclnk.F90 \
+	$(MODEL_LIB)(eosbn2.o) \
+	$(MODEL_LIB)(lbclnk.o) \
+	domzgr_substitute.h90 \
+	ldfeiv_substitute.h90 \
+	ldftra_substitute.h90 \
+	passivetrc_substitute.h90 \
+	trcbbl_adv.h90 \
+	vectopt_loop_substitute.h90 \
+	KEY_CPP \
+	trcbbl.F90
+$(MODEL_LIB)(trcbio.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	lbclnk.F90 \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trp_trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trp_trc.F90 \
+	domzgr_substitute.h90 \
+	KEY_CPP \
+	trcbio.F
+$(MODEL_LIB)(trcctl.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(trctrp_lec.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	oce_trc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	trctrp_lec.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(trctrp_ctl.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trc.F90 \
+	trctrp_ctl.F90 \
+	trcctl.cfc.h90 \
+	trcctl.lobster1.h90 \
+	trcctl.pisces.h90 \
+	KEY_CPP \
+	trcctl.F90
+$(MODEL_LIB)(trcdia.o) :	\
+	dianam.F90 \
+	in_out_manager.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(dianam.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trc.F90 \
+	$(MODEL_LIB)(trcdit.o) \
+	trcdit.F90 \
+	KEY_CPP \
+	trcdia.F90
+$(MODEL_LIB)(trcdit.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_kind.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	dianam.F90 \
+	in_out_manager.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(dianam.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trc.F90 \
+	domzgr_substitute.h90 \
+	ldfeiv_substitute.h90 \
+	ldftra_substitute.h90 \
+	passivetrc_substitute.h90 \
+	vectopt_loop_substitute.h90 \
+	$(IOIPSL_LIB) \
+	KEY_CPP \
+	trcdit.F90
+$(MODEL_LIB)(trcdmp.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	oce_trc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(prtctl_trc.o) \
+	$(MODEL_LIB)(trcdta.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(trctrp_lec.o) \
+	oce_trc.F90 \
+	prtctl_trc.F90 \
+	trcdta.F90 \
+	trc.F90 \
+	trctrp_lec.F90 \
+	domzgr_substitute.h90 \
+	ldfeiv_substitute.h90 \
+	ldftra_substitute.h90 \
+	passivetrc_substitute.h90 \
+	vectopt_loop_substitute.h90 \
+	$(IOIPSL_LIB) \
+	KEY_CPP \
+	trcdmp.F90
+$(MODEL_LIB)(trcdta.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_kind.F90 \
+	par_oce.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(trc.o) \
+	oce_trc.F90 \
+	par_sms.F90 \
+	trc.F90 \
+	domzgr_substitute.h90 \
+	ldfeiv_substitute.h90 \
+	ldftra_substitute.h90 \
+	passivetrc_substitute.h90 \
+	vectopt_loop_substitute.h90 \
+	$(IOIPSL_LIB) \
+	KEY_CPP \
+	trcdta.F90
+$(MODEL_LIB)(trcdtr.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	lib_print.f90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(lib_print.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	oce_trc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trcdta.o) \
+	$(MODEL_LIB)(trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trcdta.F90 \
+	trc.F90 \
+	KEY_CPP \
+	trcdtr.F90
+$(MODEL_LIB)(trcexp.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	oce_trc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	trc.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	lbclnk.F90 \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trc.o) \
+	$(MODEL_LIB)(trctrp_lec.o) \
+	$(MODEL_LIB)(trp_trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trc.F90 \
+	trctrp_lec.F90 \
+	trp_trc.F90 \
+	domzgr_substitute.h90 \
+	KEY_CPP \
+	trcexp.F
+$(MODEL_LIB)(trc.o) :	\
+	$(MODEL_LIB)(par_kind.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	par_kind.F90 \
+	par_trc_trp.F90 \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	par_oce.F90 \
+	par_trc.F90 \
+	KEY_CPP \
+	trc.F90
+$(MODEL_LIB)(trcfreons.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	daymod.F90 \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trc.F90 \
+	domzgr_substitute.h90 \
+	ldfeiv_substitute.h90 \
+	ldftra_substitute.h90 \
+	passivetrc_substitute.h90 \
+	vectopt_loop_substitute.h90 \
+	KEY_CPP \
+	trcfreons.F90
+$(MODEL_LIB)(trcini.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_sms.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_sms.F90 \
+	par_trc.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	lbclnk.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(sms.o) \
+	$(MODEL_LIB)(trc.o) \
+	oce_trc.F90 \
+	sms.F90 \
+	trc.F90 \
+	domzgr_substitute.h90 \
+	ldfeiv_substitute.h90 \
+	ldftra_substitute.h90 \
+	passivetrc_substitute.h90 \
+	trcini.cfc.h90 \
+	trcini.lobster1.h90 \
+	trcini.pisces.h90 \
+	vectopt_loop_substitute.h90 \
+	$(IOIPSL_LIB) \
+	KEY_CPP \
+	trcini.F90
+$(MODEL_LIB)(trcldf_bilap.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	oce_trc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	lbclnk.F90 \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(prtctl_trc.o) \
+	$(MODEL_LIB)(trc.o) \
+	oce_trc.F90 \
+	prtctl_trc.F90 \
+	trc.F90 \
+	domzgr_substitute.h90 \
+	ldfeiv_substitute.h90 \
+	ldftra_substitute.h90 \
+	passivetrc_substitute.h90 \
+	vectopt_loop_substitute.h90 \
+	KEY_CPP \
+	trcldf_bilap.F90
+$(MODEL_LIB)(trcldf_bilapg.o) :	\
+	blk_oce.F90 \
+	daymod.F90 \
+	dom_oce.F90 \
+	dynspg_oce.F90 \
+	flxrnf.F90 \
+	in_out_manager.F90 \
+	ldfslp.F90 \
+	ldftra_oce.F90 \
+	lib_mpp.F90 \
+	$(MODEL_LIB)(blk_oce.o) \
+	$(MODEL_LIB)(daymod.o) \
+	$(MODEL_LIB)(dom_oce.o) \
+	$(MODEL_LIB)(dynspg_oce.o) \
+	$(MODEL_LIB)(flxrnf.o) \
+	$(MODEL_LIB)(in_out_manager.o) \
+	$(MODEL_LIB)(ldfslp.o) \
+	$(MODEL_LIB)(ldftra_oce.o) \
+	$(MODEL_LIB)(lib_mpp.o) \
+	$(MODEL_LIB)(oce.o) \
+	$(MODEL_LIB)(ocesbc.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(ocfzpt.o) \
+	$(MODEL_LIB)(par_oce.o) \
+	$(MODEL_LIB)(par_trc.o) \
+	$(MODEL_LIB)(par_trc_trp.o) \
+	$(MODEL_LIB)(phycst.o) \
+	$(MODEL_LIB)(taumod.o) \
+	$(MODEL_LIB)(trabbl.o) \
+	$(MODEL_LIB)(traqsr.o) \
+	$(MODEL_LIB)(zdfddm.o) \
+	$(MODEL_LIB)(zdfmxl.o) \
+	$(MODEL_LIB)(zdf_oce.o) \
+	oce.F90 \
+	ocesbc.F90 \
+	oce_trc.F90 \
+	ocfzpt.F90 \
+	par_oce.F90 \
+	par_trc.F90 \
+	par_trc_trp.F90 \
+	phycst.F90 \
+	taumod.F90 \
+	trabbl.F90 \
+	traqsr.F90 \
+	zdfddm.F90 \
+	zdfmxl.F90 \
+	zdf_oce.F90 \
+	lbclnk.F90 \
+	$(MODEL_LIB)(lbclnk.o) \
+	$(MODEL_LIB)(oce_trc.o) \
+	$(MODEL_LIB)(prtctl_trc.o) \
+	$(MODEL_LIB)(trc.o) \
+	oce_trc.F90 \
+	prtctl_trc.F90 \
+	trc.F90 \
+	domzgr_substitute.h90 \
+	ldfeiv_substitute.h90 \
+	ldftra_substitute.h90 \
+	passivetrc_substitute.h90 \
+	vectopt_loop_substitute.h90 \
+	KEY_CPP \
+	trcldf_bilapg.F90

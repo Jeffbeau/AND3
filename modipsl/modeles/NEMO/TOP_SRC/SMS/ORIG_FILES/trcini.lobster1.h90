@@ -1,0 +1,128 @@
+   !!----------------------------------------------------------------------
+   !!                    ***  trcini.lobster1.h90 ***
+   !!----------------------------------------------------------------------
+#  include "domzgr_substitute.h90"
+#  include "passivetrc_substitute.h90"
+CONTAINS
+
+   SUBROUTINE trc_ini
+      !!---------------------------------------------------------------------
+      !!                    ***  ROUTINE trc_ini  ***
+      !!  purpose :
+      !!  ---------
+      !!     specific initialisation for lobster1 model
+      !!
+      !!   History :
+      !!   --------
+      !!      original    : 99-09 (M. Levy) 
+      !!      additions   : 00-12 (0. Aumont, E. Kestenare)
+      !!                           add sediment computations
+      !!    03-05 : O. Aumont and A. El Moussaoui F90  
+      !!----------------------------------------------------------------------
+      !!  TOP 1.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/TOP_SRC/SMS/trcini.lobster1.h90,v 1.4 2005/11/14 16:42:43 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+      !!----------------------------------------------------------------------
+      !! local declarations
+      !! ==================
+      INTEGER ji,jj,jk,jn
+      REAL zdm0(jpi,jpj,jpk),zrro(jpi,jpj),zfluo,zfluu
+      REAL ztest
+
+      !! 1. initialization of fields for optical model
+      !! --------------------------------------------
+
+      xze(:,:)=5.
+      xpar(:,:,:)=0.
+
+      !! 2. initialization for passive tracer remineralisation-damping  array
+      !! -------------------------------------------------------------------------
+
+      DO jn=1,jptra
+         remdmp(:,jn)=tminr
+      END DO
+
+      IF(lwp) THEN
+         WRITE(numout,*) ' '
+         WRITE(numout,*) ' trcini: compute remineralisation-damping  '
+         WRITE(numout,*) '         arrays for tracers'
+      ENDIF
+
+      !! 3. initialization of biological variables
+      !! ------------------------------------------
+
+      !! Calculate vertical distribution of newly formed biogenic poc
+      !! in the water column in the case of max. possible bottom depth
+      !! ------------------------------------------------------------
+
+      zdm0   = 0.
+      zrro = 1.
+      DO jk = jpkb,jpkm1
+         DO jj =1, jpj
+            DO ji =1, jpi
+               zfluo = (fsdepw(ji,jj,jk)/fsdepw(ji,jj,jpkb))**xhr 
+               zfluu = (fsdepw(ji,jj,jk+1)/fsdepw(ji,jj,jpkb))**xhr
+               IF (zfluo.GT.1.) zfluo = 1.
+               zdm0(ji,jj,jk) = zfluo-zfluu
+               IF (jk.LE.jpkb-1) zdm0(ji,jj,jk)=0.
+               zrro(ji,jj) = zrro(ji,jj)-zdm0(ji,jj,jk)
+            ENDDO
+         ENDDO
+      ENDDO
+!!!
+
+      zdm0(:,:,jpk) = zrro(:,:)
+
+      !! Calculate vertical distribution of newly formed biogenic poc
+      !! in the water column with realistic topography (first "dry" layer
+      !! contains total fraction, which has passed to the upper layers)
+      !! ----------------------------------------------------------------------
+
+      dminl = 0.
+      dmin3 = zdm0
+
+      DO jk = 1,jpk
+         DO jj = 1,jpj
+            DO ji = 1,jpi
+
+               IF(tmask(ji,jj,jk) == 0) THEN
+                  dminl(ji,jj) = dminl(ji,jj)+dmin3(ji,jj,jk)
+                  dmin3(ji,jj,jk) = 0.0
+               ENDIF
+
+            ENDDO
+         ENDDO
+      ENDDO
+
+      DO jj = 1,jpj
+         DO ji = 1,jpi
+            IF (tmask(ji,jj,1) == 0) dmin3(ji,jj,1) = 0.
+         ENDDO
+      ENDDO
+
+      !! CALCUL DU MASK DE COTE
+      !! ----------------------   
+      cmask=0.
+      do ji=2,jpi-1
+         do jj=2,jpj-1
+            if (tmask(ji,jj,1) == 1) then
+               ztest=tmask(ji+1,jj,1)*tmask(ji-1,jj,1)*tmask(ji,jj+1,1)*tmask(ji,jj-1,1)
+               IF (ztest == 0) cmask(ji,jj) = 1.
+            endif
+         end do
+      end do
+
+      cmask(1,:)=cmask(jpi-1,:)
+      cmask(jpi,:)=cmask(2,:)
+
+
+      !! CALCUL DE LA SURFACE COTIERE
+      !! ----------------------------
+      areacot=0.
+      do ji=2,jpi-1
+         do jj=2,jpj-1
+            areacot=areacot+e1t(ji,jj)*e2t(ji,jj)*cmask(ji,jj)
+         end do
+      end do
+
+   END SUBROUTINE trc_ini

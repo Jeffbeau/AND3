@@ -1,0 +1,504 @@
+   !!----------------------------------------------------------------------
+   !!                    ***  trcini.pisces.h90 ***
+   !!----------------------------------------------------------------------
+#  include "domzgr_substitute.h90"
+#  include "passivetrc_substitute.h90"
+CONTAINS
+
+   SUBROUTINE trc_ini
+      !!-----------------------------------------------------------------
+      !!
+      !!                   ***  ROUTINE trc_ini ***
+      !!                     
+      !!
+      !!  Purpose :
+      !!  ---------
+      !!     Initialisation of PISCES biological and chemical variables
+      !!
+      !!   INPUT :
+      !!   -----
+      !!      common
+      !!              all the common defined in opa 
+      !!
+      !!
+      !!   OUTPUT :                   : no
+      !!   ------
+      !!
+      !!   EXTERNAL :
+      !!   ----------
+      !!         p4zche
+      !!
+      !!   MODIFICATIONS:
+      !!   --------------
+      !!      original  : 1988-07  E. MAIER-REIMER      MPI HAMBURG
+      !!      additions : 1999-10  O. Aumont and C. Le Quere
+      !!      additions : 2002     O. Aumont (PISCES)
+      !!     03-2005 O. Aumont and A. El Moussaoui F90
+      !!----------------------------------------------------------------------
+      !!  TOP 1.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/TOP_SRC/SMS/trcini.pisces.h90,v 1.4 2005/11/14 16:42:43 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+      !!----------------------------------------------------------------------
+      !! local declarations
+      !! ==================
+      INTEGER :: ji,jj,jk
+      INTEGER :: ichl,iband,mo
+      INTEGER , PARAMETER :: jpmois = 12,      &
+         jpan   = 1 
+
+      REAL(wp) :: xtoto,expide,denitide,ztra,zmaskt
+      REAL(wp) , DIMENSION (jpi,jpj) :: riverdoc,river,ndepo
+      CHARACTER (len=34) :: clname
+
+      INTEGER :: ipi,ipj,ipk,itime
+      INTEGER , DIMENSION (jpmois) :: istep
+      INTEGER , DIMENSION (jpan) :: istep0
+      REAL(wp) :: zsecond, zdate0
+      REAL(wp) , DIMENSION (jpi,jpj) :: zlon,zlat
+      REAL(wp), DIMENSION (jpk) :: zlev
+      INTEGER :: numriv,numdust,numbath,numdep
+
+      !! 1. initialization
+      !! -----------------
+
+      !! computation of the record length for direct access FILE
+      !! this length depend of 512 for the t3d machine
+      !!
+      rfact = rdttra(1) * float(ndttrc)
+      rfactr = 1./rfact
+      IF(lwp) WRITE(numout,*) ' Tracer time step=',rfact,' rdt=',rdt
+      rfact2= rfact / float(nrdttrc)
+      rfact2r = 1./rfact2
+      IF(lwp) write(numout,*) ' Biology time step=',rfact2
+
+      !!    INITIALISE DUST INPUT FROM ATMOSPHERE
+      !!    -------------------------------------
+
+      IF (bdustfer) THEN
+         clname='dust.orca.nc'
+         CALL flinopen(clname,mig(1),nlci,mjg(1),nlcj,.false.,ipi,ipj,0        &
+            &      ,zlon,zlat,zlev,itime,istep,zdate0,zsecond,numdust)
+         CALL flinget(numdust,'dust',jpidta,jpjdta,0,jpmois,1,                 &
+            &        12,mig(1),nlci,mjg(1),nlcj,dustmo(1:nlci,1:nlcj,:) )
+         CALL flinclo(numdust)
+
+         ! Extra-halo initialization in MPP
+         IF( lk_mpp ) THEN
+            DO ji = nlci+1, jpi
+               dustmo(ji,:,:) = dustmo(1,:,:)
+            ENDDO
+            DO jj = nlcj+1, jpj
+               dustmo(:,jj,:)=dustmo(:,1,:)
+            ENDDO
+         ENDIF
+      ELSE
+         dustmo(:,:,:)=0.
+      ENDIF
+
+      !!    INITIALISE THE NUTRIENT INPUT BY RIVERS
+      !!    ---------------------------------------
+
+      IF (briver) THEN
+         clname='river.orca.nc'
+         CALL flinopen(clname,mig(1),nlci,mjg(1),nlcj,.false.,ipi,ipj,0        &
+            &      ,zlon,zlat,zlev,itime,istep0,zdate0,zsecond,numriv)
+         CALL flinget(numriv,'riverdic',jpidta,jpjdta,0,jpan,1,                &
+            &        1,mig(1),nlci,mjg(1),nlcj,river(1:nlci,1:nlcj) )
+         CALL flinget(numriv,'riverdoc',jpidta,jpjdta,0,jpan,1,                &
+            &        1,mig(1),nlci,mjg(1),nlcj,riverdoc(1:nlci,1:nlcj) )
+         CALL flinclo(numriv)
+
+         ! Extra-halo initialization in MPP
+         IF( lk_mpp ) THEN
+            DO ji = nlci+1, jpi
+               river(ji,:) = river(1,:)
+               riverdoc(ji,:) = riverdoc(1,:)
+            ENDDO
+            DO jj = nlcj+1, jpj
+               river(:,jj)=river(:,1)
+               riverdoc(:,jj) = riverdoc(:,1)
+            ENDDO
+         ENDIF
+
+      ELSE
+         river(:,:)=0.
+         riverdoc(:,:)=0.
+      endif
+
+      !!    INITIALISE THE N INPUT BY DUST
+      !!  ---------------------------------------
+
+      IF (bndepo) THEN
+         clname='ndeposition.orca.nc'
+         CALL flinopen(clname,mig(1),nlci,mjg(1),nlcj,.false.,ipi,ipj,0        &
+            &      ,zlon,zlat,zlev,itime,istep0,zdate0,zsecond,numdep)
+         CALL flinget(numdep,'ndep',jpidta,jpjdta,0,jpan,1,                   &
+            &        1,mig(1),nlci,mjg(1),nlcj,ndepo(1:nlci,1:nlcj) )
+         CALL flinclo(numdep)
+
+         ! Extra-halo initialization in MPP
+         IF( lk_mpp ) THEN
+            DO ji = nlci+1, jpi
+               ndepo(ji,:) = ndepo(1,:)
+            ENDDO
+            DO jj = nlcj+1, jpj
+               ndepo(:,jj)=ndepo(:,1)
+            ENDDO
+         ENDIF
+
+      ELSE
+         ndepo(:,:)=0.
+      ENDIF
+
+      !!    Computation of the coastal mask.
+      !!    Computation of an island mask to enhance coastal supply
+      !!    of iron
+      !!    -------------------------------------------------------
+
+      IF (bsedinput) THEN
+         clname='bathy.orca.nc'
+         CALL flinopen(clname,mig(1),nlci,mjg(1),nlcj,.false.,ipi,ipj,ipk      &
+            &      ,zlon,zlat,zlev,itime,istep0,zdate0,zsecond,numbath)
+         CALL flinget(numbath,'bathy',jpidta,jpjdta,jpk,jpan,1,                &
+            &        1,mig(1),nlci,mjg(1),nlcj,cmask(1:nlci,1:nlcj,1:jpk) )
+         CALL flinclo(numbath)
+
+         do jk=1,5
+            do jj=2,jpj-1
+               do ji=2,jpi-1
+                  if (tmask(ji,jj,jk).ne.0) then
+                     zmaskt=tmask(ji+1,jj,jk)*tmask(ji-1,jj,jk)*tmask(ji,jj+1,jk)    &
+                        &          *tmask(ji,jj-1,jk)*tmask(ji,jj,jk+1)
+                     if (zmaskt.eq.0) then
+                        cmask(ji,jj,jk)=0.1
+                     endif
+                  endif
+               end do
+            end do
+         end do
+
+
+         ! Extra-halo initialization in MPP
+         IF( lk_mpp ) THEN
+            DO ji = nlci+1, jpi
+               cmask(ji,:,:) = cmask(1,:,:)
+            ENDDO
+            DO jj = nlcj+1, jpj
+               cmask(:,jj,:)=cmask(:,1,:)
+            ENDDO
+         ENDIF
+
+         DO jk = 1, jpk
+            DO jj = 1, jpj
+               DO ji = 1, jpi
+                  expide=min(8.,(fsdept(ji,jj,jk)/500.)**(-1.5))
+                  denitide=-0.9543+0.7662*log(expide)-0.235*log(expide)**2
+                  cmask(ji,jj,jk)=cmask(ji,jj,jk)*min(1.,exp(denitide)/0.5)
+               END DO
+            END DO
+         END DO
+
+      ELSE
+         cmask(:,:,:)=0.
+      ENDIF
+
+      ! Lateral boundary conditions on ( avt, en )   (sign unchanged)
+      CALL lbc_lnk( cmask , 'T', 1. )
+
+      !!     Computation of the total atmospheric supply of Si
+      !!     -------------------------------------------------
+
+      sumdepsi=0.
+      DO mo=1,12
+         DO jj=2,jpjm1
+            DO ji=2,jpim1
+               sumdepsi=sumdepsi+dustmo(ji,jj,mo)/(12.*rmoss)*8.8        &
+                  *0.075/28.1*e1t(ji,jj)*e2t(ji,jj)*tmask(ji,jj,1)
+            END DO
+         END DO
+      END DO
+
+      IF( lk_mpp )   CALL mpp_sum( sumdepsi )  ! sum over the global domain
+
+      !!    COMPUTATION OF THE N/P RELEASE DUE TO COASTAL RIVERS
+      !!    COMPUTATION OF THE Si RELEASE DUE TO COASTAL RIVERS 
+      !!    ---------------------------------------------------
+
+      DO jj=1,jpj
+         DO ji=1,jpi
+            cotdep(ji,jj)=river(ji,jj)*1E9/(12.*raass                          &
+               *e1t(ji,jj)*e2t(ji,jj)*fse3t(ji,jj,1)+rtrn)*tmask(ji,jj,1)
+            rivinp(ji,jj)=(river(ji,jj)+riverdoc(ji,jj))*1E9                   &
+               /(31.6*raass*e1t(ji,jj)*e2t(ji,jj)*fse3t(ji,jj,1)+rtrn)   &
+               *tmask(ji,jj,1)
+            nitdep(ji,jj)=7.6*ndepo(ji,jj)*tmask(ji,jj,1)/(14E6*raass          &
+               *fse3t(ji,jj,1)+rtrn)
+         END DO
+      END DO
+      ! Lateral boundary conditions on ( cotdep, rivinp, nitdep )   (sign unchanged)
+      CALL lbc_lnk( cotdep , 'T', 1. )  ;  CALL lbc_lnk( rivinp , 'T', 1. )  ;  CALL lbc_lnk( nitdep , 'T', 1. )
+
+      rivpo4input=0.
+      rivalkinput=0.
+      nitdepinput=0.
+      DO jj=2,jpjm1
+         DO ji=2,jpim1
+            rivpo4input=rivpo4input+rivinp(ji,jj)*(e1t(ji,jj)*e2t(ji,jj)    &
+               *fse3t(ji,jj,1))*tmask(ji,jj,1)*raass
+            rivalkinput=rivalkinput+cotdep(ji,jj)*(e1t(ji,jj)*e2t(ji,jj)    &
+               *fse3t(ji,jj,1))*tmask(ji,jj,1)*raass
+            nitdepinput=nitdepinput+nitdep(ji,jj)*(e1t(ji,jj)*e2t(ji,jj)    &
+               *fse3t(ji,jj,1))*tmask(ji,jj,1)*raass
+         END DO
+      END DO
+
+      IF( lk_mpp ) THEN
+         CALL mpp_sum( rivpo4input )  ! sum over the global domain
+         CALL mpp_sum( rivalkinput )  ! sum over the global domain
+         CALL mpp_sum( nitdepinput )  ! sum over the global domain
+      ENDIF
+
+
+      !!    Coastal supply of iron
+      !!    ----------------------
+
+      DO jk=1,jpkm1
+         ironsed(:,:,jk)=sedfeinput*cmask(:,:,jk)         &
+            /(fse3t(:,:,jk)*rjjss)
+      END DO
+
+      ! Lateral boundary conditions on ( ironsed )   (sign unchanged)
+      CALL lbc_lnk( ironsed , 'T', 1. )
+      !!----------------------------------------------------------------------
+      !!
+      !! Initialize biological variables 
+      !!
+      !!----------------------------------------------------------------------
+      !! Set biological ratios
+      !! ---------------------
+
+      rno3   = (16.+2.)/122.
+      po4r   = 1./122.
+      o2nit  = 32./122.
+      rdenit = 97.6/16.
+      o2ut   = 140./122.
+
+      !!----------------------------------------------------------------------
+      !!
+      !! Initialize chemical variables 
+      !!
+      !!----------------------------------------------------------------------
+
+      !! set pre-industrial atmospheric [co2] (ppm) and o2/n2 ratio
+      !! ----------------------------------------------------------
+
+      atcox = 0.20946
+
+      !! Set lower/upper limits for temperature and salinity
+      !! ---------------------------------------------------
+
+      salchl = 1./1.80655
+      calcon = 1.03E-2
+
+      !! Set coefficients for apparent solubility equilibrium
+      !!   of calcite (Ingle, 1800, eq. 6)
+      !! ----------------------------------------------------
+
+      akcc1 = -34.452
+      akcc2 = -39.866
+      akcc3 = 110.21
+      akcc4 = -7.5752E-6
+
+
+      !! Set coefficients for seawater pressure correction
+      !! -------------------------------------------------
+
+      devk1(1) = -25.5
+      devk2(1) = 0.1271
+      devk3(1) = 0.
+      devk4(1) = -3.08E-3
+      devk5(1) = 0.0877E-3
+
+      devk1(2) = -15.82
+      devk2(2) = -0.0219
+      devk3(2) = 0.
+      devk4(2) = 1.13E-3
+      devk5(2) = -0.1475E-3
+
+      devk1(3) = -29.48
+      devk2(3) = 0.1622
+      devk3(3) = 2.608E-3
+      devk4(3) = -2.84E-3
+      devk5(3) = 0.
+
+      devk1(4) = -25.60
+      devk2(4) = 0.2324
+      devk3(4) = -3.6246E-3
+      devk4(4) = -5.13E-3
+      devk5(4) = 0.0794E-3
+
+      devkst = 0.23
+      devks  = 35.4
+
+      !! Set universal gas constants
+      !! ---------------------------
+
+      rgas = 83.143
+      oxyco = 1./22.4144
+
+      !! Set boron constants
+      !! -------------------
+
+      bor1 = 0.00023
+      bor2 = 1./10.82
+
+      !! Set volumetric solubility constants for co2 in ml/l (Weiss, 1974)
+      !! -----------------------------------------------------------------
+
+      c00 = -60.2409
+      c01 = 93.4517
+      c02 = 23.3585
+      c03 = 0.023517
+      c04 = -0.023656
+      c05 = 0.0047036
+
+      ca0 = -162.8301
+      ca1 = 218.2968
+      ca2 = 90.9241
+      ca3 = -1.47696
+      ca4 = 0.025695
+      ca5 = -0.025225
+      ca6 = 0.0049867
+
+      !! Set coeff. for 1. dissoc. of carbonic acid (Edmond and Gieskes, 1970)
+      !! ---------------------------------------------------------------------
+
+      c10 = -3670.7
+      c11 =  62.008
+      c12 = -9.7944
+      c13 = 0.0118
+      c14 = -0.000116
+
+      !! Set coeff. for 2. dissoc. of carbonic acid (Edmond and Gieskes, 1970)
+      !! ---------------------------------------------------------------------
+
+      c20 = -1394.7
+      c21 = -4.777
+      c22 = 0.0184
+      c23 = -0.000118
+
+      !! Set coeff. for 1. dissoc. of boric acid (Edmond and Gieskes, 1970)
+      !! ------------------------------------------------------------------
+
+      cb0  = -8966.90
+      cb1  = -2890.53
+      cb2  = -77.942
+      cb3  = 1.728
+      cb4  = -0.0996
+      cb5  = 148.0248
+      cb6  = 137.1942
+      cb7  = 1.62142
+      cb8  = -24.4344
+      cb9  = -25.085
+      cb10 = -0.2474
+      cb11 = 0.053105
+
+      !! Set coeff. for dissoc. of water (Dickson and Riley, 1979, 
+      !!   eq. 7, coefficient cw2 corrected from 0.9415 to 0.09415 
+      !!   after pers. commun. to B. Bacastow, 1988)
+      !! ---------------------------------------------------------
+
+      cw0 = -13847.26
+      cw1 = 148.9652
+      cw2 = -23.6521
+      cw3 = 118.67
+      cw4 = -5.977
+      cw5 = 1.0495
+      cw6 = -0.01615
+
+      !
+      ! Set coeff. for dissoc. of phosphate (Millero (1974)
+      ! ---------------------------------------------------
+      !
+      cp10 = 115.525
+      cp11 = -4576.752
+      cp12 = -18.453
+      cp13 = -106.736
+      cp14 = 0.69171
+      cp15 = -0.65643
+      cp16 = -0.01844
+
+      cp20 = 172.0883
+      cp21 = -8814.715
+      cp22 = -27.927
+      cp23 = -160.340
+      cp24 = 1.3566
+      cp25 = 0.37335
+      cp26 = -0.05778
+
+
+      cp30 = -18.141
+      cp31 = -3070.75
+      cp32 = 17.27039
+      cp33 = 2.81197
+      cp34 = -44.99486
+      cp35 = -0.09984
+      !
+      ! Set coeff. for dissoc. of phosphate (Millero (1974)
+      ! ---------------------------------------------------
+      !
+      cs10 = 117.385
+      cs11 = -8904.2
+      cs12 = -19.334
+      cs13 = -458.79
+      cs14 =  3.5913
+      cs15 = 188.74
+      cs16 = -1.5998
+      cs17 = -12.1652
+      cs18 = 0.07871
+      cs19 = -0.001005
+
+      !! Set volumetric solubility constants for o2 in ml/l (Weiss, 1970)
+      !! ----------------------------------------------------------------
+
+      ox0 = -58.3877
+      ox1 = 85.8079
+      ox2 = 23.8439
+      ox3 = -0.034892
+      ox4 = 0.015568
+      ox5 = -0.0019387
+
+      !!  FROM THE NEW BIOOPTIC MODEL PROPOSED JM ANDRE, WE READ HERE
+      !!  A PRECOMPUTED ARRAY CORRESPONDING TO THE ATTENUATION COEFFICIENT
+
+      open(49,file='kRGB61.txt',form='formatted')
+      do ichl=1,61
+         READ(49,*) xtoto,(xkrgb(iband,ichl),iband = 1,3)
+      end do
+      close(49)
+
+#if defined key_off_degrad
+
+      !! Read volume for degraded regions (DEGINIT)
+      !! ------------------------------------------
+
+#    if defined key_vpp
+      CALL READ3S(902,facvol,jpi,jpj,jpk)
+#    else
+      READ (902) facvol
+#    endif
+#endif
+
+
+      !!  Call p4zche to initialize the chemical constants
+      !!  ------------------------------------------------
+
+      CALL p4zche
+      !!
+      !!  Initialize a counter for the computation of chemistry
+      !!
+      ndayflxtr=0
+
+      IF(lwp) WRITE(numout,*) ' Initialisation of PISCES done'
+
+   END SUBROUTINE trc_ini

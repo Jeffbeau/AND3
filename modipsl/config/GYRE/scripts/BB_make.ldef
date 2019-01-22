@@ -1,0 +1,49 @@
+#---------------------------------------------------------------------
+#- NEMO SYSTEM : Ocean model (BB_make.ldef in scripts)
+#---------------------------------------------------------------------
+SHELL = /bin/sh
+#-
+#-Q- t3e     #--- Please use gmake instead of make
+#-Q- fjvpp   #--- Please use gmake instead of make
+
+#-
+#- Define the libraries ---
+LIBDIR = ../../../lib
+MODDIR = $(LIBDIR)
+MODEL_LIB = $(LIBDIR)/oce/libopa.a
+IOIPSL_LIB = $(LIBDIR)/libioipsl.a
+#-Q- sxnec  IOIPSL_LIB = $(LIBDIR)/libsxioipsl.a
+#-Q- sx6nec  IOIPSL_LIB = $(LIBDIR)/libsxioipsl.a
+#-Q- sxdkrz  IOIPSL_LIB = $(LIBDIR)/libsxioipsl.a
+AGRIF_LIB = $(LIBDIR)/libagrif.a
+#-Q- sxnec  AGRIF_LIB = $(LIBDIR)/libsxagrif.a
+#-Q- sx6nec AGRIF_LIB = $(LIBDIR)/libsxagrif.a
+#-Q- sxdkrc AGRIF_LIB = $(LIBDIR)/libsxagrif.a
+SXMODEL_LIB = $(MODEL_LIB)
+#-Q- sxnec  SXMODEL_LIB = $(LIBDIR)/oce/libsxopa.a
+#-Q- sx6nec  SXMODEL_LIB = $(LIBDIR)/oce/libsxopa.a
+#-Q- sxdkrz  SXMODEL_LIB = $(LIBDIR)/oce/libsxopa.a
+OASISMPI2_LIB = 
+LIBMPI  =
+LIBMP   =
+EXEC_BIN = ../../../bin/opa
+
+#-
+#- Key options for GYRE ocean configuration: Analytical forcing ---
+#  Keys have to be written on one single line (does NOT accept "\")
+
+P_P = key_gyre key_dynspg_flt key_ldfslp key_zdftke key_vectopt_loop key_vectopt_memory   
+
+#-
+#- Prefix for preprocessing ---
+#-Q- sxnec  prefix = -D
+#-Q- sx6nec prefix = -D
+#-Q- eshpux prefix = -D
+#-Q- sxdkrz prefix = -D
+#-Q- linux  prefix = -D
+#-Q- lxiv7  prefix = -D
+#-Q- lxiv8  prefix = -D
+#-Q- g95    prefix = -D
+#-Q- aix    prefix = -WF,-D
+#-Q- osxxlf prefix = -WF,-D
+

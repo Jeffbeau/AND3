@@ -1,0 +1,289 @@
+   !!----------------------------------------------------------------------
+   !!                     ***  flx_coupled_ice.h90  ***
+   !!----------------------------------------------------------------------
+   !!   flx          : define the thermohaline fluxes for the ocean in
+   !!                  coupled ocean/atmosphere case with sea-ice
+   !!----------------------------------------------------------------------
+   !! * Modules used     C A U T I O N  already defined in flxmod.F90
+
+   !! * Module variables
+   LOGICAL :: lfirstf=.TRUE.
+   INTEGER :: nhoridcf, nidcf
+   INTEGER, DIMENSION(jpi*jpj) :: ndexcf
+   !!----------------------------------------------------------------------
+   !!   OPA 9.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/OPA_SRC/SBC/flx_coupled_ice.h90,v 1.5 2005/12/12 14:18:05 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+   !!----------------------------------------------------------------------
+
+CONTAINS
+
+   SUBROUTINE flx( kt )
+      !!---------------------------------------------------------------------
+      !!                    ***  ROUTINE flx  ***
+      !!                   
+      !! ** Purpose :   provide the thermohaline fluxes (heat and freshwater) 
+      !!      to the ocean at each time step.
+      !!
+      !! ** Method  :   Read fluxes from a coupled Atmospheric model 
+      !!
+      !! References : The OASIS User Guide, Version 2.0, CERFACS/TR 95/46
+      !!
+      !! History :
+      !!        !         (O. Marti)  Original code
+      !!   8.5  !  02-09  (G. Madec)  F90: Free form and module
+      !!----------------------------------------------------------------------
+      !! * Modules used
+      USE ioipsl               ! NetCDF IPSL library 
+      USE ice_oce
+      USE cpl_oce              ! coupled ocean-atmosphere variables
+      USE flx_oce              ! sea-ice/ocean forcings variables 
+
+      !! * arguments
+      INTEGER, INTENT( in  ) ::   kt   ! ocean time step
+
+      !! * Local declarations
+      INTEGER :: ji, jj, jf
+      INTEGER :: itm1,isize,iflag
+!      INTEGER :: icpliter
+      INTEGER :: info, inuread, index
+      REAL(wp) ::   zfacflx,zfacwat
+      REAL(wp) ::   znsolc (jpiglo,jpjglo),zqsrc (jpiglo,jpjglo)
+      REAL(wp) ::   zrunoff(jpiglo,jpjglo),zec   (jpiglo,jpjglo)
+      REAL(wp) ::   zqsrice (jpiglo,jpjglo),zqsrwat (jpiglo,jpjglo)
+      REAL(wp) ::   znsolice(jpiglo,jpjglo),znsolwat(jpiglo,jpjglo)
+      REAL(wp) ::   znsicedt(jpiglo,jpjglo),zevice  (jpiglo,jpjglo)
+      REAL(wp) ::   zevwat  (jpiglo,jpjglo),zpliq   (jpiglo,jpjglo)
+      REAL(wp) ::   zpsol   (jpiglo,jpjglo),zruncot (jpiglo,jpjglo)
+      REAL(wp) ::   zrunriv (jpiglo,jpjglo),zcalving(jpiglo,jpjglo)
+      REAL(wp) ::   zevap (jpiglo,jpjglo)
+      REAL(wp) ::   zcatm1 (jpiglo,jpjglo)            ! cloud fraction 
+      CHARACTER (len=80) ::   clcplfnam
+      REAL(wp) ::   zjulian
+
+      ! Addition for SIPC CASE
+      CHARACTER (len=3) ::   clmodinf       ! Header or not
+!      CHARACTER (len=3) ::   cljobnam_r    ! Experiment name in the field brick, if any 
+!      INTEGER ::   infos(3)          ! infos in the field brick, if any
+      !!---------------------------------------------------------------------
+
+
+      ! Initialization
+      ! --------------
+
+      isize = jpiglo * jpjglo
+      itm1 = ( kt - nit000 + 1 ) - 1
+
+      ! initialisation for output
+
+      IF( lfirstf ) THEN 
+         lfirstf = .FALSE.
+         ndexcf(:) = 0
+         clcplfnam = "cpl_oce_flx"
+
+         ! Compute julian date from starting date of the run
+         CALL ymds2ju( nyear, nmonth, nday, 0.e0, zjulian )
+         CALL histbeg(clcplfnam, jpiglo,glamt,jpjglo,gphit,1,jpiglo,1   &
+            ,jpjglo,0,zjulian,rdt,nhoridcf,nidcf,domain_id=nidom)
+         ! no vertical axis
+         DO jf = 1, nflxc2o
+            CALL histdef(nidcf, cpl_readflx(jf),cpl_readflx(jf),   &
+                "-",jpi, jpj, nhoridcf, 1, 1, 1, -99, 32, "inst",   &
+                rdt,rdt)
+         END DO
+         CALL histend(nidcf)
+      ENDIF
+
+      ! caution, I presume that you have good UNIT system from coupler to OPA
+      ! that is :
+      ! watt/m2 for znsolc and zqsrc
+      ! kg/m2/s for evaporation, precipitation and runoff
+      zfacflx = 1.e0
+      ! water should be in kg/m2/day
+      zfacwat = 1.e0  ! 86400.0e0
+
+      ! Test if we couple at the current timestep
+      ! -----------------------------------------
+
+      IF( MOD(kt,nexco) == 1 ) THEN
+
+         ! Test what kind of message passing we are using
+
+         IF(lwp) WRITE(numout,*)
+         IF(lwp) WRITE(numout,*)'FLX: Read fields from CPL, itm1=',itm1
+         IF(lwp) WRITE(numout,*)
+         CALL FLUSH (numout)
+         
+         IF( cchan == 'PIPE' ) THEN
+            ! pipe mode 
+
+            ! UNIT number for fields
+
+            inuread = 99
+
+            ! exchanges from to atmosphere=CPL to ocean
+
+            DO jf = 1, nflxc2o
+               ! CALL PIPE_Model_Recv(cpl_readflx(jf), icpliter, numout)
+               OPEN (inuread, FILE=cpl_f_readflx(jf), FORM='UNFORMATTED')
+               IF(jf == 1) CALL locread(cpl_readflx(jf),znsolc ,isize,inuread,iflag,numout)
+               IF(jf == 2) CALL locread(cpl_readflx(jf),zqsrc  ,isize,inuread,iflag,numout)
+               IF(jf == 3) CALL locread(cpl_readflx(jf),zec    ,isize,inuread,iflag,numout)
+               IF(jf == 4) CALL locread(cpl_readflx(jf),zrunoff,isize,inuread,iflag,numout)
+               CLOSE (inuread)
+            END DO
+
+         ELSE IF( cchan == 'SIPC' ) THEN
+            ! SIPC mode
+
+            ! Define IF a header must be encapsulated within the field brick :
+            clmodinf = 'NOT'   ! as $MODINFO in namcouple  
+
+            ! reading of input field non solar flux SONSHLDO
+            index = 1
+            ! CALL SIPC_Read_Model(index, isize, clmodinf, cljobnam_r, infos, znsolc )
+
+            ! reading of input field solar heat flux SOSHFLDO
+            index = 2
+            ! CALL SIPC_Read_Model(index, isize, clmodinf, cljobnam_r, infos, zqsrc  )
+            
+            ! reading of input field water flux SOWAFLDO
+            index = 3
+            ! CALL SIPC_Read_Model(index, isize, clmodinf, cljobnam_r, infos, zec    )
+            
+            ! reading of input field runoff SORUNOFF
+            index = 4
+            ! CALL SIPC_Read_Model(index, isize, clmodinf, cljobnam_r, infos, zrunoff)
+            
+         ELSE IF( cchan == 'CLIM' ) THEN
+            ! CLIM mode
+            IF(lwp) WRITE (numout,*) 'Reading flux from coupler '
+            ! exchanges from atmosphere=CPL to ocean
+            DO jf = 1, nflxc2o
+               IF(jf ==  1) CALL CLIM_Import (cpl_readflx(jf),itm1,zqsrice ,info)
+               IF(jf ==  2) CALL CLIM_Import (cpl_readflx(jf),itm1,zqsrwat ,info)
+               IF(jf ==  3) CALL CLIM_Import (cpl_readflx(jf),itm1,znsolice,info)
+               IF(jf ==  4) CALL CLIM_Import (cpl_readflx(jf),itm1,znsolwat,info)
+               IF(jf ==  5) CALL CLIM_Import (cpl_readflx(jf),itm1,znsicedt,info)
+               IF(jf ==  6) CALL CLIM_Import (cpl_readflx(jf),itm1,zevice  ,info)
+               IF(jf ==  7) CALL CLIM_Import (cpl_readflx(jf),itm1,zevwat  ,info)
+               IF(jf ==  8) CALL CLIM_Import (cpl_readflx(jf),itm1,zpliq   ,info)
+               IF(jf ==  9) CALL CLIM_Import (cpl_readflx(jf),itm1,zpsol   ,info)
+               IF(jf == 10) CALL CLIM_Import (cpl_readflx(jf),itm1,zruncot ,info)
+               IF(jf == 11) CALL CLIM_Import (cpl_readflx(jf),itm1,zrunriv ,info)
+               IF(jf == 12) CALL CLIM_Import (cpl_readflx(jf),itm1,zcalving,info)
+               IF( info /= CLIM_Ok ) THEN
+                  IF(lwp) WRITE(numout,*)'Pb in reading ', cpl_readflx(jf), jf
+                  IF(lwp) WRITE(numout,*)'Couplage itm1 is = ',itm1
+                  IF(lwp) WRITE(numout,*)'CLIM error code is = ', info
+                  IF(lwp) WRITE(numout,*)'STOP in Flx'
+                  CALL abort('flx.coupled.h')
+               ENDIF
+            END DO
+         ENDIF
+
+         ! netcdf outputs
+
+         DO jf = 1, nflxc2o
+            IF(jf ==  1) CALL histwrite(nidcf,cpl_readflx(jf), kt, zqsrice ,jpi*jpj,ndexcf)
+            IF(jf ==  2) CALL histwrite(nidcf,cpl_readflx(jf), kt, zqsrwat ,jpi*jpj,ndexcf)
+            IF(jf ==  3) CALL histwrite(nidcf,cpl_readflx(jf), kt, znsolice,jpi*jpj,ndexcf)
+            IF(jf ==  4) CALL histwrite(nidcf,cpl_readflx(jf), kt, znsolwat,jpi*jpj,ndexcf)
+            IF(jf ==  5) CALL histwrite(nidcf,cpl_readflx(jf), kt, znsicedt,jpi*jpj,ndexcf)
+            IF(jf ==  6) CALL histwrite(nidcf,cpl_readflx(jf), kt, zevice  ,jpi*jpj,ndexcf)
+            IF(jf ==  7) CALL histwrite(nidcf,cpl_readflx(jf), kt, zevwat  ,jpi*jpj,ndexcf)
+            IF(jf ==  8) CALL histwrite(nidcf,cpl_readflx(jf), kt, zpliq   ,jpi*jpj,ndexcf)
+            IF(jf ==  9) CALL histwrite(nidcf,cpl_readflx(jf), kt, zpsol   ,jpi*jpj,ndexcf)
+            IF(jf == 10) CALL histwrite(nidcf,cpl_readflx(jf), kt, zruncot ,jpi*jpj,ndexcf)
+            IF(jf == 11) CALL histwrite(nidcf,cpl_readflx(jf), kt, zrunriv ,jpi*jpj,ndexcf)
+            IF(jf == 12) CALL histwrite(nidcf,cpl_readflx(jf), kt, zcalving,jpi*jpj,ndexcf)
+         END DO
+         CALL histsync(nidcf)
+         IF( nitend-kt < nexco ) CALL histclo(nidcf)
+
+         ! Compute average evaporation
+         DO jj = 1, nlcj
+            DO ji = 1, nlci
+               zevap( mig(ji), mjg(jj)) = zevwat( mig(ji), mjg(jj)) * ( 1.e0 - freeze(ji,jj) )   &
+                  &                     + zevice( mig(ji), mjg(jj)) *          freeze(ji,jj)
+            END DO
+         END DO
+
+         ! Set sublimation to zero in ice-free boxes
+         DO jj = 1, nlcj
+            DO ji = 1, nlci
+               IF( freeze(ji,jj) <= 0.0e0 ) zevice(mig(ji),mjg(jj)) = 0.0e0
+            END DO
+         END DO
+
+         ! Since cloud cover catm not transmitted from atmosphere, init =0. 
+ 
+         catm(:, :) =0.
+         DO jj = 1, jpj
+            DO ji = 1, jpi
+            zcatm1(ji,jj) = 1.0    - catm  (ji,jj)  !  fractional cloud cover
+            END DO
+         END DO
+
+         !  fraction of net shortwave radiation which is not absorbed in the 
+         !  thin surface layer and penetrates inside the ice cover 
+         !  ( Maykut and Untersteiner, 1971 ; Elbert anbd Curry, 1993 )
+         !------------------------------------------------------------------
+         DO jj = 1, nlcj
+            DO ji = 1, nlci
+            fr1_i0(ji,jj) = 0.18  * zcatm1(ji,jj) + 0.35 * catm(ji,jj) 
+            fr2_i0(ji,jj) = 0.82  * zcatm1(ji,jj) + 0.65 * catm(ji,jj)
+            END DO
+         END DO
+
+         ! copy in the subdomain
+     
+         DO jj = 1, nlcj
+            DO ji = 1, nlci
+               !  1: Net short wave heat flux on free ocean (positive downward)
+               qsr_oce(ji,jj) =  zqsrwat  ( mig(ji), mjg(jj)) * tmask(ji,jj,1) * zfacflx
+               !  2: Net short wave het flux on sea ice (positive downward)
+               qsr_ice(ji,jj) =  zqsrice  ( mig(ji), mjg(jj)) * tmask(ji,jj,1) * zfacflx
+               !  3: Net longwave heat flux on free ocean (positive downward)
+               qnsr_oce(ji,jj)=  znsolwat ( mig(ji), mjg(jj)) * tmask(ji,jj,1) * zfacflx
+               !  4: Net longwave heat flux on sea ice
+               qnsr_ice(ji,jj)=  znsolice ( mig(ji), mjg(jj)) * tmask(ji,jj,1) * zfacflx
+               !  5: Water flux (liquid precipitation - evaporation)  (positive upward)
+               tprecip(ji,jj) = (  zpliq ( mig(ji), mjg(jj))   &
+                  &                + zpsol ( mig(ji), mjg(jj))   &
+                  &                + zevap ( mig(ji), mjg(jj)) ) * tmask(ji,jj,1) * zfacwat
+               !  6: Solid precipitation  (positive upward)
+               sprecip(ji,jj) =  ( zpsol( mig(ji), mjg(jj) ) + zevice( mig(ji),mjg(jj) ) )  &
+                  &              * tmask(ji,jj,1) * zfacwat
+               !  7: runoff      (positive upward)
+               rrunoff(ji,jj) = ( zruncot ( mig(ji), mjg(jj))   &
+                  &              +  zrunriv ( mig(ji), mjg(jj)) ) * tmask(ji,jj,1) * zfacwat
+               !  8: Derivative of non solar heat flux on sea ice
+               dqns_ice(ji,jj) =  znsicedt ( mig(ji), mjg(jj)) * tmask(ji,jj,1) * zfacflx
+               !  13: Iceberg calving (positive upward)
+               calving(ji,jj) =  zcalving ( mig(ji), mjg(jj)) * tmask(ji,jj,1) * zfacwat
+               !  1st part of the fraction of sol. rad.  which penetrate inside
+               !  the ice cover
+               fr1_i0(ji,jj)  = fr1_i0(mig(ji), mjg(jj)) * tmask(ji,jj,1)
+               ! 2nd part of the fraction of sol. rad.  which penetrate inside
+               ! the ice cover
+               fr2_i0(ji,jj)  = fr2_i0(mig(ji), mjg(jj)) * tmask(ji,jj,1)
+              END DO
+           END DO
+ 
+
+         CALL lbc_lnk( qsr_oce , 'T', 1. )
+         CALL lbc_lnk( qsr_ice , 'T', 1. )
+         CALL lbc_lnk( qnsr_oce, 'T', 1. )
+         CALL lbc_lnk( qnsr_ice, 'T', 1. )
+         CALL lbc_lnk( tprecip , 'T', 1. )
+         CALL lbc_lnk( sprecip , 'T', 1. )
+         CALL lbc_lnk( rrunoff , 'T', 1. )
+         CALL lbc_lnk( dqns_ice, 'T', 1. )
+         CALL lbc_lnk( calving , 'T', 1. )
+         CALL lbc_lnk( fr1_i0  , 'T', 1. )
+         CALL lbc_lnk( fr2_i0  , 'T', 1. )
+
+      ENDIF
+
+   END SUBROUTINE flx

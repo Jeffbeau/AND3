@@ -1,0 +1,175 @@
+!!--------------------------------------------------------------------
+!!
+!!                         COMMON passivetrc.lobster1.h
+!!                      *******************************
+!!
+!!  purpose :
+!!  ---------
+!!     INCLUDE COMMON FILE for LOBSTER1 biological model (IF key_trc_lobster1)
+!!
+!!  modifications :
+!!   -------------
+!!      original    : 99-09 (M. Levy) 
+!!      additions   : 00-12 (O. Aumont, E. Kestenare): 
+!!                           add sediment parameters
+!!
+!!---------------------------------------------------------------------
+!!  TOP 1.0 , LOCEAN-IPSL (2005) 
+   !! $Header: /home/opalod/NEMOCVSROOT/NEMO/TOP_SRC/SMS/sms_lobster1.h90,v 1.6 2005/11/14 16:42:42 opalod Exp $ 
+   !! This software is governed by the CeCILL licence see modipsl/doc/NEMO_CeCILL.txt 
+!!---------------------------------------------------------------------
+!!
+!!
+!!----------------------------------------------------------------------
+!!
+!! COMMON/cotbio/ : biological parameters
+!! --------------------------------------------
+!!
+!!      apmin     : minimum phytoplancton concentration (NAMELIST)
+!!      azmin     : minimum zooplancton concentration (NAMELIST)
+!!      anmin     : minimum nutrients concentration (NAMELIST)
+!!      admin     : minimum detritus concentration (NAMELIST)
+!!      redf      : redfield ratio c:n (NAMELIST)
+!!      reddom    : redfield ratio c:n for DOM
+!!      slopet    : van t hoff coefficient (NAMELIST)
+!!      toptp     : optimal photosynthesis temperature (NAMELIST)
+!!      aknut     : half-saturation nutrient (NAMELIST)
+!!      akno3     : half-saturation for nitrate (NAMELIST)
+!!      aknh4     : half-saturation for ammonium (NAMELIST)
+!!      psinut    : inhibition of nitrate uptake by ammonium (NAMELIST)
+!!      rgamma    : phytoplankton exudation fraction (NAMELIST)
+!!      toptgz    : optimal temperature for zooplankton growth (NAMELIST)
+!!      tmaxgz    : maximal temperature for zooplankton growth (NAMELIST) 
+!!      rgz       : widtht of zooplankton temperature FUNCTION (NAMELIST)
+!!      rppz      : zooplankton nominal preference for phytoplancton
+!!                  food, (NAMELIST)
+!!      taus      : maximum specific zooplankton grazing rate (NAMELIST)
+!!      aks       : half saturation constant for total zooplankton
+!! grazing (NAMELIST)
+!!      filmax    : maximum mass clearance rate for zooplankton (NAMELIST)
+!!      rpnaz     : non-assimilated phytoplankton by zooplancton (NAMELIST) 
+!!      rdnaz     : non-assimilated detritus by zooplankton (NAMELIST) 
+!!      eggzoo    : minimum for zooplankton concentration (NAMELIST)
+!!      tauzn     : zooplancton specific excretion rate (NAMELIST)
+!!      tmmaxp    : maximal phytoplancton mortality rate (NAMELIST)
+!!      tmminp    : minimal phytoplancton mortality rate (NAMELIST)
+!!      tmmaxz    : maximal zooplankton mortality rate (NAMELIST)
+!!      tmminz    : minimal zooplankton mortality rate (NAMELIST)
+!!      anumin    : nutrient threshold for phytoplankton mortality (NAMELIST)
+!!      afdmin    : food threshold for zooplankton mortality (NAMELIST)
+!!      taudn     : detrital breakdown rate (NAMELIST)
+!!      vsed      : sedimentation speed (NAMELIST)
+!!      tmumax    : maximal phytoplankton growth rate (NAMELIST)
+!!      aki       : light photosynthesis half saturation constant (NAMELIST)
+!!
+!!      tmaxr     : maximum coefficient for passive tracer damping (NAMELIST)
+!!      tminr     : minimum coefficient for passive tracer damping (NAMELIST)
+!!      remdmp()  : damping coefficient of passive tracers (depth dependant)
+!!      fdoml     : fraction of exsudation that goes to nh4 (should be labile dom)
+!!      taunn     : nitrification rate
+!!      taudomn   : slow remineralization rate of semi-labile dom to nh4
+!!      xhr       : coeff for Martin's remineralistion profile
+!!
+!!      added by asklod AS Kremeur 2005-03:
+!!      fphylab   : NH4 fraction of phytoplankton excretion
+!!      fzoolab   : NH4 fraction of zooplankton excretion
+!!      fdetlab   : NH4 fraction of detritus dissolution
+!!      fdbod     : zooplankton mortality fraction that goes to detritus
+
+      REAL apmin,azmin,anmin,admin,  &
+                    redf,reddom,slopet,toptp,aknut,psinut,akno3,aknh4,rcchl,  &
+                     rgamma,toptgz,tmaxgz,rgz,  &
+                     rppz,taus,aks,filmax,rpnaz,rdnaz,eggzoo,tauzn,  &
+                     tmmaxp,tmminp,tmmaxz,tmminz,anumin,afdmin,taudn,  &
+                     vsed,tmumax,aki,  &
+                     tmaxr,tminr,fdoml,taunn,taudomn,xhr,  &
+                     fphylab,fzoolab,fdetlab,fdbod
+      REAL remdmp(jpk,jptra)
+
+      COMMON/cotbio/  apmin,azmin,anmin,admin,  &
+                     redf,reddom,slopet,toptp,aknut,psinut,akno3,aknh4,rcchl,  &
+                     rgamma,toptgz,tmaxgz,rgz,  &
+                     rppz,taus,aks,filmax,rpnaz,rdnaz,eggzoo,tauzn,  &
+                     tmmaxp,tmminp,tmmaxz,tmminz,anumin,afdmin,taudn,  &
+                     vsed,tmumax,aki,  &
+                     tmaxr,tminr,remdmp,fdoml,taunn,taudomn,xhr,  &
+                     fphylab,fzoolab,fdetlab,fdbod
+!!
+!!
+#    if defined key_trc_diabio
+!!
+!!----------------------------------------------------------------------
+!!
+!! COMMON/cottbd/ : biological trends 
+!! ------------------------------------------------------------------
+!!
+!!      ctrbio    : biological trends name (NAMELIST)
+!!      ctrbil    : biological trends long name (NAMELIST)
+!!      ctrbiu    : biological trends unit (NAMELIST)
+!!      trbio()   : biological trends
+!!
+      CHARACTER*8 ctrbio(jpdiabio)
+      CHARACTER*20 ctrbiu(jpdiabio)
+      CHARACTER*80 ctrbil(jpdiabio)
+      REAL trbio(jpi,jpj,jpk,jpdiabio)
+
+      COMMON/cittbd/ctrbio, ctrbil, ctrbiu
+
+      COMMON/cottbd/trbio
+!!
+!!    netcdf files and index COMMON biological trends files
+!!
+!!      nwritebio: time step frequency for biological outputs (NAMELIST)
+! asklod 10-2005: oubli de cette partie dans l update:
+!!      nitb     : id for additional array output FILE
+!!      ndepitb  : id for depth mesh
+!!      nhoritb  : id for horizontal mesh
+!!
+      INTEGER nwritebio,nitb,ndepitb,nhoritb
+      COMMON/cibcdf/nwritebio,nitb,ndepitb,nhoritb
+
+#    endif 
+!!----------------------------------------------------------------------
+!!
+!! COMMON/cotopt/ : optical parameters
+!! -----------------------------------
+!!
+!!      xze       : euphotic layer depth
+!!      xpar      : par (photosynthetic available radiation)
+!!      xkr0      : water coefficient absorption in red (NAMELIST)
+!!      xkg0      : water coefficient absorption in green (NAMELIST)
+!!      xkrp      : pigment coefficient absorption in red (NAMELIST)
+!!      xkgp      : pigment coefficient absorption in green (NAMELIST)
+!!      xlr       : exposant for pigment absorption in red (NAMELIST)
+!!      xlg       : exposant for pigment absorption in green (NAMELIST)
+!!      rpig      : chla/chla+phea ratio (NAMELIST)
+!!
+      REAL xkr0,xkg0,xkrp,xkgp,xlr,xlg,rpig
+
+      REAL xze(jpi,jpj)
+      REAL xpar(jpi,jpj,jpk)
+      COMMON/cotopt/xze,xpar,xkr0,xkg0, &
+                     xkgp,xkrp,xlg,xlr,rpig
+!!----------------------------------------------------------------------
+!!
+!! COMMON/cotsedim/ : sediment parameters
+!! --------------------------------------
+!!
+!!      sedlam : time coefficient of POC remineralization in sediments
+!!      dmin3  : fraction of sinking POC released at each level
+!!      dminl  : fraction of sinking POC released in sediments
+!! asklod add sedpocb, sedpocn, sedpoca 17 06 2005
+!!      sedpocb : mass of POC in sediments
+!!      sedpocn : mass of POC in sediments
+!!      sedpoca : mass of POC in sediments
+!!      fbod   : rapid sinking particles
+!!
+!!
+      REAL sedlam,sedlostpoc
+      REAL dmin3(jpi,jpj,jpk), dminl(jpi,jpj)
+      REAL sedpoca(jpi,jpj),sedpocb(jpi,jpj),sedpocn(jpi,jpj)
+      REAL fbod(jpi,jpj),cmask(jpi,jpj),areacot
+
+      COMMON/cotsedim/sedlam,dmin3,dminl,fbod,sedlostpoc, &
+         &               sedpoca, sedpocb, sedpocn, &
+         &                cmask, areacot

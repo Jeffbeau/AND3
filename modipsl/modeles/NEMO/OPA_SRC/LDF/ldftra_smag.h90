@@ -1,0 +1,125 @@
+   !!----------------------------------------------------------------------
+   !!                        ***  ldftra_smag.h90  ***
+   !!----------------------------------------------------------------------
+
+   !!----------------------------------------------------------------------
+   !!  OPA 9.0 , BIO (2005) 
+   !!----------------------------------------------------------------------
+
+   !!----------------------------------------------------------------------
+   !!   'key_traldf_smag'             2D lateral eddy viscosity coefficients
+   !!----------------------------------------------------------------------
+
+   SUBROUTINE ldf_tra_smag( ld_print )
+      !!----------------------------------------------------------------------
+      !!                  ***  ROUTINE ldf_tra_smag  ***
+      !!
+      !! ** Purpose :   initializations of the horizontal eddy diffusivity coef.
+      !!
+      !! ** Method  :  SMAG
+      !!       biharmonic operator  : ahtt (T)
+      !!       harmonic operator    :
+      !!                iso-model level   :ahtu,ahtv (U,V)
+      !!                isopycnal         :ahtu,ahtv,ahtw (U,V,W)
+      !!
+      !!       eddy induced velocity
+      !!         always harmonic   : aeiu, aeiv, aeiw defined at u-, v-, w-pts
+      !!       History:
+      !!              1.0 ! 07-05 Zeliang Wang ! Original Codes
+      !!----------------------------------------------------------------------
+
+      !!----------------------------------------------------------------------
+      !! * Modules used
+      !! * Arguments
+      LOGICAL, INTENT (in) :: ld_print   ! If true, output arrays on numout
+
+      !! * local variables
+      INTEGER  ::   ji, jj, jk      ! dummy loop indices
+      REAL(wp) ::   &
+         alfa, bgvalue,dh_max,dh_min  ! SMAG coeff. 
+      REAL(wp) ::   &
+         dudx,dvdy,dvdx,dudy   ! SMAG coeff. 
+      REAL(wp) ::   &
+         dvdx1,dvdx2,dudy1,dudy2  ! SMAG coeff. 
+      REAL(wp), DIMENSION(jpk) ::   zcoef       ! temporary workspace
+      REAL(wp), DIMENSION(jpi,jpj,jpk) :: tmph  ! temporary workspace
+        alfa=0.1
+      !!----------------------------------------------------------------------
+
+
+      
+      ! =================                       whatever its orientation is)
+        DO ji=2,jpi-1
+           DO jj=2,jpj-1
+              DO jk=1,jpk
+                 
+                 dudx = (ub(ji,jj,jk)-ub(ji-1,jj,jk)) / e1t(ji,jj)*tmask(ji,jj,jk)
+                 
+                 dvdy = (vb(ji,jj,jk)-vb(ji,jj-1,jk)) / e2t(ji,jj)*tmask(ji,jj,jk)
+                 
+                 dudy1 = 0.5*((ub(ji,jj+1,jk)-ub(ji,jj,jk)) /  e2f(ji,jj) *fmask(ji,jj,jk)& 
+                      &    + (ub(ji,jj,jk)-ub(ji,jj-1,jk)) / e2f(ji,jj-1)*fmask(ji,jj-1,jk))
+                 
+                 dudy2 = 0.5*((ub(ji-1,jj+1,jk)-ub(ji-1,jj,jk)) / e2f(ji-1,jj)*fmask(ji-1,jj,jk) &
+                      &    + (ub(ji-1,jj,jk)-ub(ji-1,jj-1,jk)) / e2f(ji-1,jj-1)*fmask(ji-1,jj-1,jk))
+                 
+                 dvdx1 = 0.5*((vb(ji+1,jj,jk)-vb(ji,jj,jk)) / e1f(ji,jj)*fmask(ji,jj,jk) &
+                      &    + (vb(ji,jj,jk)-vb(ji-1,jj,jk)) / e1f(ji-1,jj)*fmask(ji-1,jj,jk))
+                 
+                 dvdx2 = 0.5*((vb(ji+1,jj-1,jk)-vb(ji,jj-1,jk)) / e1f(ji,jj-1)*fmask(ji,jj-1,jk) &
+                      &    + (vb(ji,jj-1,jk)-vb(ji-1,jj-1,jk)) / e1f(ji-1,jj-1)*fmask(ji-1,jj-1,jk))
+                 
+                 dudy=0.5*(dudy1+dudy2)
+                 dvdx=0.5*(dvdx1+dvdx2)
+                 
+                 
+                 tmph(ji,jj,jk)=alfa*e1t(ji,jj)*e2t(ji,jj)*SQRT(dudx**2+dvdy**2+0.5*(dvdx+dudy)**2)  
+                 
+              END DO
+           END DO
+        END DO
+        
+        CALL lbc_lnk(tmph,'T',1.)
+
+        ahtw(:,:,:)=tmph(:,:,:)+aht0
+        CALL lbc_lnk(ahtw,'W',1.)
+        
+        IF( ln_traldf_lap ) THEN
+           
+           DO ji=1,jpi-1
+              DO jj=1,jpj          
+                 DO jk=1,jpk
+                    ahtu(ji,jj,jk)=(tmph(ji,jj,jk)*tmask(ji,jj,jk)+tmph(ji+1,jj,jk)*tmask(ji+1,jj,jk)+aht0)/  &
+                         &         max(tmask(ji,jj,jk)+tmask(ji+1,jj,jk),1.0)
+                 END DO
+              END DO
+           END DO
+           
+           DO ji=1,jpi
+              DO jj=1,jpj-1          
+                 DO jk=1,jpk
+                    ahtv(ji,jj,jk)=(tmph(ji,jj,jk)*tmask(ji,jj,jk)+tmph(ji,jj+1,jk)*tmask(ji,jj+1,jk)+aht0)/  &
+                         &         max(tmask(ji,jj,jk)+tmask(ji,jj+1,jk),1.0)
+                 END DO
+              END DO
+           END DO
+
+           CALL lbc_lnk(ahtu,'U',1.)
+           CALL lbc_lnk(ahtv,'V',1.)
+           
+           
+           
+        ENDIF
+        
+        
+        
+        IF( ln_traldf_bilap ) THEN
+           
+           DO jk=1,jpk
+              ahtt(:,:,jk)=aht0-tmph(:,:,jk)*e1t(:,:)*e2t(:,:)/8.0
+           END DO
+           
+           
+        END IF
+        
+      END SUBROUTINE ldf_tra_smag
