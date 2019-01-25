@@ -29,7 +29,7 @@ MODULE lifemaker3D
     !USE lib_bgcm_02, only: output_intprod
 #endif
 
-   IMPLICIT NONE
+   implicit none
    PRIVATE
 
 
@@ -1493,22 +1493,23 @@ MODULE lifemaker3D
 
       IF (k.EQ.1) then
          nh4mconc=0.35*1.5803E-2
-         nh4(i,j,k) = nh4(i,j,k) &
-!DL                 + rdt*(mezexnh4*Xmeso(i,j,k))  &                          ! Excretion by meso
+         nh4(i,j,1) = nh4(i,j,1) &
+!DL                 + rdtf*(mezexnh4*Xmeso(i,j,k))  &                          ! Excretion by meso
                  + rdt*mez2nh4                  &                          ! Excretion by meso
                  + rdt*((1.-mizas)*(1.-mizdom)*mizg(i,j,k)*Xmicro(i,j,k)) &! Un-assimilited part of microzoo diet routed to NH4
                  + rdt*(regmod*Xmodis(i,j,k)) &                           ! Remineralization of DOM
 !DL, oct 2014                 - rdt*(mud(i,j,k)*(1.-fno3d(i,j,k))*Xdiat(i,j,k)) &      ! Uptake by diatoms
-!                 - rdt*(mud(i,j,k)*fnh4d(i,j,k)*Xdiat(i,j,k)) &      ! Uptake by diatoms
+                 - rdt*(mud(i,j,k)*fnh4d(i,j,k)*Xdiat(i,j,k)) &      ! Uptake by diatoms
 !DL, oct 2014                 - rdt*(muf(i,j,k)*(1.-fno3f(i,j,k))*Xflag(i,j,k)) &      ! Uptake by flagelates
                  - rdt*(muf(i,j,k)*fnh4f(i,j,k)*Xflag(i,j,k)) &      ! Uptake by flagelates
-                 - rdt*nitrif*Xnh4(i,j,k) &                                     ! nitrification
+                 - rdt*nitrif*Xnh4(i,j,k)                     &
                  + (rdt/86400)*nh4mconc*watm(i,j)/e3t(1)        ! precipitation flux 
+
          nh4(i,j,k) = MAX(0.001,nh4(i,j,k))
 
         else
            nh4(i,j,k) = nh4(i,j,k) &
-!DL                 + rdt*(mezexnh4*Xmeso(i,j,k))  &                          ! Excretion by meso
+!DL                 + rdtf*(mezexnh4*Xmeso(i,j,k))  &                          ! Excretion by meso
                  + rdt*mez2nh4                  &                          ! Excretion by meso
                  + rdt*((1.-mizas)*(1.-mizdom)*mizg(i,j,k)*Xmicro(i,j,k)) &! Un-assimilited part of microzoo diet routed to NH4
                  + rdt*(regmod*Xmodis(i,j,k)) &                           ! Remineralization of DOM
@@ -1599,7 +1600,7 @@ MODULE lifemaker3D
                    + rdt*(dsp*Xflag(i,j,k))   &               ! Dead flagelate cells
                    + rdt*(fgmop*Xmop(i,j,k))  &               ! Fragmentation of POM to DOM 
                    - rdt*(regmod*Xmodis(i,j,k))  &            ! Remineralization to NH4
-                   +(rdt/86400)*modismconc*watm(i,j)/e3t(1)        ! precipitation flux
+                   +(rdt/86400)*modismconc*watm(i,j)/e3t(1)   ! precipitation flux
    
       modis(i,j,k) = MAX(0.001,modis(i,j,k))
 
@@ -1610,7 +1611,7 @@ MODULE lifemaker3D
                    + rdt*(dmiz*Xmicro(i,j,k)) &               ! Dead microzoo
                    + rdt*(dsp*Xflag(i,j,k))   &               ! Dead flagelate cells
                    + rdt*(fgmop*Xmop(i,j,k))  &               ! Fragmentation of POM to DOM 
-                   - rdt*(regmod*Xmodis(i,j,k))              ! Remineralization to NH4
+                   - rdt*(regmod*Xmodis(i,j,k))               ! Remineralization to NH4
 !c
       modis(i,j,k) = MAX(0.001,modis(i,j,k))
 
@@ -1622,7 +1623,7 @@ MODULE lifemaker3D
                    + rdt*(dmiz*Xmicro(i,j,k)) &               ! Dead microzoo
                    + rdt*(dsp*Xflag(i,j,k))   &               ! Dead flagelate cells
                    + rdt*(fgmop*Xmop(i,j,k))  &               ! Fragmentation of POM to DOM 
-                   - rdt*(regmod*Xmodis(i,j,k))              ! Remineralization to NH4
+                   - rdt*(regmod*Xmodis(i,j,k))               ! Remineralization to NH4
 !c
       modis(i,j,k) = MAX(0.001,modis(i,j,k))
 
